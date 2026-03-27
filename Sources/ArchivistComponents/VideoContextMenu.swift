@@ -32,35 +32,35 @@ public struct VideoContextMenu: View {
                 HapticFeedback.selection.play()
                 onPlayNext()
             } label: {
-                Label(String(localized: "Play Next", bundle: .module), systemImage: "text.line.first.and.arrowtriangle.forward")
+                Label(String.localised("video.playNext", table: .videos), systemImage: "text.line.first.and.arrowtriangle.forward")
             }
         }
         ShareLink(item: youtubeURL) {
-            Label(String(localized: "Share", bundle: .module), systemImage: "square.and.arrow.up")
+            Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
         }
         Button {
             HapticFeedback.selection.play()
             onAddToPlaylist()
         } label: {
-            Label(String(localized: "Add to Playlist", bundle: .module), systemImage: "text.badge.plus")
+            Label(String.localised("video.addToPlaylist", table: .videos), systemImage: "text.badge.plus")
         }
         Button {
             HapticFeedback.medium.play()
             onDownloadToDevice()
         } label: {
-            Label(String(localized: "Download to Device", bundle: .module), systemImage: "arrow.down.circle")
+            Label(String.localised("video.downloadToDevice", table: .videos), systemImage: "arrow.down.circle")
         }
         Button {
             HapticFeedback.selection.play()
             onMarkAsWatched()
         } label: {
-            Label(String(localized: "Mark as Watched", bundle: .module), systemImage: "eye")
+            Label(String.localised("video.markAsWatched", table: .videos), systemImage: "eye")
         }
         Button(role: .destructive) {
             HapticFeedback.warning.play()
             onDeleteFromServer()
         } label: {
-            Label(String(localized: "Delete from Server", bundle: .module), systemImage: "trash")
+            Label(String.localised("video.deleteFromServer", table: .videos), systemImage: "trash")
         }
     }
 }

@@ -100,12 +100,12 @@ public struct VideoPickerScreen: View {
                     .padding(.bottom, 8)
                 }
             }
-            .navigationTitle(String(localized: "Add Videos"))
+            .navigationTitle(String.localised("video.addVideos", table: .videos))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
                 text: $store.searchQuery,
                 placement: .navigationBarDrawer(displayMode: .always),
-                prompt: String(localized: "Search videos")
+                prompt: String.localised("video.search", table: .videos)
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

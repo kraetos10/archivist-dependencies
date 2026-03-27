@@ -18,7 +18,7 @@ public struct ActiveTaskView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .tint(Color.Accent.dark)
-                        Text(active.currentStep.isEmpty ? String(localized: "Downloading") : active.currentStep)
+                        Text(active.currentStep.isEmpty ? String.localised("video.downloading", table: .videos) : active.currentStep)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Accent.dark)
@@ -58,7 +58,7 @@ public struct ActiveTaskView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     } else {
-                        Text(String(localized: "Cancel Task"))
+                        Text(String.localised("settings.cancelTask", table: .settings))
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -70,7 +70,7 @@ public struct ActiveTaskView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             } header: {
-                Text(String(localized: "Active Tasks"))
+                Text(String.localised("settings.activeTasks", table: .settings))
             }
         }
     }

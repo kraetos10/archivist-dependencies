@@ -44,7 +44,7 @@ public struct HistoryScreen: View {
         #if os(tvOS)
         .navigationTitle("")
         #else
-        .navigationTitle(String(localized: "History"))
+        .navigationTitle(String.localised("settings.history", table: .settings))
         #endif
         #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -64,7 +64,7 @@ public struct HistoryScreen: View {
                 }
             } else {
                 if !store.continueVideos.isEmpty {
-                    sectionHeader(String(localized: "Continue Watching"))
+                    sectionHeader(String.localised("video.continueWatching", table: .videos))
                     ForEach(store.continueVideos) { video in
                         historyRow(video)
                             .pressable { send(.videoTapped(video)) }
@@ -72,7 +72,7 @@ public struct HistoryScreen: View {
                 }
 
                 if !store.watchedVideos.isEmpty {
-                    sectionHeader(String(localized: "Watched"))
+                    sectionHeader(String.localised("video.watched", table: .videos))
                     ForEach(store.watchedVideos) { video in
                         historyRow(video)
                             .pressable { send(.videoTapped(video)) }
@@ -168,7 +168,7 @@ public struct HistoryScreen: View {
                                 .pressable { send(.videoTapped(video)) }
                         }
                     } header: {
-                        sectionHeader(String(localized: "Continue Watching"))
+                        sectionHeader(String.localised("video.continueWatching", table: .videos))
                     }
                 }
 
@@ -184,7 +184,7 @@ public struct HistoryScreen: View {
                                 }
                         }
                     } header: {
-                        sectionHeader(String(localized: "Watched"))
+                        sectionHeader(String.localised("video.watched", table: .videos))
                     }
                 }
             }
@@ -212,7 +212,7 @@ public struct HistoryScreen: View {
                             }
                         }
                     } header: {
-                        sectionHeader(String(localized: "Continue Watching"))
+                        sectionHeader(String.localised("video.continueWatching", table: .videos))
                     }
                 }
 
@@ -229,7 +229,7 @@ public struct HistoryScreen: View {
                             }
                         }
                     } header: {
-                        sectionHeader(String(localized: "Watched"))
+                        sectionHeader(String.localised("video.watched", table: .videos))
                     }
                 }
             }
@@ -257,7 +257,7 @@ public struct HistoryScreen: View {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 48))
                 .foregroundStyle(Color.Brand.secondary)
-            Text(String(localized: "No History"))
+            Text(String.localised("settings.noHistory", table: .settings))
                 .font(.headline)
                 .foregroundStyle(Color.Text.primary)
         }

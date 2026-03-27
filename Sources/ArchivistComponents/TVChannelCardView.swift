@@ -60,7 +60,7 @@ public struct TVChannelCardView: View {
                 .lineLimit(1)
 
             if let subs = channel.formattedSubs {
-                Text(String(localized: "\(subs) subscribers", bundle: .module))
+                Text(String.localised("\(subs) subscribers"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

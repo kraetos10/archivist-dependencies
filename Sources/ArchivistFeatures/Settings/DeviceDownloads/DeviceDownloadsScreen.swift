@@ -44,7 +44,7 @@ public struct DeviceDownloadsScreen: View {
         #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .navigationTitle(String(localized: "Device Downloads"))
+        .navigationTitle(String.localised("video.deviceDownloads", table: .videos))
     }
 
     private func downloadRow(_ download: DeviceDownload) -> some View {
@@ -81,7 +81,7 @@ public struct DeviceDownloadsScreen: View {
                 Button(role: .destructive) {
                     send(.deleteTapped(download.id))
                 } label: {
-                    Label(String(localized: "Delete Download"), systemImage: "trash")
+                    Label(String.localised("video.deleteDownload", table: .videos), systemImage: "trash")
                 }
             }
         }
@@ -118,7 +118,7 @@ public struct DeviceDownloadsScreen: View {
                 Button(role: .destructive) {
                     send(.deleteTapped(download.id))
                 } label: {
-                    Label(String(localized: "Delete Download"), systemImage: "trash")
+                    Label(String.localised("video.deleteDownload", table: .videos), systemImage: "trash")
                 }
             }
         }
@@ -160,16 +160,16 @@ public struct DeviceDownloadsScreen: View {
                     .tint(Color.Accent.dark)
                 Text(download.progress > 0
                      ? "\(Int(download.progress * 100))%"
-                     : String(localized: "Downloading"))
+                     : String.localised("video.downloading", table: .videos))
                     .font(.caption)
                     .foregroundStyle(Color.Accent.dark)
             }
         case .completed:
-            Label(String(localized: "Downloaded"), systemImage: "checkmark.circle.fill")
+            Label(String.localised("video.downloaded", table: .videos), systemImage: "checkmark.circle.fill")
                 .font(.caption)
                 .foregroundStyle(Color.Accent.dark)
         case .failed:
-            Label(String(localized: "Tap to Retry"), systemImage: "arrow.clockwise.circle.fill")
+            Label(String.localised("generic.tapToRetry"), systemImage: "arrow.clockwise.circle.fill")
                 .font(.caption)
                 .foregroundStyle(.red)
         case .none:
@@ -226,8 +226,8 @@ public struct DeviceDownloadsScreen: View {
     private var emptyStateView: some View {
         EmptyStateView(
             icon: "arrow.down.to.line",
-            title: String(localized: "No Device Downloads"),
-            description: String(localized: "Videos you download to this device will appear here.")
+            title: String.localised("video.empty.noDeviceDownloads", table: .videos),
+            description: String.localised("video.empty.deviceDownloadDescription", table: .videos)
         )
     }
 }

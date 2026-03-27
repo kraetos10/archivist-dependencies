@@ -29,10 +29,10 @@ public struct PlaylistPickerScreen: View {
                         Image(systemName: "music.note.list")
                             .font(.system(size: 48))
                             .foregroundStyle(Color.Brand.secondary)
-                        Text(String(localized: "No custom playlists"))
+                        Text(String.localised("login.noCustomPlaylists", table: .login))
                             .font(.headline)
                             .foregroundStyle(Color.Text.primary)
-                        Text(String(localized: "Create a custom playlist to get started."))
+                        Text(String.localised("login.createPlaylistDescription", table: .login))
                             .font(.subheadline)
                             .foregroundStyle(Color.Brand.secondary)
                             .multilineTextAlignment(.center)
@@ -57,7 +57,7 @@ public struct PlaylistPickerScreen: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.Brand.primary)
-            .navigationTitle(String(localized: "Add to Playlist"))
+            .navigationTitle(String.localised("video.addToPlaylist", table: .videos))
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear { send(.viewDidAppear) }

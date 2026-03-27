@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -110,16 +111,16 @@ extension ChannelsReducer {
 
     private func handleUnsubscribeTapped(_ channel: ChannelResponse, state: inout State) -> Effect<Action> {
         state.alert = AlertState {
-            TextState(String(localized: "Unsubscribe"))
+            TextState(String.localised("generic.unsubscribe"))
         } actions: {
             ButtonState(role: .cancel) {
-                TextState(String(localized: "Cancel"))
+                TextState(String.localised("generic.cancel"))
             }
             ButtonState(role: .destructive, action: .confirmUnsubscribe(channel.channelId)) {
-                TextState(String(localized: "Unsubscribe"))
+                TextState(String.localised("generic.unsubscribe"))
             }
         } message: {
-            TextState(String(localized: "Are you sure you want to unsubscribe from \(channel.channelName)?"))
+            TextState(String.localised("Are you sure you want to unsubscribe from \(channel.channelName)?", table: .login))
         }
         return .none
     }

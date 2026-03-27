@@ -51,7 +51,7 @@ public struct WatchFilterRow: View {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle")
                             .font(.caption)
-                        Text(String(localized: "Downloaded", bundle: .module))
+                        Text(String.localised("video.downloaded", table: .videos))
                     }
                     .font(.subheadline)
                     .fontWeight(.medium)

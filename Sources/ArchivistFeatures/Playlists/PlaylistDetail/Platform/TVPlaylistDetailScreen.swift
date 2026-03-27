@@ -21,7 +21,7 @@ public struct TVPlaylistDetailScreen: View {
                 Section {
                     entriesContent
                 } header: {
-                    PinnedSectionHeader(title: String(localized: "Videos"))
+                    PinnedSectionHeader(title: String.localised("generic.videos"))
                 }
                 .focusSection()
             }
@@ -100,7 +100,7 @@ public struct TVPlaylistDetailScreen: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 48)
             } else if store.entries.isEmpty && store.hasLoadedEntries {
-                Text(String(localized: "No videos yet"))
+                Text(String.localised("video.empty.noVideos", table: .videos))
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)

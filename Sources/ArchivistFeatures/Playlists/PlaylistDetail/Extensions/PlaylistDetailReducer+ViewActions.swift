@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -50,16 +51,16 @@ extension PlaylistDetailReducer {
 
     private func handleUnsubscribeTapped(state: inout State) -> Effect<Action> {
         state.alert = AlertState {
-            TextState(String(localized: "Remove Playlist"))
+            TextState(String.localised("video.removePlaylist", table: .videos))
         } actions: {
             ButtonState(role: .cancel) {
-                TextState(String(localized: "Cancel"))
+                TextState(String.localised("generic.cancel"))
             }
             ButtonState(role: .destructive, action: .confirmUnsubscribe) {
-                TextState(String(localized: "Remove"))
+                TextState(String.localised("generic.remove"))
             }
         } message: { [state] in
-            TextState(String(localized: "Are you sure you want to remove \(state.playlist.playlistName)?"))
+            TextState(String.localised("Are you sure you want to remove \(state.playlist.playlistName)?", table: .login))
         }
         return .none
     }

@@ -188,7 +188,7 @@ public struct VideoCardView: View {
 
             HStack(spacing: 6) {
                 if data.isPending {
-                    Text(String(localized: "Pending", bundle: .module))
+                    Text(String.localised("generic.pending"))
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)

@@ -61,7 +61,7 @@ public struct ChannelCardView: View {
                 .multilineTextAlignment(.center)
 
             if let subs = channel.formattedSubs {
-                Text(String(localized: "\(subs) subscribers", bundle: .module))
+                Text(String.localised("\(subs) subscribers"))
                     .font(.caption)
                     .foregroundStyle(Color.Brand.secondary)
             }

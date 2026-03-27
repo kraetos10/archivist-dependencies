@@ -24,7 +24,7 @@ public struct AddChannelScreen: View {
                         .frame(width: 200, height: 200)
 
                     TextField(
-                        String(localized: "Channel URL"),
+                        String.localised("login.channelUrl", table: .login),
                         text: $store.channelInput
                     )
                     .textFieldStyle(.roundedBorder)
@@ -44,7 +44,7 @@ public struct AddChannelScreen: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                     } else {
-                        Text(String(localized: "Add Channel"))
+                        Text(String.localised("login.addChannel", table: .login))
                             .font(.headline)
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -59,7 +59,7 @@ public struct AddChannelScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.Brand.primary)
-            .navigationTitle(String(localized: "Add Channel"))
+            .navigationTitle(String.localised("login.addChannel", table: .login))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

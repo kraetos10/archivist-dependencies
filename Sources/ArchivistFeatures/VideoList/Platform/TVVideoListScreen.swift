@@ -29,7 +29,7 @@ public struct TVVideoListScreen: View {
                     Button {
                         send(.pullToRefreshTriggered)
                     } label: {
-                        Label(String(localized: "Refresh"), systemImage: "arrow.trianglehead.2.clockwise")
+                        Label(String.localised("generic.refresh"), systemImage: "arrow.trianglehead.2.clockwise")
                     }
                     .disabled(store.isLoading)
                 }
@@ -94,9 +94,9 @@ public struct TVVideoListScreen: View {
             Image(systemName: "play.rectangle.on.rectangle")
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
-            Text(String(localized: "No videos yet"))
+            Text(String.localised("video.empty.noVideos", table: .videos))
                 .font(.title2)
-            Text(String(localized: "Videos from your server will appear here."))
+            Text(String.localised("video.empty.serverDescription", table: .videos))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

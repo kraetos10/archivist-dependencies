@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -24,9 +25,9 @@ extension ServerSetupReducer {
     private func handleHealthCheckFailed(state: inout State) -> Effect<Action> {
         state.isLoading = false
         state.alert = AlertState {
-            TextState(String(localized: "Could Not Connect"))
+            TextState(String.localised("login.couldNotConnect", table: .login))
         } message: {
-            TextState(String(localized: "Please check your server details and try again."))
+            TextState(String.localised("login.checkDetails", table: .login))
         }
         return .none
     }

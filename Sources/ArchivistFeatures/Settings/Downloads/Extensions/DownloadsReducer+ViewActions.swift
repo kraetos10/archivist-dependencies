@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -46,13 +47,13 @@ extension DownloadsReducer {
             TextState(download.title ?? download.youtubeId)
         } actions: {
             ButtonState(action: .confirmDownload(download.youtubeId)) {
-                TextState(String(localized: "Download Now"))
+                TextState(String.localised("video.downloadNow", table: .videos))
             }
             ButtonState(role: .cancel) {
-                TextState(String(localized: "Cancel"))
+                TextState(String.localised("generic.cancel"))
             }
         } message: {
-            TextState(String(localized: "Would you like to start downloading this video?"))
+            TextState(String.localised("video.confirmDownload", table: .videos))
         }
         #else
         state.downloadDetail = DownloadDetailReducer.State(

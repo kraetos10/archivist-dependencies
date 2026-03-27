@@ -23,7 +23,7 @@ public struct TVSettingsScreen: View {
                     } label: {
                         HStack {
                             Image(systemName: "arrow.down.circle")
-                            Text(String(localized: "Queue"))
+                            Text(String.localised("settings.queue", table: .settings))
                         }
                     }
 
@@ -32,7 +32,7 @@ public struct TVSettingsScreen: View {
                     } label: {
                         HStack {
                             Image(systemName: "chart.bar")
-                            Text(String(localized: "Stats"))
+                            Text(String.localised("settings.stats", table: .settings))
                         }
                     }
 
@@ -41,7 +41,7 @@ public struct TVSettingsScreen: View {
                     } label: {
                         HStack {
                             Image(systemName: "clock.arrow.circlepath")
-                            Text(String(localized: "History"))
+                            Text(String.localised("settings.history", table: .settings))
                         }
                     }
                 }
@@ -56,43 +56,43 @@ public struct TVSettingsScreen: View {
                             } else {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                             }
-                            Text(String(localized: "Rescan Subscriptions"))
+                            Text(String.localised("settings.rescanSubscriptions", table: .settings))
                         }
                     }
                     .disabled(store.isRescanningSubscriptions || store.activeTask.activeDownload != nil)
                 } header: {
-                    Text(String(localized: "Actions"))
+                    Text(String.localised("generic.actions"))
                 }
 
                 Section {
                     HStack {
-                        Text(String(localized: "Server"))
+                        Text(String.localised("settings.server", table: .settings))
                         Spacer()
                         Text(store.serverConfig.hostname)
                             .foregroundStyle(.secondary)
                     }
                     if let port = store.serverConfig.port {
                         HStack {
-                            Text(String(localized: "Port"))
+                            Text(String.localised("settings.port", table: .settings))
                             Spacer()
                             Text("\(port)")
                                 .foregroundStyle(.secondary)
                         }
                     }
                     HStack {
-                        Text(String(localized: "Connection"))
+                        Text(String.localised("settings.connection", table: .settings))
                         Spacer()
                         Text(store.serverConfig.useHTTP ? "HTTP" : "HTTPS")
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text(String(localized: "Server Info"))
+                    Text(String.localised("settings.serverInfo", table: .settings))
                 }
 
                 Section {
-                    Toggle(String(localized: "Autoplay"), isOn: $store.autoPlayEnabled)
+                    Toggle(String.localised("video.autoplay", table: .videos), isOn: $store.autoPlayEnabled)
                 } header: {
-                    Text(String(localized: "Playback"))
+                    Text(String.localised("video.playback", table: .videos))
                 }
 
                 Section {
@@ -101,7 +101,7 @@ public struct TVSettingsScreen: View {
                     } label: {
                         HStack {
                             Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text(String(localized: "Logout"))
+                            Text(String.localised("settings.logout", table: .settings))
                         }
                     }
                 }

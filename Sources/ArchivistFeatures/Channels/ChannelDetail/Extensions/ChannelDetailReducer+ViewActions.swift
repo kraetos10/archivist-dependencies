@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -116,13 +117,13 @@ extension ChannelDetailReducer {
             TextState(download.title ?? download.youtubeId)
         } actions: {
             ButtonState(action: .confirmDownload(download.youtubeId)) {
-                TextState(String(localized: "Download Now"))
+                TextState(String.localised("video.downloadNow", table: .videos))
             }
             ButtonState(role: .cancel) {
-                TextState(String(localized: "Cancel"))
+                TextState(String.localised("generic.cancel"))
             }
         } message: {
-            TextState(String(localized: "Would you like to start downloading this video?"))
+            TextState(String.localised("video.confirmDownload", table: .videos))
         }
         #else
         state.downloadDetail = DownloadDetailReducer.State(
@@ -135,16 +136,16 @@ extension ChannelDetailReducer {
 
     private func handleUnsubscribeTapped(state: inout State) -> Effect<Action> {
         state.alert = AlertState {
-            TextState(String(localized: "Unsubscribe"))
+            TextState(String.localised("generic.unsubscribe"))
         } actions: {
             ButtonState(role: .cancel) {
-                TextState(String(localized: "Cancel"))
+                TextState(String.localised("generic.cancel"))
             }
             ButtonState(role: .destructive, action: .confirmUnsubscribe) {
-                TextState(String(localized: "Unsubscribe"))
+                TextState(String.localised("generic.unsubscribe"))
             }
         } message: { [state] in
-            TextState(String(localized: "Are you sure you want to unsubscribe from \(state.channel.channelName)?"))
+            TextState(String.localised("Are you sure you want to unsubscribe from \(state.channel.channelName)?", table: .login))
         }
         return .none
     }

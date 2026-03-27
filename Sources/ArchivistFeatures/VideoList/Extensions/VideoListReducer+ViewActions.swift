@@ -44,8 +44,8 @@ extension VideoListReducer {
         let config = state.serverConfig
         let videoService = self.videoService
         return .run { send in
-            do {
-                let response = try await videoService.getVideos(
+            let result = await Result {
+                try await videoService.getVideos(
                     config: config,
                     page: 1,
                     sort: "published",
@@ -55,26 +55,18 @@ extension VideoListReducer {
                     channel: nil,
                     playlist: nil
                 )
-                await send(.videosLoaded(response))
-            } catch {
-                await send(.videosFailed(error))
             }
+            await send(.videosResult(result))
         }
     }
 
     private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
         state.isLoading = true
         state.isLoadingMore = false
-        state.currentPage = 1
-        state.lastPage = 1
-        state.videos = []
-        state.searchResults = []
-        state.downloadedVideoIDs = []
         let config = state.serverConfig
-        let videoService = self.videoService
-        return .run { send in
-            do {
-                let response = try await videoService.getVideos(
+        return .run { [videoService] send in
+            let result = await Result {
+                try await videoService.getVideos(
                     config: config,
                     page: 1,
                     sort: "published",
@@ -84,10 +76,8 @@ extension VideoListReducer {
                     channel: nil,
                     playlist: nil
                 )
-                await send(.videosLoaded(response))
-            } catch {
-                await send(.videosFailed(error))
             }
+            await send(.videosResult(result))
         }
     }
 
@@ -96,10 +86,9 @@ extension VideoListReducer {
         state.isLoadingMore = true
         let config = state.serverConfig
         let nextPage = state.currentPage + 1
-        let videoService = self.videoService
-        return .run { send in
-            do {
-                let response = try await videoService.getVideos(
+        return .run { [videoService] send in
+            let result = await Result {
+                try await videoService.getVideos(
                     config: config,
                     page: nextPage,
                     sort: "published",
@@ -109,10 +98,8 @@ extension VideoListReducer {
                     channel: nil,
                     playlist: nil
                 )
-                await send(.videosLoaded(response))
-            } catch {
-                await send(.videosFailed(error))
             }
+            await send(.videosResult(result))
         }
     }
 
@@ -126,7 +113,9 @@ extension VideoListReducer {
         state.showDownloadedOnly.toggle()
         if state.showDownloadedOnly {
             state.downloadedVideoIDs = Set(
-                state.videos.map(\.videoId).filter { localVideoStorage.isDownloaded(videoId: $0) }
+                state.videos.map(\.videoId).filter {
+                    localVideoStorage.isDownloaded(videoId: $0)
+                }
             )
         }
         return .none
@@ -226,8 +215,7 @@ extension VideoListReducer {
     private func handleMarkAsWatchedTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = video.videoId
-        let videoService = self.videoService
-        return .run { send in
+        return .run { [videoService] send in
             try await videoService.setWatched(config: config, videoId: videoId, isWatched: true)
             await send(.markWatchedCompleted(videoId))
         } catch: { _, send in

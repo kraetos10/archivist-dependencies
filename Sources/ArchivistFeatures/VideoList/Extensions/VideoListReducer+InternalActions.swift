@@ -6,9 +6,9 @@ import Foundation
 extension VideoListReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .videosLoaded(let response):
+        case .videosResult(.success(let response)):
             return handleVideosLoaded(response, state: &state)
-        case .videosFailed(let error):
+        case .videosResult(.failure(let error)):
             return handleVideosFailed(error, state: &state)
         case .contextDeleteCompleted(let videoId):
             state.videos.remove(id: videoId)
@@ -58,8 +58,12 @@ extension VideoListReducer {
         state: inout State
     ) -> Effect<Action> {
         if state.isLoading {
+            // Full refresh — replace everything
             state.videos = IdentifiedArrayOf(uniqueElements: response.data)
+            state.searchResults = []
+            state.downloadedVideoIDs = []
         } else {
+            // Pagination — append
             for video in response.data {
                 state.videos.updateOrAppend(video)
             }
@@ -92,7 +96,7 @@ extension VideoListReducer {
         state.isLoadingMore = false
         state.hasLoaded = true
         state.alert = AlertState {
-            TextState(String(localized: "Error"))
+            TextState(String.localised("generic.error"))
         } message: {
             TextState(error.localizedDescription)
         }
@@ -130,7 +134,7 @@ extension VideoListReducer {
 
     private func handleContextDeleteFailed(_ error: Error, state: inout State) -> Effect<Action> {
         state.alert = AlertState {
-            TextState(String(localized: "Error"))
+            TextState(String.localised("generic.error"))
         } message: {
             TextState(error.localizedDescription)
         }
