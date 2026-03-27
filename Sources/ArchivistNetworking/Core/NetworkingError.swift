@@ -49,4 +49,5 @@ extension Error {
 
 extension Notification.Name {
     public static let authTokenExpired = Notification.Name("authTokenExpired")
+    public static let pipRestoreRequested = Notification.Name("pipRestoreRequested")
 }

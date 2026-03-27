@@ -16,6 +16,7 @@ public struct VideoDetailReducer {
         var similarVideos: [VideoResponse] = []
         var isLoadingSimilar = false
         var nextVideos: [VideoResponse] = []
+        var showPlayNext: Bool = true
         var isDownloaded = false
         var isDownloading = false
         var downloadProgress: Double = 0
@@ -28,6 +29,14 @@ public struct VideoDetailReducer {
 
         var youtubeURL: URL { video.youtubeURL }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
+
+        public init(serverConfig: ServerConfig, video: VideoResponse, nextVideos: [VideoResponse] = [], showPlayNext: Bool = true, isPlaying: Bool = false) {
+            self.serverConfig = serverConfig
+            self.video = video
+            self.nextVideos = nextVideos
+            self.showPlayNext = showPlayNext
+            self.isPlaying = isPlaying
+        }
 
         mutating func resetForNewVideo(_ video: VideoResponse) {
             self.video = video
@@ -66,6 +75,7 @@ public struct VideoDetailReducer {
         case downloadCompleted
         case downloadFailed(String)
         case autoPlayVideo(VideoResponse)
+        case pipRestoreRequested(VideoResponse)
         case serverDeleteCompleted
         case serverDeleteFailed(String)
         case loadNextVideo
@@ -87,6 +97,8 @@ public struct VideoDetailReducer {
             case toggleDescription
             case toggleWatchedTapped
             case addToPlaylistTapped
+            case addToPlayNextTapped
+            case removeFromPlayNextTapped(Int)
         }
     }
 

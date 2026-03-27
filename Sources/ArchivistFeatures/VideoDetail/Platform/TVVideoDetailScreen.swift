@@ -2,11 +2,17 @@
 import ArchivistNetworking
 import ArchivistComponents
 import ComposableArchitecture
+import Dependencies
+import SQLiteData
+import StructuredQueries
 import SwiftUI
 
 @ViewAction(for: VideoDetailReducer.self)
 public struct TVVideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
+
+    @FetchAll(PlayNextItem.all.order(by: \.id))
+    private var playNextItems
 
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
@@ -98,6 +104,52 @@ public struct TVVideoDetailScreen: View {
                 .padding(.horizontal, 48)
                 .padding(.top, 32)
 
+                // Play Next
+                if store.showPlayNext && !playNextItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(String(localized: "Play Next"))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 48)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: 40) {
+                                ForEach(playNextItems) { item in
+                                    playNextCard(item)
+                                }
+                            }
+                            .padding(.horizontal, 48)
+                        }
+                    }
+                    .padding(.top, 48)
+                    .padding(.bottom, 24)
+                }
+
+                // Up Next
+                if !store.nextVideos.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(String(localized: "Up Next"))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 48)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: 40) {
+                                ForEach(store.nextVideos.prefix(10)) { video in
+                                    TVVideoCardView(
+                                        video: video,
+                                        serverConfig: store.serverConfig
+                                    ) {
+                                        send(.nextUpVideoTapped(video))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 48)
+                        }
+                    }
+                    .padding(.bottom, 24)
+                }
+
                 // Bottom: similar videos horizontal scroll
                 similarSection
                     .padding(.top, 48)
@@ -149,6 +201,59 @@ public struct TVVideoDetailScreen: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Play Next Card
+
+    private func playNextCard(_ item: PlayNextItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                if let thumbPath = item.thumbUrl,
+                   let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
+                    AsyncImage(url: thumbURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        default:
+                            Rectangle().fill(Color.Brand.secondary.opacity(0.3))
+                        }
+                    }
+                } else {
+                    Rectangle().fill(Color.Brand.secondary.opacity(0.3))
+                }
+
+                if let duration = item.duration {
+                    Text(duration)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.7))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .padding(6)
+                }
+            }
+            .frame(width: 400, height: 225)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Text(item.title)
+                .font(.callout)
+                .fontWeight(.medium)
+                .lineLimit(1)
+
+            Text(item.channelName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 400)
+        .contextMenu {
+            Button(role: .destructive) {
+                send(.removeFromPlayNextTapped(item.id), animation: .default)
+            } label: {
+                Label(String(localized: "Remove from Play Next"), systemImage: "minus.circle")
+            }
+        }
     }
 
     // MARK: - Similar Videos

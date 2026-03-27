@@ -126,6 +126,7 @@ public struct VideoListReducer {
         case searchResultsLoaded([VideoResponse])
         case searchFailed
         case addVideo(PresentationAction<AddVideoReducer.Action>)
+        case pipRestoreVideo(VideoResponse)
 
         @CasePathable
         public enum View {
@@ -141,6 +142,7 @@ public struct VideoListReducer {
             case markAsWatchedTapped(VideoResponse)
             case playNextTapped(VideoResponse)
             case addVideoTapped
+            case pipRestoreNotificationReceived
         }
     }
 

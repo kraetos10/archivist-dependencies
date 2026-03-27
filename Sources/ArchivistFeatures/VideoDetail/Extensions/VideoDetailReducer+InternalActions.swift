@@ -74,12 +74,15 @@ extension VideoDetailReducer {
     }
 
     private func handleAutoPlayVideo(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+        // Remove the autoplayed video from the up next queue
+        state.nextVideos.removeAll { $0.videoId == video.videoId }
         state.resetForNewVideo(video)
         state.isPlaying = true
         let url = mediaURL(state: state)
         let startPosition = state.video.player?.position
         let config = state.serverConfig
         let videoId = state.video.videoId
+        let currentVideo = video
         return .merge(
             .run { [videoService] send in
                 await MainActor.run {
@@ -96,6 +99,7 @@ extension VideoDetailReducer {
                                 try? await videoService.setProgress(config: config, videoId: videoId, position: position)
                             }
                         }
+                        PlayerManager.shared.currentVideoID = videoId
                     }
                 }
             },

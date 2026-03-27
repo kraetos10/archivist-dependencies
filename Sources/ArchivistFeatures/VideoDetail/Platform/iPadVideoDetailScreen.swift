@@ -2,6 +2,9 @@
 import ArchivistNetworking
 import ArchivistComponents
 import ComposableArchitecture
+import Dependencies
+import SQLiteData
+import StructuredQueries
 import SwiftUI
 
 @ViewAction(for: VideoDetailReducer.self)
@@ -11,6 +14,8 @@ public struct iPadVideoDetailScreen: View {
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
     }
+    @FetchAll(PlayNextItem.all.order(by: \.id))
+    private var playNextItems
     @State private var showAllComments = false
     @State private var currentCommentIndex: Int = 0
 
@@ -57,6 +62,9 @@ public struct iPadVideoDetailScreen: View {
                 // Right: up next + similar videos
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
+                        if store.showPlayNext && !playNextItems.isEmpty {
+                            playNextSidebarSection(compact: useCompactSidebar)
+                        }
                         if !store.nextVideos.isEmpty {
                             nextUpSidebarSection(compact: useCompactSidebar)
                         }
@@ -219,6 +227,14 @@ public struct iPadVideoDetailScreen: View {
                             ? String(localized: "Watched")
                             : String(localized: "Unwatched")
                     )
+                }
+
+                if store.showPlayNext && !playNextItems.contains(where: { $0.videoId == store.video.videoId }) {
+                    Button {
+                        send(.addToPlayNextTapped)
+                    } label: {
+                        actionPillLabel(systemImage: "text.line.last.and.arrowtriangle.forward", label: String(localized: "Play Next"))
+                    }
                 }
 
                 Button {
@@ -482,6 +498,116 @@ public struct iPadVideoDetailScreen: View {
             .padding(.horizontal, 16)
         }
         .padding(.top, 8)
+    }
+
+    private func playNextSidebarSection(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(String(localized: "Play Next"))
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.Text.primary)
+                .padding(.horizontal, 16)
+
+            LazyVStack(spacing: 12) {
+                ForEach(playNextItems) { item in
+                    playNextSidebarRow(item, compact: compact)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 24)
+    }
+
+    private func playNextSidebarRow(_ item: PlayNextItem, compact: Bool) -> some View {
+        let videoRow = similarVideoThumbnailFromPlayNext(item)
+        return Group {
+            if compact {
+                VStack(alignment: .leading, spacing: 8) {
+                    videoRow
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .clipped()
+
+                    playNextDetails(item)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 10)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    videoRow
+                        .frame(width: 160, height: 90)
+                        .clipped()
+
+                    playNextDetails(item)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.trailing, 8)
+                        .padding(.vertical, 8)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .background(Color.Surface.highlight)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .contextMenu {
+            Button(role: .destructive) {
+                send(.removeFromPlayNextTapped(item.id), animation: .default)
+            } label: {
+                Label(String(localized: "Remove from Play Next"), systemImage: "minus.circle")
+            }
+        }
+    }
+
+    private func similarVideoThumbnailFromPlayNext(_ item: PlayNextItem) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            if let thumbPath = item.thumbUrl,
+               let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
+                AsyncImage(url: thumbURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        Rectangle().fill(Color.Brand.secondary.opacity(0.3))
+                    }
+                }
+            } else {
+                Rectangle().fill(Color.Brand.secondary.opacity(0.3))
+            }
+
+            if let duration = item.duration {
+                Text(duration)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.7))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(6)
+            }
+        }
+    }
+
+    private func playNextDetails(_ item: PlayNextItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(Color.Text.primary)
+                .lineLimit(2)
+
+            Text(item.channelName)
+                .font(.caption2)
+                .foregroundStyle(Color.Brand.secondary)
+                .lineLimit(1)
+
+            if let duration = item.duration {
+                Text(duration)
+                    .font(.caption2)
+                    .foregroundStyle(Color.Brand.secondary)
+            }
+        }
     }
 
     private func nextUpSidebarSection(compact: Bool) -> some View {

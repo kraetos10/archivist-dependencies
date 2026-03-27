@@ -33,6 +33,19 @@ extension VideoListReducer {
         case .videoRefreshed(let video):
             state.videos.updateOrAppend(video)
             return .none
+        case .pipRestoreVideo(let video):
+            let detailState = VideoDetailReducer.State(
+                serverConfig: state.serverConfig,
+                video: video,
+                nextVideos: [],
+                isPlaying: true
+            )
+            #if os(tvOS)
+            state.path.append(.videoDetail(detailState))
+            #else
+            state.videoDetail = detailState
+            #endif
+            return .none
         default:
             return .none
         }

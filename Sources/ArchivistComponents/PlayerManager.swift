@@ -11,6 +11,8 @@ public final class PlayerManager {
     public private(set) var isBuffering = true
     public private(set) var currentTime: Double = 0
     public private(set) var duration: Double = 0
+    public var onPiPRestore: (() -> Void)?
+    public var currentVideoID: String?
     private var timeObserver: Any?
     private var durationObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
@@ -53,6 +55,8 @@ public final class PlayerManager {
         duration = 0
         onPlaybackEnd = nil
         onPause = nil
+        onPiPRestore = nil
+        currentVideoID = nil
     }
 
     public func pause() {

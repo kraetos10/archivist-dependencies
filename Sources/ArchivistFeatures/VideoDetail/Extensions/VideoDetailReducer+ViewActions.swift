@@ -33,6 +33,10 @@ extension VideoDetailReducer {
             return handleToggleWatched(state: &state)
         case .addToPlaylistTapped:
             return handleAddToPlaylistTapped(state: &state)
+        case .addToPlayNextTapped:
+            return handleAddToPlayNextTapped(state: &state)
+        case .removeFromPlayNextTapped(let id):
+            return handleRemoveFromPlayNextTapped(id, state: &state)
         }
     }
 
@@ -112,6 +116,7 @@ extension VideoDetailReducer {
         let startPosition = state.video.player?.position
         let config = state.serverConfig
         let videoId = state.video.videoId
+        let video = state.video
         return .run { [videoService] send in
             await MainActor.run {
                 PlayerManager.shared.load(url: url, startPosition: startPosition)
@@ -125,6 +130,7 @@ extension VideoDetailReducer {
                         try? await videoService.setProgress(config: config, videoId: videoId, position: position)
                     }
                 }
+                PlayerManager.shared.currentVideoID = videoId
             }
         }
     }
@@ -279,9 +285,10 @@ extension VideoDetailReducer {
         let saveEffect = saveProgressEffect(state: state)
         let config = state.serverConfig
         let currentVideoId = state.video.videoId
+        let nextVideos = state.nextVideos
         let similarVideos = state.similarVideos
         return .merge(saveEffect, .run { [playNextDatabase, videoService] send in
-            // 1. Check user's Play Next queue in DB
+            // 1. Play Next queue (user-curated, highest priority)
             if let nextItem = try? await playNextDatabase.popNext() {
                 do {
                     let video = try await videoService.getVideo(config: config, id: nextItem.videoId)
@@ -292,13 +299,19 @@ extension VideoDetailReducer {
                 }
             }
 
-            // 2. Fall back to first similar video
+            // 2. Up Next (contextual queue from video list / playlist)
+            if let firstNext = nextVideos.first {
+                await send(.autoPlayVideo(firstNext))
+                return
+            }
+
+            // 3. Similar videos (pre-loaded)
             if let firstSimilar = similarVideos.first {
                 await send(.autoPlayVideo(firstSimilar))
                 return
             }
 
-            // 3. Try fetching similar videos if none loaded
+            // 4. Fetch similar from server as last resort
             do {
                 let similar = try await videoService.getSimilar(config: config, videoId: currentVideoId)
                 if let first = similar.first {
@@ -316,6 +329,19 @@ extension VideoDetailReducer {
             videoId: state.video.videoId
         )
         return .none
+    }
+
+    private func handleAddToPlayNextTapped(state: inout State) -> Effect<Action> {
+        let video = state.video
+        return .run { [playNextDatabase] _ in
+            try? await playNextDatabase.addToQueue(video)
+        }
+    }
+
+    private func handleRemoveFromPlayNextTapped(_ id: Int, state: inout State) -> Effect<Action> {
+        return .run { [playNextDatabase] _ in
+            try? await playNextDatabase.removeFromQueue(id)
+        }
     }
 
     private func handleNextUpVideoTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
