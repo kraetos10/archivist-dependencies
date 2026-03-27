@@ -5,19 +5,19 @@ import Foundation
 extension PlaylistsReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .playlistsLoaded(let response):
+        case .playlistsResult(.success(let response)):
             return handlePlaylistsLoaded(response, state: &state)
-        case .playlistsFailed:
+        case .playlistsResult(.failure):
             return handlePlaylistsFailed(state: &state)
-        case .searchResultsLoaded(let playlists):
+        case .searchResult(.success(let playlists)):
             state.searchResults = IdentifiedArrayOf(uniqueElements: playlists)
             state.isSearching = false
             return .none
-        case .searchFailed:
+        case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .addPlaylist(.presented(.subscribeSucceeded)),
-             .addPlaylist(.presented(.createCustomSucceeded)):
+        case .addPlaylist(.presented(.subscribeResult(.success))),
+             .addPlaylist(.presented(.createCustomResult(.success))):
             return handleSubscribeSucceeded(state: &state)
         default:
             return .none
@@ -60,12 +60,10 @@ extension PlaylistsReducer {
         let searchService = self.searchService
         return .run { send in
             try await clock.sleep(for: .milliseconds(400))
-            do {
-                let response = try await searchService.search(config: config, query: query)
-                await send(.searchResultsLoaded(response.playlistResults ?? []))
-            } catch {
-                await send(.searchFailed)
+            let result = await Result {
+                try await searchService.search(config: config, query: query)
             }
+            await send(.searchResult(result.map { $0.playlistResults ?? [] }))
         }
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }

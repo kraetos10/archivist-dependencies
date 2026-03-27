@@ -12,10 +12,10 @@ extension SettingsReducer {
             let config = state.serverConfig
             let taskService = self.taskService
             return .run { send in
-                _ = try await taskService.startTask(config: config, name: TaskName.updateSubscribed.rawValue)
-                await send(.rescanSubscriptionsStarted)
-            } catch: { _, send in
-                await send(.rescanSubscriptionsFailed)
+                let result = await Result {
+                    _ = try await taskService.startTask(config: config, name: TaskName.updateSubscribed.rawValue)
+                }
+                await send(.rescanSubscriptionsResult(result))
             }
         case .pullToRefreshTriggered:
             return .send(.activeTask(.view(.startPolling)))
@@ -23,33 +23,32 @@ extension SettingsReducer {
             state.isReAuthenticating = true
             let config = state.serverConfig
             return .run { [keychainService, userService] send in
-                guard let credentials = keychainService.loadCredentials() else {
-                    await send(.reAuthFailed)
-                    return
+                let result = await Result {
+                    guard let credentials = keychainService.loadCredentials() else {
+                        throw NetworkingError.missingData
+                    }
+                    // Logout first to clear stale session cookies
+                    try? await userService.logout(config: config)
+                    // Re-login to get fresh csrftoken + sessionid cookies
+                    _ = try await userService.login(
+                        baseURL: config.baseURL,
+                        port: config.port,
+                        useHTTP: config.useHTTP,
+                        username: credentials.username,
+                        password: credentials.password
+                    )
+                    let tokenResponse = try await userService.getToken(
+                        baseURL: config.baseURL,
+                        port: config.port,
+                        useHTTP: config.useHTTP
+                    )
+                    guard let token = tokenResponse.token else {
+                        throw NetworkingError.missingData
+                    }
+                    try keychainService.save(token: token)
+                    return token
                 }
-                // Logout first to clear stale session cookies
-                try? await userService.logout(config: config)
-                // Re-login to get fresh csrftoken + sessionid cookies
-                _ = try await userService.login(
-                    baseURL: config.baseURL,
-                    port: config.port,
-                    useHTTP: config.useHTTP,
-                    username: credentials.username,
-                    password: credentials.password
-                )
-                let tokenResponse = try await userService.getToken(
-                    baseURL: config.baseURL,
-                    port: config.port,
-                    useHTTP: config.useHTTP
-                )
-                guard let token = tokenResponse.token else {
-                    await send(.reAuthFailed)
-                    return
-                }
-                try keychainService.save(token: token)
-                await send(.reAuthSucceeded(token))
-            } catch: { _, send in
-                await send(.reAuthFailed)
+                await send(.reAuthResult(result))
             }
         }
     }

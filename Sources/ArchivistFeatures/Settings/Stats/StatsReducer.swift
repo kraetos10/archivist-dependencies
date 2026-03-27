@@ -25,13 +25,12 @@ public struct StatsReducer {
 
     public enum Action: ViewAction {
         case view(View)
-        case videoStatsLoaded(VideoStatsResponse)
-        case channelStatsLoaded(ChannelStatsResponse)
-        case playlistStatsLoaded(PlaylistStatsResponse)
-        case downloadStatsLoaded(DownloadStatsResponse)
-        case watchStatsLoaded(WatchStatsResponse)
-        case biggestChannelsLoaded([BiggestChannelResponse])
-        case statsFailed(StatsSection)
+        case videoStatsResult(Result<VideoStatsResponse, Error>)
+        case channelStatsResult(Result<ChannelStatsResponse, Error>)
+        case playlistStatsResult(Result<PlaylistStatsResponse, Error>)
+        case downloadStatsResult(Result<DownloadStatsResponse, Error>)
+        case watchStatsResult(Result<WatchStatsResponse, Error>)
+        case biggestChannelsResult(Result<[BiggestChannelResponse], Error>)
 
         @CasePathable
         public enum View {

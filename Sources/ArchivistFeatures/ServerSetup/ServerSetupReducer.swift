@@ -27,8 +27,7 @@ public struct ServerSetupReducer {
         case view(View)
         case alert(PresentationAction<AlertAction>)
         case binding(BindingAction<State>)
-        case healthCheckSucceeded
-        case healthCheckFailed(Error)
+        case healthCheckResult(Result<Void, Error>)
         case loginCompleted
         case path(StackActionOf<ServerSetupPath>)
         case serverValidated

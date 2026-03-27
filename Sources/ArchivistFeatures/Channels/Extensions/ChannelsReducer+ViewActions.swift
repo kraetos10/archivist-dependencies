@@ -29,17 +29,15 @@ extension ChannelsReducer {
         let config = state.serverConfig
         let channelService = self.channelService
         return .run { send in
-            do {
-                let response = try await channelService.getChannels(
+            let result = await Result {
+                try await channelService.getChannels(
                     config: config,
                     page: 1,
                     filter: nil,
                     query: nil
                 )
-                await send(.channelsLoaded(response))
-            } catch {
-                await send(.channelsFailed(error))
             }
+            await send(.channelsResult(result))
         }
         .cancellable(id: CancelID.loadChannels)
     }
@@ -50,17 +48,15 @@ extension ChannelsReducer {
         let config = state.serverConfig
         let channelService = self.channelService
         return .run { send in
-            do {
-                let response = try await channelService.getChannels(
+            let result = await Result {
+                try await channelService.getChannels(
                     config: config,
                     page: 1,
                     filter: nil,
                     query: nil
                 )
-                await send(.channelsLoaded(response))
-            } catch {
-                await send(.channelsFailed(error))
             }
+            await send(.channelsResult(result))
         }
         .cancellable(id: CancelID.loadChannels, cancelInFlight: true)
     }
@@ -72,17 +68,15 @@ extension ChannelsReducer {
         let nextPage = state.currentPage + 1
         let channelService = self.channelService
         return .run { send in
-            do {
-                let response = try await channelService.getChannels(
+            let result = await Result {
+                try await channelService.getChannels(
                     config: config,
                     page: nextPage,
                     filter: nil,
                     query: nil
                 )
-                await send(.channelsLoaded(response))
-            } catch {
-                await send(.channelsFailed(error))
             }
+            await send(.channelsResult(result))
         }
         .cancellable(id: CancelID.loadChannels)
     }
@@ -129,12 +123,10 @@ extension ChannelsReducer {
         let config = state.serverConfig
         let channelService = self.channelService
         return .run { send in
-            do {
+            let result = await Result {
                 try await channelService.deleteChannel(config: config, id: channelId)
-                await send(.unsubscribeCompleted(channelId))
-            } catch {
-                await send(.unsubscribeFailed)
             }
+            await send(.unsubscribeResult(result.map { channelId }))
         }
     }
 }

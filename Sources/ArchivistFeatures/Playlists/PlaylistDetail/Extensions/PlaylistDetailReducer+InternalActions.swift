@@ -5,27 +5,29 @@ import Foundation
 extension PlaylistDetailReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .playlistLoaded(let playlist):
+        case .playlistResult(.success(let playlist)):
             return handlePlaylistLoaded(playlist, state: &state)
-        case .playlistFailed:
+        case .playlistResult(.failure):
             state.isLoadingEntries = false
             state.hasLoadedEntries = true
             return .none
-        case .videoLoaded(let video, let nextVideos):
+        case .videoResult(.success(let (video, nextVideos))):
             return .send(.delegate(.showVideo(video, nextVideos: nextVideos)))
-        case .videoFailed:
+        case .videoResult(.failure):
             return .none
-        case .removeEntryCompleted(let videoId):
+        case .removeEntryResult(.success(let videoId)):
             if var entries = state.playlist.playlistEntries {
                 entries.removeAll { $0.youtubeId == videoId }
                 state.playlist = state.playlist.withEntries(entries)
             }
             return .none
-        case .removeEntryFailed:
+        case .removeEntryResult(.failure):
             return .none
-        case .moveEntryFailed:
+        case .moveEntryResult(.failure):
             state.hasLoadedEntries = false
             return .send(.view(.viewDidAppear))
+        case .moveEntryResult(.success):
+            return .none
         case .thumbnailsLoaded(let thumbs):
             state.entryThumbnails.merge(thumbs) { _, new in new }
             return .none
@@ -73,12 +75,10 @@ extension PlaylistDetailReducer {
         let playlistId = state.playlist.playlistId
         let playlistService = self.playlistService
         return .run { send in
-            do {
+            let result = await Result {
                 try await playlistService.deletePlaylist(config: config, id: playlistId, deleteVideos: false)
-                await send(.unsubscribeCompleted)
-            } catch {
-                await send(.unsubscribeFailed)
             }
+            await send(.unsubscribeResult(result))
         }
     }
 }

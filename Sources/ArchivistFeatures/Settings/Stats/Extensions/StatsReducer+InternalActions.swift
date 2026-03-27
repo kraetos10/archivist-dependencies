@@ -5,32 +5,47 @@ import Foundation
 extension StatsReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .videoStatsLoaded(let video):
+        case .videoStatsResult(.success(let video)):
             state.videoStats = video
             state.loadedSections.insert(.video)
             return checkAllLoaded(state: &state)
-        case .channelStatsLoaded(let channel):
+        case .videoStatsResult(.failure):
+            state.loadedSections.insert(.video)
+            return checkAllLoaded(state: &state)
+        case .channelStatsResult(.success(let channel)):
             state.channelStats = channel
             state.loadedSections.insert(.channel)
             return checkAllLoaded(state: &state)
-        case .playlistStatsLoaded(let playlist):
+        case .channelStatsResult(.failure):
+            state.loadedSections.insert(.channel)
+            return checkAllLoaded(state: &state)
+        case .playlistStatsResult(.success(let playlist)):
             state.playlistStats = playlist
             state.loadedSections.insert(.playlist)
             return checkAllLoaded(state: &state)
-        case .downloadStatsLoaded(let download):
+        case .playlistStatsResult(.failure):
+            state.loadedSections.insert(.playlist)
+            return checkAllLoaded(state: &state)
+        case .downloadStatsResult(.success(let download)):
             state.downloadStats = download
             state.loadedSections.insert(.download)
             return checkAllLoaded(state: &state)
-        case .watchStatsLoaded(let watch):
+        case .downloadStatsResult(.failure):
+            state.loadedSections.insert(.download)
+            return checkAllLoaded(state: &state)
+        case .watchStatsResult(.success(let watch)):
             state.watchStats = watch
             state.loadedSections.insert(.watch)
             return checkAllLoaded(state: &state)
-        case .biggestChannelsLoaded(let channels):
+        case .watchStatsResult(.failure):
+            state.loadedSections.insert(.watch)
+            return checkAllLoaded(state: &state)
+        case .biggestChannelsResult(.success(let channels)):
             state.biggestChannels = channels
             state.loadedSections.insert(.biggestChannels)
             return checkAllLoaded(state: &state)
-        case .statsFailed(let section):
-            state.loadedSections.insert(section)
+        case .biggestChannelsResult(.failure):
+            state.loadedSections.insert(.biggestChannels)
             return checkAllLoaded(state: &state)
         default:
             return .none

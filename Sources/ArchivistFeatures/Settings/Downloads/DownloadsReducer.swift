@@ -48,12 +48,9 @@ public struct DownloadsReducer {
         case view(View)
         case binding(BindingAction<State>)
         case alert(PresentationAction<AlertAction>)
-        case downloadsLoaded(PaginatedResponse<DownloadResponse>)
-        case downloadsFailed(Error)
-        case searchResultsLoaded(PaginatedResponse<DownloadResponse>)
-        case searchFailed
-        case downloadDeleted(String)
-        case downloadDeleteFailed(Error)
+        case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
+        case searchResult(Result<PaginatedResponse<DownloadResponse>, Error>)
+        case deleteResult(Result<String, Error>)
         case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
 
         @CasePathable
@@ -86,10 +83,10 @@ public struct DownloadsReducer {
             case .downloadDetail(.presented(.view(.dismissTapped))):
                 state.downloadDetail = nil
                 return .none
-            case .downloadDetail(.presented(.downloadStarted)):
+            case .downloadDetail(.presented(.downloadResult(.success))):
                 state.downloadDetail = nil
                 return .send(.view(.pullToRefreshTriggered))
-            case .downloadDetail(.presented(.deleteSucceeded)):
+            case .downloadDetail(.presented(.deleteResult(.success))):
                 let videoId = state.downloadDetail?.download.youtubeId
                 state.downloadDetail = nil
                 if let videoId {

@@ -17,12 +17,12 @@ public struct iPadVideoListScreen: View {
     public var body: some View {
         ScrollView {
             if !store.isSearchActive {
-                WatchFilterRow(watchFilter: store.watchFilter, showDownloadedOnly: store.showDownloadedOnly, onFilterChanged: { send(.watchFilterChanged($0), animation: .default) }, onDownloadedFilterTapped: { send(.downloadedFilterTapped) })
+                WatchFilterRow(watchFilter: store.watchFilter, onFilterChanged: { send(.watchFilterChanged($0), animation: .default) })
                     .padding(.top, 8)
             }
 
             if (store.hasLoaded || (store.isSearchActive && !store.isSearching)) && store.displayedVideos.isEmpty {
-                VideoListEmptyState(isSearchActive: store.isSearchActive, isSearching: store.isSearching, showDownloadedOnly: store.showDownloadedOnly, watchFilter: store.watchFilter)
+                VideoListEmptyState(isSearchActive: store.isSearchActive, isSearching: store.isSearching, watchFilter: store.watchFilter)
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.videos.isEmpty {

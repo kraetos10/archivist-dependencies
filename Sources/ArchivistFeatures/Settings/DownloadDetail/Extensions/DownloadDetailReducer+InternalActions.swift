@@ -5,11 +5,11 @@ import Foundation
 extension DownloadDetailReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .downloadStarted:
+        case .downloadResult(.success):
             state.isDownloading = false
             state.downloadTriggered = true
             return .none
-        case .downloadFailed:
+        case .downloadResult(.failure):
             state.isDownloading = false
             return .none
         case .performDelete:
@@ -17,17 +17,15 @@ extension DownloadDetailReducer {
             let videoId = state.download.youtubeId
             let downloadService = self.downloadService
             return .run { send in
-                do {
+                let result = await Result {
                     try await downloadService.deleteDownload(config: config, id: videoId)
-                    await send(.deleteSucceeded)
-                } catch {
-                    await send(.deleteFailed(error))
                 }
+                await send(.deleteResult(result))
             }
-        case .deleteSucceeded:
+        case .deleteResult(.success):
             state.isDeleting = false
             return .none
-        case .deleteFailed:
+        case .deleteResult(.failure):
             state.isDeleting = false
             return .none
         default:

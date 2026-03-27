@@ -5,18 +5,15 @@ import SwiftUI
 public struct VideoListEmptyState: View {
     public let isSearchActive: Bool
     public let isSearching: Bool
-    public let showDownloadedOnly: Bool
     public let watchFilter: WatchFilter
 
     public init(
         isSearchActive: Bool,
         isSearching: Bool,
-        showDownloadedOnly: Bool,
         watchFilter: WatchFilter
     ) {
         self.isSearchActive = isSearchActive
         self.isSearching = isSearching
-        self.showDownloadedOnly = showDownloadedOnly
         self.watchFilter = watchFilter
     }
 
@@ -27,12 +24,6 @@ public struct VideoListEmptyState: View {
                 icon: "magnifyingglass",
                 title: String.localised("video.empty.noResults", table: .videos),
                 description: String.localised("video.empty.noSearchMatch", table: .videos)
-            )
-        } else if showDownloadedOnly {
-            EmptyStateView(
-                icon: "arrow.down.circle",
-                title: String.localised("video.empty.noDownloads", table: .videos),
-                description: String.localised("video.empty.downloadDescription", table: .videos)
             )
         } else {
             switch watchFilter {
@@ -53,6 +44,12 @@ public struct VideoListEmptyState: View {
                     icon: "eye",
                     title: String.localised("video.empty.noWatched", table: .videos),
                     description: String.localised("video.empty.watchDescription", table: .videos)
+                )
+            case .downloaded:
+                EmptyStateView(
+                    icon: "arrow.down.circle",
+                    title: String.localised("video.empty.noDownloads", table: .videos),
+                    description: String.localised("video.empty.downloadDescription", table: .videos)
                 )
             }
         }

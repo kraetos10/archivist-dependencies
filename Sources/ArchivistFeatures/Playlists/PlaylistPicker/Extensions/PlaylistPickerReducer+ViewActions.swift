@@ -19,7 +19,7 @@ extension PlaylistPickerReducer {
         let videoId = state.videoId
         let playlistService = self.playlistService
         return .run { send in
-            do {
+            let result = await Result {
                 let response = try await playlistService.getPlaylists(
                     config: config,
                     page: 1,
@@ -43,10 +43,9 @@ extension PlaylistPickerReducer {
                         playlistsContainingVideo.insert(id)
                     }
                 }
-                await send(.playlistsLoaded(response.data, playlistsContainingVideo))
-            } catch {
-                await send(.loadFailed)
+                return (response.data, playlistsContainingVideo)
             }
+            await send(.loadResult(result))
         }
     }
 
@@ -58,17 +57,15 @@ extension PlaylistPickerReducer {
         let videoId = state.videoId
         let playlistService = self.playlistService
         return .run { send in
-            do {
+            let result = await Result {
                 try await playlistService.modifyCustomPlaylist(
                     config: config,
                     id: playlistId,
                     action: "create",
                     videoId: videoId
                 )
-                await send(.addSucceeded)
-            } catch {
-                await send(.addFailed)
             }
+            await send(.addResult(result))
         }
     }
 }

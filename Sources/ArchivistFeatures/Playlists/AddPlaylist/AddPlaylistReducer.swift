@@ -22,10 +22,8 @@ public struct AddPlaylistReducer {
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
-        case subscribeSucceeded
-        case subscribeFailed
-        case createCustomSucceeded
-        case createCustomFailed
+        case subscribeResult(Result<Void, Error>)
+        case createCustomResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

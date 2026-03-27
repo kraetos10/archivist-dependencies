@@ -69,20 +69,18 @@ extension DownloadsReducer {
         let videoId = download.youtubeId
         let downloadService = self.downloadService
         return .run { send in
-            do {
+            let result = await Result {
                 try await downloadService.deleteDownload(config: config, id: videoId)
-                await send(.downloadDeleted(videoId))
-            } catch {
-                await send(.downloadDeleteFailed(error))
             }
+            await send(.deleteResult(result.map { videoId }))
         }
     }
 
     func fetchDownloads(config: ServerConfig, page: Int) -> Effect<Action> {
         let downloadService = self.downloadService
         return .run { send in
-            do {
-                let response = try await downloadService.getDownloads(
+            let result = await Result {
+                try await downloadService.getDownloads(
                     config: config,
                     page: page,
                     filter: "pending",
@@ -90,10 +88,8 @@ extension DownloadsReducer {
                     query: nil,
                     vidType: nil
                 )
-                await send(.downloadsLoaded(response))
-            } catch {
-                await send(.downloadsFailed(error))
             }
+            await send(.downloadsResult(result))
         }
     }
 }

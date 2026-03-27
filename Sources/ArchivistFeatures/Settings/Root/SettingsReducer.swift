@@ -46,10 +46,8 @@ public struct SettingsReducer {
         case view(View)
         case binding(BindingAction<State>)
         case didRequestLogout
-        case rescanSubscriptionsStarted
-        case rescanSubscriptionsFailed
-        case reAuthSucceeded(String)
-        case reAuthFailed
+        case rescanSubscriptionsResult(Result<Void, Error>)
+        case reAuthResult(Result<String, Error>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
         case downloads(DownloadsReducer.Action)
         case stats(StatsReducer.Action)

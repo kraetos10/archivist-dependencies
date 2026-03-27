@@ -33,8 +33,8 @@ extension ChannelDetailReducer {
             state.isLoadingVideos = true
             effects.append(
                 .run { send in
-                    do {
-                        let response = try await videoService.getVideos(
+                    let result = await Result {
+                        try await videoService.getVideos(
                             config: config,
                             page: 1,
                             sort: "published",
@@ -44,10 +44,8 @@ extension ChannelDetailReducer {
                             channel: channelId,
                             playlist: nil
                         )
-                        await send(.videosLoaded(response))
-                    } catch {
-                        await send(.videosFailed(error))
                     }
+                    await send(.videosResult(result))
                 }
             )
         }
@@ -56,8 +54,8 @@ extension ChannelDetailReducer {
             state.isLoadingDownloads = true
             effects.append(
                 .run { send in
-                    do {
-                        let response = try await downloadService.getDownloads(
+                    let result = await Result {
+                        try await downloadService.getDownloads(
                             config: config,
                             page: 1,
                             filter: "pending",
@@ -65,10 +63,8 @@ extension ChannelDetailReducer {
                             query: nil,
                             vidType: nil
                         )
-                        await send(.downloadsLoaded(response))
-                    } catch {
-                        await send(.downloadsFailed(error))
                     }
+                    await send(.downloadsResult(result))
                 }
             )
         }
@@ -83,8 +79,8 @@ extension ChannelDetailReducer {
         let channelId = state.channel.channelId
         let nextPage = state.currentPage + 1
         return .run { send in
-            do {
-                let response = try await videoService.getVideos(
+            let result = await Result {
+                try await videoService.getVideos(
                     config: config,
                     page: nextPage,
                     sort: "published",
@@ -94,10 +90,8 @@ extension ChannelDetailReducer {
                     channel: channelId,
                     playlist: nil
                 )
-                await send(.videosLoaded(response))
-            } catch {
-                await send(.videosFailed(error))
             }
+            await send(.videosResult(result))
         }
     }
 

@@ -5,21 +5,21 @@ import Foundation
 extension DownloadsReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .downloadsLoaded(let response):
+        case .downloadsResult(.success(let response)):
             return handleDownloadsLoaded(response, state: &state)
-        case .downloadsFailed:
+        case .downloadsResult(.failure):
             return handleDownloadsFailed(state: &state)
-        case .searchResultsLoaded(let response):
+        case .searchResult(.success(let response)):
             state.searchResults = IdentifiedArrayOf(uniqueElements: response.data)
             state.isSearching = false
             return .none
-        case .searchFailed:
+        case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .downloadDeleted(let videoId):
+        case .deleteResult(.success(let videoId)):
             state.downloads.remove(id: videoId)
             return .none
-        case .downloadDeleteFailed:
+        case .deleteResult(.failure):
             return .none
         default:
             return .none
@@ -60,8 +60,8 @@ extension DownloadsReducer {
         let downloadService = self.downloadService
         return .run { send in
             try await clock.sleep(for: .milliseconds(400))
-            do {
-                let response = try await downloadService.getDownloads(
+            let result = await Result {
+                try await downloadService.getDownloads(
                     config: config,
                     page: 1,
                     filter: "pending",
@@ -69,10 +69,8 @@ extension DownloadsReducer {
                     query: query,
                     vidType: nil
                 )
-                await send(.searchResultsLoaded(response))
-            } catch {
-                await send(.searchFailed)
             }
+            await send(.searchResult(result))
         }
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }

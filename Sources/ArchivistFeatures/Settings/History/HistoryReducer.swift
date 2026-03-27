@@ -20,9 +20,8 @@ public struct HistoryReducer {
     public enum Action: ViewAction {
         case view(View)
         case delegate(Delegate)
-        case continueVideosLoaded(PaginatedResponse<VideoResponse>)
-        case watchedVideosLoaded(PaginatedResponse<VideoResponse>)
-        case videosFailed
+        case continueVideosResult(Result<PaginatedResponse<VideoResponse>, Error>)
+        case watchedVideosResult(Result<PaginatedResponse<VideoResponse>, Error>)
 
         @CasePathable
         public enum View {

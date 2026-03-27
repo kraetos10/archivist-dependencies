@@ -15,8 +15,7 @@ public struct AddChannelReducer {
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
-        case subscribeSucceeded
-        case subscribeFailed
+        case subscribeResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

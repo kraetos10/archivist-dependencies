@@ -51,15 +51,11 @@ public struct PlaylistDetailReducer {
         case view(View)
         case alert(PresentationAction<AlertAction>)
         case delegate(Delegate)
-        case playlistLoaded(PlaylistResponse)
-        case playlistFailed(Error)
-        case videoLoaded(VideoResponse, nextVideos: [VideoResponse])
-        case videoFailed(Error)
-        case unsubscribeCompleted
-        case unsubscribeFailed
-        case removeEntryCompleted(String)
-        case removeEntryFailed
-        case moveEntryFailed
+        case playlistResult(Result<PlaylistResponse, Error>)
+        case videoResult(Result<(VideoResponse, nextVideos: [VideoResponse]), Error>)
+        case unsubscribeResult(Result<Void, Error>)
+        case removeEntryResult(Result<String, Error>)
+        case moveEntryResult(Result<Void, Error>)
         case thumbnailsLoaded([String: String])
         case videoPicker(PresentationAction<VideoPickerReducer.Action>)
 
@@ -95,7 +91,7 @@ public struct PlaylistDetailReducer {
                 return .none
             case .delegate:
                 return .none
-            case .videoPicker(.presented(.addSucceeded)):
+            case .videoPicker(.presented(.addResult(.success))):
                 state.videoPicker = nil
                 state.hasLoadedEntries = false
                 return .send(.view(.viewDidAppear))

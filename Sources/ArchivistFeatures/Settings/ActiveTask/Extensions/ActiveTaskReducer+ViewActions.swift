@@ -14,10 +14,10 @@ extension ActiveTaskReducer {
             let config = state.serverConfig
             let taskService = self.taskService
             return .run { send in
-                try await taskService.sendTaskCommand(config: config, taskId: taskId, command: "stop")
-                await send(.taskCancelled)
-            } catch: { _, send in
-                await send(.taskCancelFailed)
+                let result = await Result {
+                    try await taskService.sendTaskCommand(config: config, taskId: taskId, command: "stop")
+                }
+                await send(.cancelTaskResult(result))
             }
         }
     }
@@ -27,12 +27,10 @@ extension ActiveTaskReducer {
     private func poll(config: ServerConfig) -> Effect<Action> {
         let taskService = self.taskService
         return .run { send in
-            do {
-                let notifications = try await taskService.getDownloadNotifications(config: config)
-                await send(.notificationsLoaded(notifications))
-            } catch {
-                await send(.pollFailed)
+            let result = await Result {
+                try await taskService.getDownloadNotifications(config: config)
             }
+            await send(.pollResult(result))
         }
         .cancellable(id: CancelID.polling, cancelInFlight: true)
     }

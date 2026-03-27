@@ -17,10 +17,8 @@ public struct PlaylistPickerReducer {
 
     public enum Action: ViewAction {
         case view(View)
-        case playlistsLoaded([PlaylistResponse], Set<String>)
-        case loadFailed
-        case addSucceeded
-        case addFailed
+        case loadResult(Result<([PlaylistResponse], Set<String>), Error>)
+        case addResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

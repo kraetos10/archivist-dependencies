@@ -30,32 +30,32 @@ extension VideoPickerReducer {
         let downloadService = self.downloadService
         return .merge(
             .run { send in
-                let response = try await videoService.getVideos(
-                    config: config,
-                    page: 1,
-                    sort: "published",
-                    order: "desc",
-                    type: nil,
-                    watch: nil,
-                    channel: nil,
-                    playlist: nil
-                )
-                await send(.videosLoaded(response))
-            } catch: { _, send in
-                await send(.videosFailed)
+                let result = await Result {
+                    try await videoService.getVideos(
+                        config: config,
+                        page: 1,
+                        sort: "published",
+                        order: "desc",
+                        type: nil,
+                        watch: nil,
+                        channel: nil,
+                        playlist: nil
+                    )
+                }
+                await send(.videosResult(result))
             },
             .run { send in
-                let response = try await downloadService.getDownloads(
-                    config: config,
-                    page: 1,
-                    filter: "pending",
-                    channel: nil,
-                    query: nil,
-                    vidType: nil
-                )
-                await send(.downloadsLoaded(response))
-            } catch: { _, send in
-                await send(.downloadsFailed)
+                let result = await Result {
+                    try await downloadService.getDownloads(
+                        config: config,
+                        page: 1,
+                        filter: "pending",
+                        channel: nil,
+                        query: nil,
+                        vidType: nil
+                    )
+                }
+                await send(.downloadsResult(result))
             }
         )
     }
@@ -69,19 +69,19 @@ extension VideoPickerReducer {
         let nextPage = state.currentPage + 1
         let videoService = self.videoService
         return .run { send in
-            let response = try await videoService.getVideos(
-                config: config,
-                page: nextPage,
-                sort: "published",
-                order: "desc",
-                type: nil,
-                watch: nil,
-                channel: nil,
-                playlist: nil
-            )
-            await send(.videosLoaded(response))
-        } catch: { _, send in
-            await send(.videosFailed)
+            let result = await Result {
+                try await videoService.getVideos(
+                    config: config,
+                    page: nextPage,
+                    sort: "published",
+                    order: "desc",
+                    type: nil,
+                    watch: nil,
+                    channel: nil,
+                    playlist: nil
+                )
+            }
+            await send(.videosResult(result))
         }
     }
 
@@ -93,17 +93,17 @@ extension VideoPickerReducer {
         let videoIds = Array(state.selectedVideoIds)
         let playlistService = self.playlistService
         return .run { send in
-            for videoId in videoIds {
-                try? await playlistService.modifyCustomPlaylist(
-                    config: config,
-                    id: playlistId,
-                    action: "create",
-                    videoId: videoId
-                )
+            let result = await Result {
+                for videoId in videoIds {
+                    try await playlistService.modifyCustomPlaylist(
+                        config: config,
+                        id: playlistId,
+                        action: "create",
+                        videoId: videoId
+                    )
+                }
             }
-            await send(.addSucceeded)
-        } catch: { _, send in
-            await send(.addFailed)
+            await send(.addResult(result))
         }
     }
 
@@ -120,10 +120,10 @@ extension VideoPickerReducer {
         let searchService = self.searchService
         return .run { send in
             try await clock.sleep(for: .milliseconds(400))
-            let response = try await searchService.search(config: config, query: query)
-            await send(.searchResultsLoaded(response.videoResults ?? []))
-        } catch: { _, send in
-            await send(.searchFailed)
+            let result = await Result {
+                try await searchService.search(config: config, query: query)
+            }
+            await send(.searchResult(result.map { $0.videoResults ?? [] }))
         }
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }

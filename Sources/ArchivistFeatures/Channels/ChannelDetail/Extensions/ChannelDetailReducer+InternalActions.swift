@@ -5,13 +5,13 @@ import Foundation
 extension ChannelDetailReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .videosLoaded(let response):
+        case .videosResult(.success(let response)):
             return handleVideosLoaded(response, state: &state)
-        case .videosFailed:
+        case .videosResult(.failure):
             return handleVideosFailed(state: &state)
-        case .downloadsLoaded(let response):
+        case .downloadsResult(.success(let response)):
             return handleDownloadsLoaded(response, state: &state)
-        case .downloadsFailed:
+        case .downloadsResult(.failure):
             state.isLoadingDownloads = false
             state.hasLoadedDownloads = true
             return .none
@@ -61,12 +61,10 @@ extension ChannelDetailReducer {
         let config = state.serverConfig
         let channelId = state.channel.channelId
         return .run { send in
-            do {
+            let result = await Result {
                 try await channelService.deleteChannel(config: config, id: channelId)
-                await send(.unsubscribeCompleted)
-            } catch {
-                await send(.unsubscribeFailed)
             }
+            await send(.unsubscribeResult(result))
         }
     }
 }

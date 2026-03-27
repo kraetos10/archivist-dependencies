@@ -18,12 +18,10 @@ extension AddChannelReducer {
         let item = ChannelSubscribeItem(channelId: input, channelSubscribed: true)
         let channelService = self.channelService
         return .run { send in
-            do {
+            let result = await Result {
                 try await channelService.subscribeChannels(config: config, items: [item])
-                await send(.subscribeSucceeded)
-            } catch {
-                await send(.subscribeFailed)
             }
+            await send(.subscribeResult(result))
         }
     }
 }

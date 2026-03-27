@@ -60,7 +60,6 @@ public struct VideoListReducer {
         var isLoadingMore = false
         var hasLoaded = false
         var watchFilter: WatchFilter = .unwatched
-        var showDownloadedOnly = false
         var downloadedVideoIDs: Set<String> = []
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<VideoResponse> = []
@@ -89,9 +88,6 @@ public struct VideoListReducer {
                 }
                 return merged
             }
-            if showDownloadedOnly {
-                return videos.filter { downloadedVideoIDs.contains($0.videoId) }
-            }
             switch watchFilter {
             case .all:
                 return videos
@@ -99,6 +95,8 @@ public struct VideoListReducer {
                 return videos.filter { !$0.isWatched }
             case .watched:
                 return videos.filter { $0.isWatched }
+            case .downloaded:
+                return videos.filter { downloadedVideoIDs.contains($0.videoId) }
             }
         }
     }
@@ -117,13 +115,10 @@ public struct VideoListReducer {
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case alert(PresentationAction<AlertAction>)
         case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
-        case contextDeleteCompleted(String)
-        case contextDeleteFailed(Error)
-        case markWatchedCompleted(String)
-        case markWatchedFailed
+        case contextDeleteResult(Result<String, Error>)
+        case markWatchedResult(Result<String, Error>)
         case videoRefreshed(VideoResponse)
-        case searchResultsLoaded([VideoResponse])
-        case searchFailed
+        case searchResult(Result<[VideoResponse], Error>)
         case addVideo(PresentationAction<AddVideoReducer.Action>)
         case pipRestoreVideo(VideoResponse)
 
@@ -136,7 +131,6 @@ public struct VideoListReducer {
             case downloadToDeviceTapped(VideoResponse)
             case deleteFromServerTapped(VideoResponse)
             case watchFilterChanged(WatchFilter)
-            case downloadedFilterTapped
             case addToPlaylistTapped(VideoResponse)
             case markAsWatchedTapped(VideoResponse)
             case playNextTapped(VideoResponse)
@@ -189,31 +183,31 @@ public struct VideoListReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .selectedVideoDetail(.serverDeleteCompleted):
+            case .selectedVideoDetail(.serverDeleteResult(.success)):
                 state.selectedVideo = nil
                 return .send(.view(.pullToRefreshTriggered))
             case .selectedVideoDetail:
                 return .none
-            case .presentedVideo(.presented(.serverDeleteCompleted)):
+            case .presentedVideo(.presented(.serverDeleteResult(.success))):
                 state.presentedVideo = nil
                 return .send(.view(.pullToRefreshTriggered))
             case .presentedVideo:
                 return .none
-            case .path(.element(_, action: .videoDetail(.serverDeleteCompleted))):
+            case .path(.element(_, action: .videoDetail(.serverDeleteResult(.success)))):
                 _ = state.path.popLast()
                 return .send(.view(.pullToRefreshTriggered))
             case .path:
                 return .none
             case .playlistPicker:
                 return .none
-            case .addVideo(.presented(.addSucceeded)):
+            case .addVideo(.presented(.addResult(.success))):
                 state.addVideo = nil
                 return .send(.view(.pullToRefreshTriggered))
             case .addVideo:
                 return .none
             case .alert:
                 return .none
-            case .videoDetail(.presented(.serverDeleteCompleted)):
+            case .videoDetail(.presented(.serverDeleteResult(.success))):
                 state.videoDetail = nil
                 return .send(.view(.pullToRefreshTriggered))
             case .videoDetail:

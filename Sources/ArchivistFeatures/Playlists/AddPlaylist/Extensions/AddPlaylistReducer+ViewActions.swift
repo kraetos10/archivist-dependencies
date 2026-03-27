@@ -20,12 +20,10 @@ extension AddPlaylistReducer {
         let item = PlaylistSubscribeItem(playlistId: input, playlistSubscribed: true)
         let playlistService = self.playlistService
         return .run { send in
-            do {
+            let result = await Result {
                 try await playlistService.subscribePlaylists(config: config, items: [item])
-                await send(.subscribeSucceeded)
-            } catch {
-                await send(.subscribeFailed)
             }
+            await send(.subscribeResult(result))
         }
     }
 
@@ -36,12 +34,10 @@ extension AddPlaylistReducer {
         let config = state.serverConfig
         let playlistService = self.playlistService
         return .run { send in
-            do {
+            let result = await Result {
                 try await playlistService.createCustomPlaylist(config: config, name: name)
-                await send(.createCustomSucceeded)
-            } catch {
-                await send(.createCustomFailed)
             }
+            await send(.createCustomResult(result))
         }
     }
 }

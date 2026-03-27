@@ -24,11 +24,9 @@ public struct DownloadDetailReducer {
 
     public enum Action: ViewAction {
         case view(View)
-        case downloadStarted
-        case downloadFailed(Error)
+        case downloadResult(Result<Void, Error>)
         case performDelete
-        case deleteSucceeded
-        case deleteFailed(Error)
+        case deleteResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {
