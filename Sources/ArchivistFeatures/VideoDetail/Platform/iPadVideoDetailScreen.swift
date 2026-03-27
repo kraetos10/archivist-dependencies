@@ -11,7 +11,6 @@ public struct iPadVideoDetailScreen: View {
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
     }
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showAllComments = false
     @State private var currentCommentIndex: Int = 0
 
@@ -19,6 +18,7 @@ public struct iPadVideoDetailScreen: View {
         GeometryReader { geo in
             let leftWidth = geo.size.width * 0.65
             let playerHeight = leftWidth * 9 / 16
+            let useCompactSidebar = geo.size.width < geo.size.height
 
             HStack(alignment: .top, spacing: 0) {
                 // Left: player (fixed) + scrollable content
@@ -54,10 +54,13 @@ public struct iPadVideoDetailScreen: View {
                 Divider()
                     .padding(.horizontal, 4)
 
-                // Right: similar videos
+                // Right: up next + similar videos
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        similarSection
+                        if !store.nextVideos.isEmpty {
+                            nextUpSidebarSection(compact: useCompactSidebar)
+                        }
+                        similarSection(compact: useCompactSidebar)
                     }
                 }
             }
@@ -481,9 +484,31 @@ public struct iPadVideoDetailScreen: View {
         .padding(.top, 8)
     }
 
+    private func nextUpSidebarSection(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(String(localized: "Up Next"))
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.Text.primary)
+                .padding(.horizontal, 16)
+
+            LazyVStack(spacing: 12) {
+                ForEach(store.nextVideos.prefix(10), id: \.videoId) { video in
+                    similarVideoRow(video, compact: compact)
+                        .pressable {
+                            send(.nextUpVideoTapped(video))
+                        }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 24)
+    }
+
     // MARK: - Similar Videos
 
-    private var similarSection: some View {
+    private func similarSection(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "Similar Videos"))
                 .font(.title3)
@@ -494,7 +519,7 @@ public struct iPadVideoDetailScreen: View {
             if store.isLoadingSimilar {
                 LazyVStack(spacing: 12) {
                     ForEach(VideoResponse.placeholders.prefix(4)) { video in
-                        similarVideoRow(video)
+                        similarVideoRow(video, compact: compact)
                             .redacted(reason: .placeholder)
                     }
                 }
@@ -513,7 +538,7 @@ public struct iPadVideoDetailScreen: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(store.similarVideos) { video in
-                        similarVideoRow(video)
+                        similarVideoRow(video, compact: compact)
                             .pressable {
                                 send(.similarVideoTapped(video))
                             }
@@ -526,23 +551,28 @@ public struct iPadVideoDetailScreen: View {
         .padding(.bottom, 24)
     }
 
-    private func similarVideoRow(_ video: VideoResponse) -> some View {
+    private func similarVideoRow(_ video: VideoResponse, compact: Bool = false) -> some View {
         Group {
-            if horizontalSizeClass == .compact {
+            if compact {
                 similarVideoRowVertical(video)
             } else {
                 similarVideoRowHorizontal(video)
             }
         }
+        .background(Color.Surface.highlight)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
 
     private func similarVideoRowVertical(_ video: VideoResponse) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             similarVideoThumbnail(video)
                 .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipped()
 
             similarVideoDetails(video)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -551,10 +581,14 @@ public struct iPadVideoDetailScreen: View {
         HStack(alignment: .top, spacing: 10) {
             similarVideoThumbnail(video)
                 .frame(width: 160, height: 90)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipped()
 
             similarVideoDetails(video)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 8)
+                .padding(.vertical, 8)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func similarVideoThumbnail(_ video: VideoResponse) -> some View {
