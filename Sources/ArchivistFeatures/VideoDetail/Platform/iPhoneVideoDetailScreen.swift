@@ -465,9 +465,9 @@ public struct iPhoneVideoDetailScreen: View {
 
     private var nextUpSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "nextUp"))
-                .font(.subheadline)
-                .fontWeight(.semibold)
+            Text(String(localized: "Up Next"))
+                .font(.title3)
+                .fontWeight(.bold)
                 .foregroundStyle(Color.Text.primary)
                 .padding(.horizontal, 16)
 
@@ -506,8 +506,10 @@ public struct iPhoneVideoDetailScreen: View {
                         LazyHStack(spacing: 12) {
                             ForEach(playNextItems) { item in
                                 playNextRow(item)
+                                    .playNextTransition()
                             }
                         }
+                        .animation(.default, value: playNextItems.map(\.id))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 4)
                     }
@@ -518,54 +520,14 @@ public struct iPhoneVideoDetailScreen: View {
     }
 
     private func playNextRow(_ item: PlayNextItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .bottomTrailing) {
-                if let thumbPath = item.thumbUrl,
-                   let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
-                    AsyncImage(url: thumbURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        default:
-                            Rectangle().fill(Color.Brand.secondary.opacity(0.3))
-                        }
-                    }
-                } else {
-                    Rectangle().fill(Color.Brand.secondary.opacity(0.3))
-                }
-
-                if let duration = item.duration {
-                    Text(duration)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.black.opacity(0.7))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .padding(6)
-                }
-            }
-            .frame(width: 200, height: 112)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            Text(item.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(Color.Text.primary)
-                .lineLimit(1)
-
-            Text(item.channelName)
-                .font(.caption2)
-                .foregroundStyle(Color.Brand.secondary)
-        }
-        .frame(width: 200)
-        .contextMenu {
-            Button(role: .destructive) {
-                send(.removeFromPlayNextTapped(item.id), animation: .default)
-            } label: {
-                Label(String(localized: "Remove"), systemImage: "minus.circle")
-            }
+        PlayNextRowView(
+            title: item.title,
+            channelName: item.channelName,
+            thumbUrl: item.thumbUrl,
+            duration: item.duration,
+            serverConfig: store.serverConfig
+        ) {
+            send(.removeFromPlayNextTapped(item.id), animation: .default)
         }
     }
 

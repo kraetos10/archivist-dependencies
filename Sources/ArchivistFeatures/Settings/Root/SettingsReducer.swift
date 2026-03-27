@@ -27,6 +27,7 @@ public struct SettingsReducer {
         var selectedDetail: SettingsDetail?
         var isRescanningSubscriptions = false
         var isReAuthenticating = false
+        @Shared(.appStorage("autoPlayEnabled")) public var autoPlayEnabled = true
         @Presents var videoDetail: VideoDetailReducer.State?
 
         public init(serverConfig: ServerConfig) {

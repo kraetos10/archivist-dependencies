@@ -17,7 +17,7 @@ extension VideoDetailReducer {
             state.isLoadingComments = false
             return .none
         case .similarLoaded(let videos):
-            state.similarVideos = videos
+            state.similarVideos = videos.filter { !$0.isWatched }
             state.isLoadingSimilar = false
             return .none
         case .similarFailed:
