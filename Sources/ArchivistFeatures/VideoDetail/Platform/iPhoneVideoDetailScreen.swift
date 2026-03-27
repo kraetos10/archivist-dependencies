@@ -35,8 +35,15 @@ public struct iPhoneVideoDetailScreen: View {
                                     .padding(.vertical, 8)
                             }
 
-                            playNextSection
-                                .padding(.vertical, 8)
+                            if store.showPlayNext {
+                                playNextSection
+                                    .padding(.vertical, 8)
+                            }
+
+                            if !store.nextVideos.isEmpty {
+                                nextUpSection
+                                    .padding(.vertical, 8)
+                            }
 
                             similarSection
                                 .padding(.vertical, 16)
@@ -204,6 +211,14 @@ public struct iPhoneVideoDetailScreen: View {
                             ? String(localized: "Watched")
                             : String(localized: "Unwatched")
                     )
+                }
+
+                if store.showPlayNext && !playNextItems.contains(where: { $0.videoId == store.video.videoId }) {
+                    Button {
+                        send(.addToPlayNextTapped)
+                    } label: {
+                        actionPillLabel(systemImage: "text.line.last.and.arrowtriangle.forward", label: String(localized: "Play Next"))
+                    }
                 }
 
                 Button {
@@ -547,11 +562,7 @@ public struct iPhoneVideoDetailScreen: View {
         .frame(width: 200)
         .contextMenu {
             Button(role: .destructive) {
-                let id = item.id
-                Task {
-                    @Dependency(\.playNextDatabase) var db
-                    try? await db.removeFromQueue(id)
-                }
+                send(.removeFromPlayNextTapped(item.id), animation: .default)
             } label: {
                 Label(String(localized: "Remove"), systemImage: "minus.circle")
             }

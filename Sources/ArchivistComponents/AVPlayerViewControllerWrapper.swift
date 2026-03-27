@@ -58,6 +58,7 @@ public struct AVPlayerViewControllerWrapper: UIViewControllerRepresentable {
             _ playerViewController: AVPlayerViewController,
             restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
         ) {
+            NotificationCenter.default.post(name: .pipRestoreRequested, object: nil)
             completionHandler(true)
         }
     }

@@ -102,14 +102,16 @@ public struct PlaylistsReducer {
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
-                    nextVideos: nextVideos
+                    nextVideos: nextVideos,
+                    showPlayNext: false
                 )
                 return .none
             case .playlistDetail(.presented(.delegate(.showVideo(let video, let nextVideos)))):
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
-                    nextVideos: nextVideos
+                    nextVideos: nextVideos,
+                    showPlayNext: false
                 )
                 return .none
             case .videoDetail:
