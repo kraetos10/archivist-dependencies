@@ -1,0 +1,113 @@
+import ArchivistNetworking
+import ComposableArchitecture
+import Foundation
+
+@Reducer
+public struct PlaylistDetailReducer {
+    public init() {}
+    @ObservableState
+    public struct State: Equatable, Sendable {
+        var serverConfig: ServerConfig
+        var playlist: PlaylistResponse
+        var isLoadingEntries = false
+        var hasLoadedEntries = false
+        var isEditing = false
+        var entryThumbnails: [String: String] = [:]
+        @Presents var alert: AlertState<AlertAction>?
+        @Presents var videoPicker: VideoPickerReducer.State?
+
+        var playlistThumbURL: URL? {
+            playlist.thumbURL(config: serverConfig)
+        }
+
+        var entries: [PlaylistEntry] {
+            playlist.playlistEntries ?? []
+        }
+
+        var entryThumbURLs: [String: URL] {
+            var result: [String: URL] = [:]
+            for entry in entries {
+                guard let videoId = entry.youtubeId else { continue }
+                if let url = entry.thumbURL(config: serverConfig) {
+                    result[videoId] = url
+                } else if let path = entryThumbnails[videoId],
+                          let url = serverConfig.fullURL(for: path) {
+                    result[videoId] = url
+                }
+            }
+            return result
+        }
+
+        var isCustomPlaylist: Bool {
+            playlist.playlistType == .custom
+        }
+    }
+
+    public enum AlertAction: Equatable, Sendable {
+        case confirmUnsubscribe
+    }
+
+    public enum Action: ViewAction {
+        case view(View)
+        case alert(PresentationAction<AlertAction>)
+        case delegate(Delegate)
+        case playlistLoaded(PlaylistResponse)
+        case playlistFailed(Error)
+        case videoLoaded(VideoResponse, nextVideos: [VideoResponse])
+        case videoFailed(Error)
+        case unsubscribeCompleted
+        case unsubscribeFailed
+        case removeEntryCompleted(String)
+        case removeEntryFailed
+        case moveEntryFailed
+        case thumbnailsLoaded([String: String])
+        case videoPicker(PresentationAction<VideoPickerReducer.Action>)
+
+        @CasePathable
+        public enum View {
+            case viewDidAppear
+            case entryTapped(PlaylistEntry)
+            case dismissTapped
+            case unsubscribeTapped
+            case removeEntryTapped(PlaylistEntry)
+            case moveEntry(IndexSet, Int)
+            case editTapped
+            case addVideoTapped
+        }
+
+        @CasePathable
+        public enum Delegate: Equatable, Sendable {
+            case showVideo(VideoResponse, nextVideos: [VideoResponse])
+        }
+    }
+
+    @Dependency(\.playlistService) var playlistService
+    @Dependency(\.videoService) var videoService
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .view(let viewAction):
+                return handleViewAction(viewAction, state: &state)
+            case .alert(.presented(.confirmUnsubscribe)):
+                return handleUnsubscribeConfirmed(state: &state)
+            case .alert:
+                return .none
+            case .delegate:
+                return .none
+            case .videoPicker(.presented(.addSucceeded)):
+                state.videoPicker = nil
+                state.hasLoadedEntries = false
+                return .send(.view(.viewDidAppear))
+            case .videoPicker:
+                return .none
+            default:
+                return handleInternalAction(action, state: &state)
+            }
+        }
+        .ifLet(\.$videoPicker, action: \.videoPicker) {
+            VideoPickerReducer()
+        }
+        .ifLet(\.$alert, action: \.alert)
+    }
+}
