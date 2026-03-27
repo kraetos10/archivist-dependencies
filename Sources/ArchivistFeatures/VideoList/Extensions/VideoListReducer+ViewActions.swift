@@ -63,9 +63,13 @@ extension VideoListReducer {
     }
 
     private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
-        guard !state.isLoading else { return .none }
         state.isLoading = true
+        state.isLoadingMore = false
         state.currentPage = 1
+        state.lastPage = 1
+        state.videos = []
+        state.searchResults = []
+        state.downloadedVideoIDs = []
         let config = state.serverConfig
         let videoService = self.videoService
         return .run { send in
