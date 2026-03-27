@@ -1,6 +1,6 @@
 # Archivist Dependencies
 
-Swift packages powering the [Archivist](https://github.com/kraetos10/archivist) iOS and tvOS client for [TubeArchivist](https://www.tubearchivist.com) — a self-hosted YouTube media server.
+Swift packages powering the iArchivist iOS and tvOS client for [TubeArchivist](https://www.tubearchivist.com) — a self-hosted YouTube media server.
 
 ## Packages
 
