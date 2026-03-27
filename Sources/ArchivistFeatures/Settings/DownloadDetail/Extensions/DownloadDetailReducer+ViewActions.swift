@@ -25,16 +25,14 @@ extension DownloadDetailReducer {
         let videoId = state.download.youtubeId
         let downloadService = self.downloadService
         return .run { send in
-            do {
+            let result = await Result {
                 try await downloadService.updateDownload(
                     config: config,
                     id: videoId,
                     status: "priority"
                 )
-                await send(.downloadStarted)
-            } catch {
-                await send(.downloadFailed(error))
             }
+            await send(.downloadResult(result))
         }
     }
 

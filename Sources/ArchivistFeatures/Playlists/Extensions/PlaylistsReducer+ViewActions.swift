@@ -65,18 +65,16 @@ extension PlaylistsReducer {
     func fetchPlaylists(config: ServerConfig, page: Int) -> Effect<Action> {
         let playlistService = self.playlistService
         return .run { send in
-            do {
-                let response = try await playlistService.getPlaylists(
+            let result = await Result {
+                try await playlistService.getPlaylists(
                     config: config,
                     page: page,
                     type: nil,
                     channel: nil,
                     subscribed: nil
                 )
-                await send(.playlistsLoaded(response))
-            } catch {
-                await send(.playlistsFailed(error))
             }
+            await send(.playlistsResult(result))
         }
     }
 }

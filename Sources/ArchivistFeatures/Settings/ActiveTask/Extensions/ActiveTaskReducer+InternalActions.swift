@@ -5,7 +5,7 @@ import Foundation
 extension ActiveTaskReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .notificationsLoaded(let notifications):
+        case .pollResult(.success(let notifications)):
             if let notification = notifications.first {
                 let title = notification.title ?? ""
                 let normalizedProgress = notification.progress.map { $0 / 100.0 }
@@ -28,16 +28,16 @@ extension ActiveTaskReducer {
                 }
                 return .none
             }
-        case .pollFailed:
+        case .pollResult(.failure):
             state.activeDownload = nil
             state.activeTaskId = nil
             state.isPolling = false
             state.isCancelling = false
             return .none
-        case .taskCancelled:
+        case .cancelTaskResult(.success):
             state.isCancelling = false
             return .none
-        case .taskCancelFailed:
+        case .cancelTaskResult(.failure):
             state.isCancelling = false
             return .none
         default:
@@ -52,12 +52,10 @@ extension ActiveTaskReducer {
         let taskService = self.taskService
         return .run { send in
             try await clock.sleep(for: .seconds(3))
-            do {
-                let notifications = try await taskService.getDownloadNotifications(config: config)
-                await send(.notificationsLoaded(notifications))
-            } catch {
-                await send(.pollFailed)
+            let result = await Result {
+                try await taskService.getDownloadNotifications(config: config)
             }
+            await send(.pollResult(result))
         }
         .cancellable(id: CancelID.polling, cancelInFlight: true)
     }

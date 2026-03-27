@@ -83,12 +83,10 @@ extension VideoDetailReducer {
             state.isLoadingComments = true
             effects.append(
                 .run { send in
-                    do {
-                        let comments = try await videoService.getComments(config: config, videoId: videoId)
-                        await send(.commentsLoaded(comments))
-                    } catch {
-                        await send(.commentsFailed)
+                    let result = await Result {
+                        try await videoService.getComments(config: config, videoId: videoId)
                     }
+                    await send(.commentsResult(result))
                 }
             )
         }
@@ -97,12 +95,10 @@ extension VideoDetailReducer {
             state.isLoadingSimilar = true
             effects.append(
                 .run { send in
-                    do {
-                        let videos = try await videoService.getSimilar(config: config, videoId: videoId)
-                        await send(.similarLoaded(videos))
-                    } catch {
-                        await send(.similarFailed)
+                    let result = await Result {
+                        try await videoService.getSimilar(config: config, videoId: videoId)
                     }
+                    await send(.similarResult(result))
                 }
             )
         }
@@ -244,12 +240,10 @@ extension VideoDetailReducer {
         let videoId = state.video.videoId
         let videoService = self.videoService
         return .run { send in
-            do {
+            let result = await Result {
                 try await videoService.deleteVideo(config: config, id: videoId)
-                await send(.serverDeleteCompleted)
-            } catch {
-                await send(.serverDeleteFailed(error.localizedDescription))
             }
+            await send(.serverDeleteResult(result))
         }
     }
 
@@ -259,12 +253,10 @@ extension VideoDetailReducer {
         let newWatched = !state.isWatched
         let videoService = self.videoService
         return .run { send in
-            do {
+            let result = await Result {
                 try await videoService.setWatched(config: config, videoId: videoId, isWatched: newWatched)
-                await send(.watchedToggled)
-            } catch {
-                await send(.watchedToggleFailed)
             }
+            await send(.watchedToggleResult(result))
         }
     }
 

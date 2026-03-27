@@ -16,8 +16,7 @@ public struct AddVideoReducer {
     public enum Action: ViewAction, BindableAction {
         case binding(BindingAction<State>)
         case view(View)
-        case addSucceeded
-        case addFailed
+        case addResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

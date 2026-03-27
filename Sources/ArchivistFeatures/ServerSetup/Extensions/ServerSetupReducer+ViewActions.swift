@@ -24,16 +24,14 @@ extension ServerSetupReducer {
         let useHTTP = state.registrationDetails.useHTTP
         let healthService = self.healthService
         return .run { send in
-            do {
+            let result = await Result {
                 try await healthService.checkHealth(
                     baseURL: serverURL,
                     port: port,
                     useHTTP: useHTTP
                 )
-                await send(.healthCheckSucceeded)
-            } catch {
-                await send(.healthCheckFailed(error))
             }
+            await send(.healthCheckResult(result))
         }
     }
 }

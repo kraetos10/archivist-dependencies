@@ -68,14 +68,10 @@ public struct VideoPickerReducer {
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
-        case videosLoaded(PaginatedResponse<VideoResponse>)
-        case videosFailed
-        case downloadsLoaded(PaginatedResponse<DownloadResponse>)
-        case downloadsFailed
-        case searchResultsLoaded([VideoResponse])
-        case searchFailed
-        case addSucceeded
-        case addFailed
+        case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
+        case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
+        case searchResult(Result<[VideoResponse], Error>)
+        case addResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

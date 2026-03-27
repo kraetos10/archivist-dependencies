@@ -9,18 +9,18 @@ extension VideoDetailReducer {
         case .videoRefreshed(let video):
             state.video = video
             return .none
-        case .commentsLoaded(let comments):
+        case .commentsResult(.success(let comments)):
             state.comments = comments
             state.isLoadingComments = false
             return .none
-        case .commentsFailed:
+        case .commentsResult(.failure):
             state.isLoadingComments = false
             return .none
-        case .similarLoaded(let videos):
+        case .similarResult(.success(let videos)):
             state.similarVideos = videos.filter { !$0.isWatched }
             state.isLoadingSimilar = false
             return .none
-        case .similarFailed:
+        case .similarResult(.failure):
             state.isLoadingSimilar = false
             return .none
         case .downloadResumed(let progress):
@@ -44,29 +44,29 @@ extension VideoDetailReducer {
                 TextState(message)
             }
             return .none
-        case .serverDeleteCompleted:
+        case .serverDeleteResult(.success):
             state.isDeletingFromServer = false
             let videoId = state.video.videoId
             try? localVideoStorage.deleteVideo(videoId: videoId)
             try? deviceDownloadDatabase.deleteDownload(videoId)
             state.isDownloaded = false
             return .none
-        case .serverDeleteFailed(let message):
+        case .serverDeleteResult(.failure(let error)):
             state.isDeletingFromServer = false
             state.alert = AlertState {
                 TextState(String.localised("generic.error"))
             } message: {
-                TextState(message)
+                TextState(error.localizedDescription)
             }
             return .none
-        case .watchedToggled:
+        case .watchedToggleResult(.success):
             state.watchedOverride = !(state.watchedOverride ?? state.video.isWatched)
             return .none
         case .loadNextVideo:
             return handleLoadNextVideo(state: &state)
         case .autoPlayVideo(let video):
             return handleAutoPlayVideo(video, state: &state)
-        case .watchedToggleFailed:
+        case .watchedToggleResult(.failure):
             return .none
         default:
             return .none

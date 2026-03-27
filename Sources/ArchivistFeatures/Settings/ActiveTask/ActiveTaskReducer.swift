@@ -16,11 +16,9 @@ public struct ActiveTaskReducer {
 
     public enum Action: ViewAction {
         case view(View)
-        case notificationsLoaded([NotificationResponse])
-        case pollFailed
+        case pollResult(Result<[NotificationResponse], Error>)
         case downloadCompleted
-        case taskCancelled
-        case taskCancelFailed
+        case cancelTaskResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

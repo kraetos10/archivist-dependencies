@@ -7,10 +7,10 @@ extension SettingsReducer {
         switch action {
         case .activeTask(.downloadCompleted):
             return .send(.downloads(.view(.pullToRefreshTriggered)))
-        case .rescanSubscriptionsStarted:
+        case .rescanSubscriptionsResult(.success):
             state.isRescanningSubscriptions = false
             return .send(.activeTask(.view(.startPolling)))
-        case .rescanSubscriptionsFailed:
+        case .rescanSubscriptionsResult(.failure):
             state.isRescanningSubscriptions = false
             return .none
         case .history(.delegate(.videoSelected(let video))):
@@ -33,7 +33,7 @@ extension SettingsReducer {
         #endif
         case .videoDetail:
             return .none
-        case .reAuthSucceeded(let token):
+        case .reAuthResult(.success(let token)):
             state.isReAuthenticating = false
             state.serverConfig = ServerConfig(
                 baseURL: state.serverConfig.baseURL,
@@ -42,7 +42,7 @@ extension SettingsReducer {
                 useHTTP: state.serverConfig.useHTTP
             )
             return .none
-        case .reAuthFailed:
+        case .reAuthResult(.failure):
             state.isReAuthenticating = false
             return .none
         case .didRequestLogout, .downloads, .stats, .activeTask, .history:

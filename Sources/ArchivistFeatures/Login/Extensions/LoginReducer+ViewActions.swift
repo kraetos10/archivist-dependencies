@@ -22,7 +22,7 @@ extension LoginReducer {
         let password = state.password
         let userService = self.userService
         return .run { send in
-            do {
+            let result = await Result {
                 try await userService.login(
                     baseURL: serverURL,
                     port: port,
@@ -30,10 +30,8 @@ extension LoginReducer {
                     username: username,
                     password: password
                 )
-                await send(.loginCompleted)
-            } catch {
-                await send(.loginFailed(error))
             }
+            await send(.loginResult(result))
         }
     }
 }

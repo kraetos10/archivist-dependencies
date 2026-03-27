@@ -19,46 +19,40 @@ extension StatsReducer {
         let statsService = self.statsService
         return .merge(
             .run { send in
-                if let result = try? await statsService.getVideoStats(config: config) {
-                    await send(.videoStatsLoaded(result))
-                } else {
-                    await send(.statsFailed(.video))
+                let result = await Result {
+                    try await statsService.getVideoStats(config: config)
                 }
+                await send(.videoStatsResult(result))
             },
             .run { send in
-                if let result = try? await statsService.getChannelStats(config: config) {
-                    await send(.channelStatsLoaded(result))
-                } else {
-                    await send(.statsFailed(.channel))
+                let result = await Result {
+                    try await statsService.getChannelStats(config: config)
                 }
+                await send(.channelStatsResult(result))
             },
             .run { send in
-                if let result = try? await statsService.getPlaylistStats(config: config) {
-                    await send(.playlistStatsLoaded(result))
-                } else {
-                    await send(.statsFailed(.playlist))
+                let result = await Result {
+                    try await statsService.getPlaylistStats(config: config)
                 }
+                await send(.playlistStatsResult(result))
             },
             .run { send in
-                if let result = try? await statsService.getDownloadStats(config: config) {
-                    await send(.downloadStatsLoaded(result))
-                } else {
-                    await send(.statsFailed(.download))
+                let result = await Result {
+                    try await statsService.getDownloadStats(config: config)
                 }
+                await send(.downloadStatsResult(result))
             },
             .run { send in
-                if let result = try? await statsService.getWatchStats(config: config) {
-                    await send(.watchStatsLoaded(result))
-                } else {
-                    await send(.statsFailed(.watch))
+                let result = await Result {
+                    try await statsService.getWatchStats(config: config)
                 }
+                await send(.watchStatsResult(result))
             },
             .run { send in
-                if let result = try? await statsService.getBiggestChannels(config: config) {
-                    await send(.biggestChannelsLoaded(result))
-                } else {
-                    await send(.statsFailed(.biggestChannels))
+                let result = await Result {
+                    try await statsService.getBiggestChannels(config: config)
                 }
+                await send(.biggestChannelsResult(result))
             }
         )
     }

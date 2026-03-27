@@ -40,12 +40,10 @@ extension PlaylistDetailReducer {
         let playlistId = state.playlist.playlistId
         let playlistService = self.playlistService
         return .run { send in
-            do {
-                let playlist = try await playlistService.getPlaylist(config: config, id: playlistId)
-                await send(.playlistLoaded(playlist))
-            } catch {
-                await send(.playlistFailed(error))
+            let result = await Result {
+                try await playlistService.getPlaylist(config: config, id: playlistId)
             }
+            await send(.playlistResult(result))
         }
     }
 
@@ -76,25 +74,26 @@ extension PlaylistDetailReducer {
         }()
         let videoService = self.videoService
         return .run { send in
-            let video = try await videoService.getVideo(config: config, id: videoId)
-            let nextVideos: [VideoResponse] = await withTaskGroup(of: VideoResponse?.self) { group in
-                for nextId in nextEntryIds.prefix(10) {
-                    group.addTask {
-                        try? await videoService.getVideo(config: config, id: nextId)
+            let result = await Result {
+                let video = try await videoService.getVideo(config: config, id: videoId)
+                let nextVideos: [VideoResponse] = await withTaskGroup(of: VideoResponse?.self) { group in
+                    for nextId in nextEntryIds.prefix(10) {
+                        group.addTask {
+                            try? await videoService.getVideo(config: config, id: nextId)
+                        }
                     }
-                }
-                var results: [(Int, VideoResponse)] = []
-                for await result in group {
-                    if let video = result,
-                       let order = nextEntryIds.firstIndex(of: video.videoId) {
-                        results.append((order, video))
+                    var results: [(Int, VideoResponse)] = []
+                    for await result in group {
+                        if let video = result,
+                           let order = nextEntryIds.firstIndex(of: video.videoId) {
+                            results.append((order, video))
+                        }
                     }
+                    return results.sorted { $0.0 < $1.0 }.map(\.1)
                 }
-                return results.sorted { $0.0 < $1.0 }.map(\.1)
+                return (video, nextVideos: nextVideos)
             }
-            await send(.videoLoaded(video, nextVideos: nextVideos))
-        } catch: { error, send in
-            await send(.videoFailed(error))
+            await send(.videoResult(result))
         }
     }
 
@@ -104,17 +103,15 @@ extension PlaylistDetailReducer {
         let playlistId = state.playlist.playlistId
         let playlistService = self.playlistService
         return .run { send in
-            do {
+            let result = await Result {
                 try await playlistService.modifyCustomPlaylist(
                     config: config,
                     id: playlistId,
                     action: "remove",
                     videoId: videoId
                 )
-                await send(.removeEntryCompleted(videoId))
-            } catch {
-                await send(.removeEntryFailed)
             }
+            await send(.removeEntryResult(result.map { videoId }))
         }
     }
 
@@ -135,7 +132,7 @@ extension PlaylistDetailReducer {
         let playlistService = self.playlistService
 
         return .run { send in
-            do {
+            let result = await Result {
                 try await playlistService.modifyCustomPlaylist(
                     config: config,
                     id: playlistId,
@@ -143,9 +140,8 @@ extension PlaylistDetailReducer {
                     videoId: videoId,
                     position: newPosition
                 )
-            } catch {
-                await send(.moveEntryFailed)
             }
+            await send(.moveEntryResult(result))
         }
     }
 }

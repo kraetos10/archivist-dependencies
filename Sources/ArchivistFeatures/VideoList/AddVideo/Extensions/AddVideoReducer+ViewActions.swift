@@ -30,20 +30,20 @@ extension AddVideoReducer {
         let downloadService = self.downloadService
         let playlistService = self.playlistService
         return .run { send in
-            try await downloadService.addDownloads(config: config, items: items)
-            if let playlistId {
-                for videoId in videoIds {
-                    try? await playlistService.modifyCustomPlaylist(
-                        config: config,
-                        id: playlistId,
-                        action: "create",
-                        videoId: videoId
-                    )
+            let result = await Result {
+                try await downloadService.addDownloads(config: config, items: items)
+                if let playlistId {
+                    for videoId in videoIds {
+                        try? await playlistService.modifyCustomPlaylist(
+                            config: config,
+                            id: playlistId,
+                            action: "create",
+                            videoId: videoId
+                        )
+                    }
                 }
             }
-            await send(.addSucceeded)
-        } catch: { _, send in
-            await send(.addFailed)
+            await send(.addResult(result))
         }
     }
 }

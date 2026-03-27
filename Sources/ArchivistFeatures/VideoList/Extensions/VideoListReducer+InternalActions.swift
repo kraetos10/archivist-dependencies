@@ -10,17 +10,17 @@ extension VideoListReducer {
             return handleVideosLoaded(response, state: &state)
         case .videosResult(.failure(let error)):
             return handleVideosFailed(error, state: &state)
-        case .contextDeleteCompleted(let videoId):
+        case .contextDeleteResult(.success(let videoId)):
             state.videos.remove(id: videoId)
             return .none
-        case .contextDeleteFailed(let error):
+        case .contextDeleteResult(.failure(let error)):
             return handleContextDeleteFailed(error, state: &state)
-        case .searchResultsLoaded(let videos):
+        case .searchResult(.success(let videos)):
             return handleSearchResultsLoaded(videos, state: &state)
-        case .searchFailed:
+        case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .markWatchedCompleted(let videoId):
+        case .markWatchedResult(.success(let videoId)):
             let config = state.serverConfig
             return .run { [videoService] send in
                 if let video = try? await videoService.getVideo(config: config, id: videoId) {
@@ -28,7 +28,7 @@ extension VideoListReducer {
                 }
             }
 
-        case .markWatchedFailed:
+        case .markWatchedResult(.failure):
             return .none
         case .videoRefreshed(let video):
             state.videos.updateOrAppend(video)
@@ -122,12 +122,10 @@ extension VideoListReducer {
         let searchService = self.searchService
         return .run { send in
             try await clock.sleep(for: .milliseconds(400))
-            do {
-                let response = try await searchService.search(config: config, query: query)
-                await send(.searchResultsLoaded(response.videoResults ?? []))
-            } catch {
-                await send(.searchFailed)
+            let result = await Result {
+                try await searchService.search(config: config, query: query)
             }
+            await send(.searchResult(result.map { $0.videoResults ?? [] }))
         }
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }

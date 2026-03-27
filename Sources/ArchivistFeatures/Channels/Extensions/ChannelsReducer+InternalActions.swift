@@ -5,23 +5,23 @@ import Foundation
 extension ChannelsReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .channelsLoaded(let response):
+        case .channelsResult(.success(let response)):
             return handleChannelsLoaded(response, state: &state)
-        case .channelsFailed:
+        case .channelsResult(.failure):
             return handleChannelsFailed(state: &state)
-        case .addChannel(.presented(.subscribeSucceeded)):
+        case .addChannel(.presented(.subscribeResult(.success))):
             return handleSubscribeSucceeded(state: &state)
-        case .searchResultsLoaded(let channels):
+        case .searchResult(.success(let channels)):
             state.searchResults = IdentifiedArrayOf(uniqueElements: channels)
             state.isSearching = false
             return .none
-        case .searchFailed:
+        case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .unsubscribeCompleted(let channelId):
+        case .unsubscribeResult(.success(let channelId)):
             state.channels.remove(id: channelId)
             return .none
-        case .unsubscribeFailed:
+        case .unsubscribeResult(.failure):
             return .none
         default:
             return .none
@@ -66,12 +66,10 @@ extension ChannelsReducer {
         let searchService = self.searchService
         return .run { send in
             try await clock.sleep(for: .milliseconds(400))
-            do {
-                let response = try await searchService.search(config: config, query: query)
-                await send(.searchResultsLoaded(response.channelResults ?? []))
-            } catch {
-                await send(.searchFailed)
+            let result = await Result {
+                try await searchService.search(config: config, query: query)
             }
+            await send(.searchResult(result.map { $0.channelResults ?? [] }))
         }
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }

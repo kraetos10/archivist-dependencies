@@ -6,9 +6,9 @@ import Foundation
 extension ServerSetupReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .healthCheckSucceeded:
+        case .healthCheckResult(.success):
             return handleHealthCheckSucceeded(state: &state)
-        case .healthCheckFailed:
+        case .healthCheckResult(.failure):
             return handleHealthCheckFailed(state: &state)
         default:
             return .none

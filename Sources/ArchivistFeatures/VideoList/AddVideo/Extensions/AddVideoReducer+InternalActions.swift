@@ -5,10 +5,10 @@ import Foundation
 extension AddVideoReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .addSucceeded:
+        case .addResult(.success):
             state.isAdding = false
             return .none
-        case .addFailed:
+        case .addResult(.failure):
             state.isAdding = false
             return .none
         default:

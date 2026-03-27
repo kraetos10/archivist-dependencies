@@ -20,8 +20,6 @@ extension VideoListReducer {
             return handleDeleteFromServerTapped(video, state: &state)
         case .watchFilterChanged(let filter):
             return handleWatchFilterChanged(filter, state: &state)
-        case .downloadedFilterTapped:
-            return handleDownloadedFilterTapped(state: &state)
         case .addToPlaylistTapped(let video):
             return handleAddToPlaylistTapped(video, state: &state)
         case .markAsWatchedTapped(let video):
@@ -104,14 +102,12 @@ extension VideoListReducer {
     }
 
     private func handleWatchFilterChanged(_ filter: WatchFilter, state: inout State) -> Effect<Action> {
+        if filter == .downloaded && state.watchFilter == .downloaded {
+            state.watchFilter = .unwatched
+            return .none
+        }
         state.watchFilter = filter
-        state.showDownloadedOnly = false
-        return .none
-    }
-
-    private func handleDownloadedFilterTapped(state: inout State) -> Effect<Action> {
-        state.showDownloadedOnly.toggle()
-        if state.showDownloadedOnly {
+        if filter == .downloaded {
             state.downloadedVideoIDs = Set(
                 state.videos.map(\.videoId).filter {
                     localVideoStorage.isDownloaded(videoId: $0)
@@ -185,12 +181,10 @@ extension VideoListReducer {
         let videoId = video.videoId
         let videoService = self.videoService
         return .run { send in
-            do {
+            let result = await Result {
                 try await videoService.deleteVideo(config: config, id: videoId)
-                await send(.contextDeleteCompleted(videoId))
-            } catch {
-                await send(.contextDeleteFailed(error))
             }
+            await send(.contextDeleteResult(result.map { videoId }))
         }
     }
 
@@ -216,10 +210,10 @@ extension VideoListReducer {
         let config = state.serverConfig
         let videoId = video.videoId
         return .run { [videoService] send in
-            try await videoService.setWatched(config: config, videoId: videoId, isWatched: true)
-            await send(.markWatchedCompleted(videoId))
-        } catch: { _, send in
-            await send(.markWatchedFailed)
+            let result = await Result {
+                try await videoService.setWatched(config: config, videoId: videoId, isWatched: true)
+            }
+            await send(.markWatchedResult(result.map { videoId }))
         }
     }
 }

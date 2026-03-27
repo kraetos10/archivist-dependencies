@@ -44,13 +44,10 @@ public struct ChannelDetailReducer: Sendable {
         case view(View)
         case delegate(Delegate)
         case alert(PresentationAction<AlertAction>)
-        case videosLoaded(PaginatedResponse<VideoResponse>)
-        case videosFailed(Error)
-        case downloadsLoaded(PaginatedResponse<DownloadResponse>)
-        case downloadsFailed(Error)
+        case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
+        case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
-        case unsubscribeCompleted
-        case unsubscribeFailed
+        case unsubscribeResult(Result<Void, Error>)
 
         @CasePathable
         public enum Delegate: Equatable, Sendable {
@@ -82,10 +79,10 @@ public struct ChannelDetailReducer: Sendable {
             case .downloadDetail(.presented(.view(.dismissTapped))):
                 state.downloadDetail = nil
                 return .none
-            case .downloadDetail(.presented(.downloadStarted)):
+            case .downloadDetail(.presented(.downloadResult(.success))):
                 state.downloadDetail = nil
                 return .none
-            case .downloadDetail(.presented(.deleteSucceeded)):
+            case .downloadDetail(.presented(.deleteResult(.success))):
                 let youtubeId = state.downloadDetail?.download.youtubeId
                 state.downloadDetail = nil
                 if let youtubeId {

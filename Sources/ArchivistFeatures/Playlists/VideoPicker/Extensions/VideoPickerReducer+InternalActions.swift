@@ -5,7 +5,7 @@ import Foundation
 extension VideoPickerReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .videosLoaded(let response):
+        case .videosResult(.success(let response)):
             for video in response.data {
                 state.videos.updateOrAppend(video)
             }
@@ -15,32 +15,32 @@ extension VideoPickerReducer {
             state.isLoadingMore = false
             state.hasLoaded = true
             return .none
-        case .videosFailed:
+        case .videosResult(.failure):
             state.isLoading = false
             state.isLoadingMore = false
             state.hasLoaded = true
             return .none
-        case .downloadsLoaded(let response):
+        case .downloadsResult(.success(let response)):
             for download in response.data {
                 state.pendingDownloads.updateOrAppend(download)
             }
             state.isLoadingDownloads = false
             return .none
-        case .downloadsFailed:
+        case .downloadsResult(.failure):
             state.isLoadingDownloads = false
             return .none
-        case .searchResultsLoaded(let videos):
+        case .searchResult(.success(let videos)):
             state.searchResults = IdentifiedArrayOf(uniqueElements: videos)
             state.isSearching = false
             return .none
-        case .searchFailed:
+        case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .addSucceeded:
+        case .addResult(.success):
             state.isAdding = false
             let dismiss = self.dismiss
             return .run { _ in await dismiss() }
-        case .addFailed:
+        case .addResult(.failure):
             state.isAdding = false
             return .none
         default:

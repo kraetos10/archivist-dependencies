@@ -5,17 +5,17 @@ import Foundation
 extension AddPlaylistReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .subscribeSucceeded:
+        case .subscribeResult(.success):
             state.isSubscribing = false
             return .none
-        case .subscribeFailed:
+        case .subscribeResult(.failure):
             state.isSubscribing = false
             return .none
-        case .createCustomSucceeded:
+        case .createCustomResult(.success):
             state.isSubscribing = false
             state.customName = ""
             return .none
-        case .createCustomFailed:
+        case .createCustomResult(.failure):
             state.isSubscribing = false
             return .none
         default:

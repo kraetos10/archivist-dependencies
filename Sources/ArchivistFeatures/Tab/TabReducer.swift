@@ -53,13 +53,13 @@ public struct TabReducer {
             case .appeared:
                 return .send(.settings(.activeTask(.view(.startPolling))))
 
-            case .settings(.downloads(.downloadDetail(.presented(.downloadStarted)))):
+            case .settings(.downloads(.downloadDetail(.presented(.downloadResult(.success))))):
                 return .send(.settings(.activeTask(.view(.startPolling))))
 
-            case .channels(.channelDetail(.presented(.downloadDetail(.presented(.downloadStarted))))):
+            case .channels(.channelDetail(.presented(.downloadDetail(.presented(.downloadResult(.success)))))):
                 return .send(.settings(.activeTask(.view(.startPolling))))
 
-            case .channels(.path(.element(_, action: .channelDetail(.downloadDetail(.presented(.downloadStarted)))))):
+            case .channels(.path(.element(_, action: .channelDetail(.downloadDetail(.presented(.downloadResult(.success))))))):
                 return .send(.settings(.activeTask(.view(.startPolling))))
 
             case .settings(.activeTask(.downloadCompleted)):

@@ -27,13 +27,10 @@ public struct LoginReducer {
         case view(View)
         case alert(PresentationAction<AlertAction>)
         case binding(BindingAction<State>)
-        case loginCompleted
-        case loginFailed(Error)
-        case tokenReceived(String)
-        case tokenFailed(Error)
+        case loginResult(Result<Void, Error>)
+        case tokenResult(Result<String, Error>)
         case loginSucceeded(String, username: String, password: String)
-        case pingSucceeded
-        case pingFailed(Error)
+        case pingResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

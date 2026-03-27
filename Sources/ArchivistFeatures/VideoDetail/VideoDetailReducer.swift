@@ -66,21 +66,17 @@ public struct VideoDetailReducer {
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case alert(PresentationAction<AlertAction>)
         case videoRefreshed(VideoResponse)
-        case commentsLoaded([VideoComment])
-        case commentsFailed
-        case similarLoaded([VideoResponse])
-        case similarFailed
+        case commentsResult(Result<[VideoComment], Error>)
+        case similarResult(Result<[VideoResponse], Error>)
         case downloadResumed(Double)
         case downloadProgressUpdated(Double)
         case downloadCompleted
         case downloadFailed(String)
         case autoPlayVideo(VideoResponse)
         case pipRestoreRequested(VideoResponse)
-        case serverDeleteCompleted
-        case serverDeleteFailed(String)
+        case serverDeleteResult(Result<Void, Error>)
         case loadNextVideo
-        case watchedToggled
-        case watchedToggleFailed
+        case watchedToggleResult(Result<Void, Error>)
 
         @CasePathable
         public enum View {

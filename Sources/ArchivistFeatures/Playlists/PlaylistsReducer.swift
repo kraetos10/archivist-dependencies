@@ -45,10 +45,8 @@ public struct PlaylistsReducer {
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
-        case playlistsLoaded(PaginatedResponse<PlaylistResponse>)
-        case playlistsFailed(Error)
-        case searchResultsLoaded([PlaylistResponse])
-        case searchFailed
+        case playlistsResult(Result<PaginatedResponse<PlaylistResponse>, Error>)
+        case searchResult(Result<[PlaylistResponse], Error>)
         case playlistDetail(PresentationAction<PlaylistDetailReducer.Action>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
         case path(StackActionOf<PlaylistsPath>)
@@ -82,16 +80,16 @@ public struct PlaylistsReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .addPlaylist(.presented(.subscribeSucceeded)),
-                 .addPlaylist(.presented(.createCustomSucceeded)):
+            case .addPlaylist(.presented(.subscribeResult(.success))),
+                 .addPlaylist(.presented(.createCustomResult(.success))):
                 return handleInternalAction(action, state: &state)
-            case .playlistDetail(.presented(.unsubscribeCompleted)):
+            case .playlistDetail(.presented(.unsubscribeResult(.success))):
                 if let playlistId = state.selectedPlaylist?.playlist.playlistId {
                     state.playlists.remove(id: playlistId)
                 }
                 state.selectedPlaylist = nil
                 return .none
-            case .path(.element(_, action: .playlistDetail(.unsubscribeCompleted))):
+            case .path(.element(_, action: .playlistDetail(.unsubscribeResult(.success)))):
                 if let last = state.path.last,
                    case .playlistDetail(let detail) = last {
                     state.playlists.remove(id: detail.playlist.playlistId)

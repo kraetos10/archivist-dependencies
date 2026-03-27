@@ -52,8 +52,7 @@ public struct ChannelsReducer {
         case view(View)
         case binding(BindingAction<State>)
         case alert(PresentationAction<AlertAction>)
-        case channelsLoaded(PaginatedResponse<ChannelResponse>)
-        case channelsFailed(Error)
+        case channelsResult(Result<PaginatedResponse<ChannelResponse>, Error>)
         case channelDetail(PresentationAction<ChannelDetailReducer.Action>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
         case path(StackActionOf<ChannelsPath>)
@@ -61,10 +60,8 @@ public struct ChannelsReducer {
         case addChannel(PresentationAction<AddChannelReducer.Action>)
         case refreshPendingDownloads
 
-        case searchResultsLoaded([ChannelResponse])
-        case searchFailed
-        case unsubscribeCompleted(String)
-        case unsubscribeFailed
+        case searchResult(Result<[ChannelResponse], Error>)
+        case unsubscribeResult(Result<String, Error>)
 
         @CasePathable
         public enum View {
@@ -96,7 +93,7 @@ public struct ChannelsReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .channelDetail(.presented(.unsubscribeCompleted)):
+            case .channelDetail(.presented(.unsubscribeResult(.success))):
                 if let channelId = state.selectedChannel?.channel.channelId {
                     state.channels.remove(id: channelId)
                 }
@@ -116,7 +113,7 @@ public struct ChannelsReducer {
                     nextVideos: nextVideos
                 )
                 return .none
-            case .path(.element(_, action: .channelDetail(.unsubscribeCompleted))):
+            case .path(.element(_, action: .channelDetail(.unsubscribeResult(.success)))):
                 if let last = state.path.last,
                    case .channelDetail(let detail) = last {
                     state.channels.remove(id: detail.channel.channelId)
@@ -128,7 +125,7 @@ public struct ChannelsReducer {
                     return .send(.channelDetail(.presented(.view(.viewDidAppear))))
                 }
                 return .none
-            case .addChannel(.presented(.subscribeSucceeded)):
+            case .addChannel(.presented(.subscribeResult(.success))):
                 return handleInternalAction(action, state: &state)
             case .alert(.presented(.confirmUnsubscribe(let channelId))):
                 return handleConfirmedUnsubscribe(channelId, state: &state)

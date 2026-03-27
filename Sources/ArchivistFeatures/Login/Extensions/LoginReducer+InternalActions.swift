@@ -6,17 +6,17 @@ import Foundation
 extension LoginReducer {
     public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .loginCompleted:
+        case .loginResult(.success):
             return handleLoginCompleted(state: &state)
-        case .loginFailed(let error):
+        case .loginResult(.failure(let error)):
             return handleLoginFailed(error, state: &state)
-        case .tokenReceived(let token):
+        case .tokenResult(.success(let token)):
             return handleTokenReceived(token, state: &state)
-        case .tokenFailed(let error):
+        case .tokenResult(.failure(let error)):
             return handleTokenFailed(error, state: &state)
-        case .pingSucceeded:
+        case .pingResult(.success):
             return handlePingSucceeded(state: &state)
-        case .pingFailed:
+        case .pingResult(.failure):
             return handlePingFailed(state: &state)
         default:
             return .none
@@ -29,20 +29,18 @@ extension LoginReducer {
         let details = state.registrationDetails
         let userService = self.userService
         return .run { send in
-            do {
+            let result = await Result {
                 let response = try await userService.getToken(
                     baseURL: details.serverAddress,
                     port: Int(details.port),
                     useHTTP: details.useHTTP
                 )
-                if let token = response.token {
-                    await send(.tokenReceived(token))
-                } else {
-                    await send(.tokenFailed(NetworkingError.missingData))
+                guard let token = response.token else {
+                    throw NetworkingError.missingData
                 }
-            } catch {
-                await send(.tokenFailed(error))
+                return token
             }
+            await send(.tokenResult(result))
         }
     }
 
@@ -93,12 +91,10 @@ extension LoginReducer {
         state.pendingToken = token
         let pingService = self.pingService
         return .run { send in
-            do {
+            let result = await Result {
                 _ = try await pingService.ping(config: config)
-                await send(.pingSucceeded)
-            } catch {
-                await send(.pingFailed(error))
             }
+            await send(.pingResult(result))
         }
     }
 
