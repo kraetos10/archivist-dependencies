@@ -19,7 +19,7 @@ public struct PlaylistDetailScreen: View {
                 Section {
                     entriesContent
                 } header: {
-                    PinnedSectionHeader(title: String(localized: "Videos"))
+                    PinnedSectionHeader(title: String.localised("generic.videos"))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -41,20 +41,20 @@ public struct PlaylistDetailScreen: View {
                     Button {
                         send(.editTapped)
                     } label: {
-                        Text(store.isEditing ? String(localized: "Done") : String(localized: "Edit"))
+                        Text(store.isEditing ? String.localised("generic.done") : String.localised("generic.edit"))
                     }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     ShareLink(item: store.playlist.youtubeURL) {
-                        Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                        Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
                     }
 
                     Button(role: .destructive) {
                         send(.unsubscribeTapped)
                     } label: {
-                        Label(String(localized: "Remove Playlist"), systemImage: "trash")
+                        Label(String.localised("video.removePlaylist", table: .videos), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -147,7 +147,7 @@ public struct PlaylistDetailScreen: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 24)
         } else if store.entries.isEmpty && store.hasLoadedEntries {
-            Text(String(localized: "No videos yet"))
+            Text(String.localised("video.empty.noVideos", table: .videos))
                 .font(.subheadline)
                 .foregroundStyle(Color.Brand.secondary)
                 .frame(maxWidth: .infinity)
@@ -184,7 +184,7 @@ public struct PlaylistDetailScreen: View {
                                 Button(role: .destructive) {
                                     send(.removeEntryTapped(entry))
                                 } label: {
-                                    Label(String(localized: "Remove from Playlist"), systemImage: "minus.circle")
+                                    Label(String.localised("video.removeFromPlaylist", table: .videos), systemImage: "minus.circle")
                                 }
                             }
                         }

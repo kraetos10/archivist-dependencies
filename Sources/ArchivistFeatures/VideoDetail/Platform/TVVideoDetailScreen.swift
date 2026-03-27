@@ -61,7 +61,7 @@ public struct TVVideoDetailScreen: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: store.video.watchProgress > 0 ? "play.circle.fill" : "play.fill")
-                                Text(store.video.watchProgress > 0 ? String(localized: "Resume") : String(localized: "Play"))
+                                Text(store.video.watchProgress > 0 ? String.localised("video.resume", table: .videos) : String.localised("video.play", table: .videos))
                             }
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -75,7 +75,7 @@ public struct TVVideoDetailScreen: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: store.isWatched ? "eye.fill" : "eye")
-                                Text(store.isWatched ? String(localized: "Watched") : String(localized: "Mark as Watched"))
+                                Text(store.isWatched ? String.localised("video.watched", table: .videos) : String.localised("video.markAsWatched", table: .videos))
                             }
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -93,7 +93,7 @@ public struct TVVideoDetailScreen: View {
                             Button {
                                 send(.toggleDescription, animation: .default)
                             } label: {
-                                Text(store.isDescriptionExpanded ? String(localized: "Show Less") : String(localized: "Show More"))
+                                Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                             }
@@ -107,7 +107,7 @@ public struct TVVideoDetailScreen: View {
                 // Play Next
                 if store.showPlayNext && !playNextItems.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(String(localized: "Play Next"))
+                        Text(String.localised("video.playNext", table: .videos))
                             .font(.title3)
                             .fontWeight(.bold)
                             .padding(.horizontal, 48)
@@ -130,7 +130,7 @@ public struct TVVideoDetailScreen: View {
                 // Up Next
                 if !store.nextVideos.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(String(localized: "Up Next"))
+                        Text(String.localised("video.upNext", table: .videos))
                             .font(.title3)
                             .fontWeight(.bold)
                             .padding(.horizontal, 48)
@@ -253,7 +253,7 @@ public struct TVVideoDetailScreen: View {
             Button(role: .destructive) {
                 send(.removeFromPlayNextTapped(item.id), animation: .default)
             } label: {
-                Label(String(localized: "Remove from Play Next"), systemImage: "minus.circle")
+                Label(String.localised("video.removeFromPlayNext", table: .videos), systemImage: "minus.circle")
             }
         }
     }
@@ -262,7 +262,7 @@ public struct TVVideoDetailScreen: View {
 
     private var similarSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text(String(localized: "Similar Videos"))
+            Text(String.localised("video.similarVideos", table: .videos))
                 .font(.title3)
                 .fontWeight(.bold)
                 .padding(.horizontal, 48)
@@ -286,7 +286,7 @@ public struct TVVideoDetailScreen: View {
                     Image(systemName: "play.rectangle.on.rectangle")
                         .font(.system(size: 32))
                         .foregroundStyle(.secondary)
-                    Text(String(localized: "No similar videos found"))
+                    Text(String.localised("video.empty.noSimilar", table: .videos))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

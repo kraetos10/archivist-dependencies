@@ -34,14 +34,14 @@ public struct DownloadsScreen: View {
         #if os(tvOS)
         .navigationTitle("")
         #else
-        .navigationTitle(String(localized: "Queue"))
+        .navigationTitle(String.localised("settings.queue", table: .settings))
         #endif
         #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $store.searchQuery,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: String(localized: "Search queue")
+            prompt: String.localised("video.searchQueue", table: .videos)
         )
         #endif
         .onAppear { send(.viewDidAppear) }
@@ -53,9 +53,9 @@ public struct DownloadsScreen: View {
     private var queueContent: some View {
         Group {
             if store.hasLoaded && store.filteredDownloads.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(icon: "arrow.down.circle", title: String(localized: "No downloads yet"), description: String(localized: "Downloads from your server will appear here."))
+                EmptyStateView(icon: "arrow.down.circle", title: String.localised("video.empty.noDownloads", table: .videos), description: String.localised("video.empty.downloadsDescription", table: .videos))
             } else if store.hasLoaded && store.filteredDownloads.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(icon: "magnifyingglass", title: String(localized: "No search results"), description: String(localized: "Try a different search term."))
+                EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.downloads.isEmpty {
@@ -139,12 +139,12 @@ private struct DownloadQueueCardWithPopover: View {
         }
         .contextMenu {
             ShareLink(item: download.youtubeURL) {
-                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
             }
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label(String(localized: "Delete"), systemImage: "trash")
+                Label(String.localised("generic.delete"), systemImage: "trash")
             }
         }
         .popover(isPresented: $showPopover) {

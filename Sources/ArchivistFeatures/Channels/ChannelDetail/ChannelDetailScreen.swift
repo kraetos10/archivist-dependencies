@@ -36,14 +36,14 @@ public struct ChannelDetailScreen: View {
                 Section {
                     videosContent
                 } header: {
-                    PinnedSectionHeader(title: String(localized: "Videos"))
+                    PinnedSectionHeader(title: String.localised("generic.videos"))
                 }
 
                 if !store.pendingDownloads.isEmpty || store.isLoadingDownloads {
                     Section {
                         pendingDownloadsContent
                     } header: {
-                        PinnedSectionHeader(title: String(localized: "Pending Downloads"))
+                        PinnedSectionHeader(title: String.localised("video.pendingDownloads", table: .videos))
                     }
                 }
             }
@@ -56,13 +56,13 @@ public struct ChannelDetailScreen: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     ShareLink(item: store.channel.youtubeURL) {
-                        Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                        Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
                     }
 
                     Button(role: .destructive) {
                         send(.unsubscribeTapped)
                     } label: {
-                        Label(String(localized: "Unsubscribe"), systemImage: "xmark.circle")
+                        Label(String.localised("generic.unsubscribe"), systemImage: "xmark.circle")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -104,7 +104,7 @@ public struct ChannelDetailScreen: View {
                     Button {
                         send(.descriptionToggleTapped, animation: .default)
                     } label: {
-                        Text(store.isDescriptionExpanded ? String(localized: "Show Less") : String(localized: "Show More"))
+                        Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
                             .font(.caption)
                             .foregroundStyle(Color.Brand.secondary)
                     }
@@ -196,7 +196,7 @@ public struct ChannelDetailScreen: View {
                 .contentMargins(.horizontal, 16)
                 .scrollTargetBehavior(.viewAligned)
             } else if store.videos.isEmpty && store.hasLoadedVideos {
-                Text(String(localized: "No videos yet"))
+                Text(String.localised("video.empty.noVideos", table: .videos))
                     .font(.subheadline)
                     .foregroundStyle(Color.Brand.secondary)
                     .frame(maxWidth: .infinity)

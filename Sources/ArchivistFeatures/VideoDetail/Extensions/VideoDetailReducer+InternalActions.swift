@@ -39,7 +39,7 @@ extension VideoDetailReducer {
             state.isDownloading = false
             state.downloadError = message
             state.alert = AlertState {
-                TextState(String(localized: "Error"))
+                TextState(String.localised("generic.error"))
             } message: {
                 TextState(message)
             }
@@ -54,7 +54,7 @@ extension VideoDetailReducer {
         case .serverDeleteFailed(let message):
             state.isDeletingFromServer = false
             state.alert = AlertState {
-                TextState(String(localized: "Error"))
+                TextState(String.localised("generic.error"))
             } message: {
                 TextState(message)
             }

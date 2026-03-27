@@ -23,7 +23,7 @@ public struct AddVideoScreen: View {
                     .frame(width: 200, height: 200)
 
                 TextField(
-                    String(localized: "Video URL"),
+                    String.localised("video.videoUrl", table: .videos),
                     text: $store.videoInput,
                     axis: .vertical
                 )
@@ -32,7 +32,7 @@ public struct AddVideoScreen: View {
                 .textInputAutocapitalization(.never)
                 .lineLimit(1...5)
 
-                Text(String(localized: "Paste a YouTube URL or video ID"))
+                Text(String.localised("video.pasteUrl", table: .videos))
                     .font(.caption)
                     .foregroundStyle(Color.Brand.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -46,7 +46,7 @@ public struct AddVideoScreen: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                     } else {
-                        Text(String(localized: "Add to Queue"))
+                        Text(String.localised("video.addToQueue", table: .videos))
                             .font(.headline)
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -61,7 +61,7 @@ public struct AddVideoScreen: View {
             .padding(.top, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.Brand.primary)
-            .navigationTitle(String(localized: "Add Video"))
+            .navigationTitle(String.localised("video.addVideo", table: .videos))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

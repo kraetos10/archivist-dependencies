@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -51,31 +52,31 @@ extension LoginReducer {
             switch networkError {
             case .errorStatusCode(let code, _):
                 let message = code == 403
-                    ? String(localized: "Invalid username or password")
-                    : String(localized: "Server error: \(code)")
+                    ? String.localised("login.invalidCredentials", table: .login)
+                    : String.localised("Server error: \(code)", table: .login)
                 state.alert = AlertState {
-                    TextState(String(localized: "Login Failed"))
+                    TextState(String.localised("login.loginFailed", table: .login))
                 } message: {
                     TextState(message)
                 }
             case .invalidURL:
                 state.alert = AlertState {
-                    TextState(String(localized: "Login Failed"))
+                    TextState(String.localised("login.loginFailed", table: .login))
                 } message: {
-                    TextState(String(localized: "Invalid server URL"))
+                    TextState(String.localised("login.invalidServerUrl", table: .login))
                 }
             case .missingData:
                 state.alert = AlertState {
-                    TextState(String(localized: "Login Failed"))
+                    TextState(String.localised("login.loginFailed", table: .login))
                 } message: {
-                    TextState(String(localized: "No response from server"))
+                    TextState(String.localised("login.noResponse", table: .login))
                 }
             }
         } else {
             state.alert = AlertState {
-                TextState(String(localized: "Could Not Connect"))
+                TextState(String.localised("login.couldNotConnect", table: .login))
             } message: {
-                TextState(String(localized: "Please check your server details and try again."))
+                TextState(String.localised("login.checkDetails", table: .login))
             }
         }
         return .none
@@ -104,9 +105,9 @@ extension LoginReducer {
     private func handleTokenFailed(_ error: Error, state: inout State) -> Effect<Action> {
         state.isLoading = false
         state.alert = AlertState {
-            TextState(String(localized: "Login Failed"))
+            TextState(String.localised("login.loginFailed", table: .login))
         } message: {
-            TextState(String(localized: "Login succeeded but no API token was returned."))
+            TextState(String.localised("login.noToken", table: .login))
         }
         return .none
     }
@@ -120,9 +121,9 @@ extension LoginReducer {
     private func handlePingFailed(state: inout State) -> Effect<Action> {
         state.isLoading = false
         state.alert = AlertState {
-            TextState(String(localized: "Could Not Connect"))
+            TextState(String.localised("login.couldNotConnect", table: .login))
         } message: {
-            TextState(String(localized: "Please check your server details and try again."))
+            TextState(String.localised("login.checkDetails", table: .login))
         }
         state.pendingToken = nil
         return .none

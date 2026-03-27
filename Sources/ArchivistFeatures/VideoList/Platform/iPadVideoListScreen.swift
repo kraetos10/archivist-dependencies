@@ -78,12 +78,12 @@ public struct iPadVideoListScreen: View {
         }
         .background(Color.Brand.primary)
         .refreshable { await send(.pullToRefreshTriggered).finish() }
-        .navigationTitle(String(localized: "Home"))
+        .navigationTitle(String.localised("generic.home"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $store.searchQuery,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: String(localized: "Search videos")
+            prompt: String.localised("video.search", table: .videos)
         )
         .onAppear {
             store.useSplitView = true

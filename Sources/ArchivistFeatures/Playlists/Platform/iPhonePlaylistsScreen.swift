@@ -18,9 +18,9 @@ public struct iPhonePlaylistsScreen: View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
                 if store.hasLoaded && store.filteredPlaylists.isEmpty && store.searchQuery.isEmpty {
-                    EmptyStateView(icon: "music.note.list", title: String(localized: "No playlists yet"), description: String(localized: "Subscribe to playlists to see them here."))
+                    EmptyStateView(icon: "music.note.list", title: String.localised("login.noPlaylists", table: .login), description: String.localised("login.subscribePlaylistsDescription", table: .login))
                 } else if store.hasLoaded && store.filteredPlaylists.isEmpty && !store.searchQuery.isEmpty {
-                    EmptyStateView(icon: "magnifyingglass", title: String(localized: "No search results"), description: String(localized: "Try a different search term."))
+                    EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
                 } else {
                     LazyVGrid(columns: columns, spacing: 16) {
                         if store.isLoading && store.playlists.isEmpty {
@@ -59,12 +59,12 @@ public struct iPhonePlaylistsScreen: View {
             }
             .background(Color.Brand.primary)
             .refreshable { await send(.pullToRefreshTriggered).finish() }
-            .navigationTitle(String(localized: "Playlists"))
+            .navigationTitle(String.localised("generic.playlists"))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
                 text: $store.searchQuery,
                 placement: .navigationBarDrawer(displayMode: .automatic),
-                prompt: String(localized: "Search playlists")
+                prompt: String.localised("login.searchPlaylists", table: .login)
             )
             .safeAreaInset(edge: .bottom) {
                 FloatingAddButton { send(.addPlaylistTapped) }

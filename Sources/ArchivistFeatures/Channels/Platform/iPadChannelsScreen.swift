@@ -17,12 +17,12 @@ public struct iPadChannelsScreen: View {
     public var body: some View {
         NavigationStack {
             channelListContent
-                .navigationTitle(String(localized: "Channels"))
+                .navigationTitle(String.localised("generic.channels"))
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(
                     text: $store.searchQuery,
                     placement: .navigationBarDrawer(displayMode: .automatic),
-                    prompt: String(localized: "Search channels")
+                    prompt: String.localised("login.searchChannels", table: .login)
                 )
                 .toolbarBackground(Color.Brand.primary, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
@@ -48,9 +48,9 @@ public struct iPadChannelsScreen: View {
     private var channelListContent: some View {
         ScrollView {
             if store.hasLoaded && store.filteredChannels.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(icon: "person.2.rectangle.stack", title: String(localized: "No channels yet"), description: String(localized: "Subscribe to channels to see them here."))
+                EmptyStateView(icon: "person.2.rectangle.stack", title: String.localised("login.noChannels", table: .login), description: String.localised("login.subscribeChannelsDescription", table: .login))
             } else if store.hasLoaded && store.filteredChannels.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(icon: "magnifyingglass", title: String(localized: "No search results"), description: String(localized: "Try a different search term."))
+                EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.filteredChannels.isEmpty {
@@ -71,7 +71,7 @@ public struct iPadChannelsScreen: View {
                                 Button(role: .destructive) {
                                     send(.unsubscribeTapped(channel))
                                 } label: {
-                                    Label(String(localized: "Unsubscribe"), systemImage: "xmark.circle")
+                                    Label(String.localised("generic.unsubscribe"), systemImage: "xmark.circle")
                                 }
                             }
                             .pressable {

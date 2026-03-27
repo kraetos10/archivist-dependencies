@@ -24,18 +24,18 @@ public struct TVLoginScreen: View {
                 .fontWeight(.bold)  
 
             VStack(spacing: 24) {
-                TextField(String(localized: "Username"), text: $store.username)
+                TextField(String.localised("login.username", table: .login), text: $store.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                SecureField(String(localized: "Password"), text: $store.password)
+                SecureField(String.localised("login.password", table: .login), text: $store.password)
             }
             .frame(maxWidth: 500)
 
             if store.isLoading {
                 ProgressView()
             } else {
-                Button(String(localized: "Login")) {
+                Button(String.localised("login.login", table: .login)) {
                     send(.loginButtonTapped)
                 }
                 .disabled(store.username.isEmpty || store.password.isEmpty)

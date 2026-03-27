@@ -25,34 +25,34 @@ public struct VideoListEmptyState: View {
         if isSearchActive && !isSearching {
             EmptyStateView(
                 icon: "magnifyingglass",
-                title: String(localized: "No results", bundle: .module),
-                description: String(localized: "No videos match your search.", bundle: .module)
+                title: String.localised("video.empty.noResults", table: .videos),
+                description: String.localised("video.empty.noSearchMatch", table: .videos)
             )
         } else if showDownloadedOnly {
             EmptyStateView(
                 icon: "arrow.down.circle",
-                title: String(localized: "No downloads yet", bundle: .module),
-                description: String(localized: "Videos you download will appear here.", bundle: .module)
+                title: String.localised("video.empty.noDownloads", table: .videos),
+                description: String.localised("video.empty.downloadDescription", table: .videos)
             )
         } else {
             switch watchFilter {
             case .all:
                 EmptyStateView(
                     icon: "play.rectangle.on.rectangle",
-                    title: String(localized: "No videos yet", bundle: .module),
-                    description: String(localized: "Videos from this channel will appear here.", bundle: .module)
+                    title: String.localised("video.empty.noVideos", table: .videos),
+                    description: String.localised("video.empty.channelDescription", table: .videos)
                 )
             case .unwatched:
                 EmptyStateView(
                     icon: "checkmark.circle",
-                    title: String(localized: "No unwatched videos", bundle: .module),
-                    description: String(localized: "All videos have been watched.", bundle: .module)
+                    title: String.localised("video.empty.noUnwatched", table: .videos),
+                    description: String.localised("video.empty.allWatched", table: .videos)
                 )
             case .watched:
                 EmptyStateView(
                     icon: "eye",
-                    title: String(localized: "No watched videos", bundle: .module),
-                    description: String(localized: "Videos you watch will appear here.", bundle: .module)
+                    title: String.localised("video.empty.noWatched", table: .videos),
+                    description: String.localised("video.empty.watchDescription", table: .videos)
                 )
             }
         }

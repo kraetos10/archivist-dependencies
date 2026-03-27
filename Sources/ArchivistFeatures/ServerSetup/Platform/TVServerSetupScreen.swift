@@ -46,20 +46,20 @@ private struct TVServerSetupContentView: View {
             }
 
             VStack(spacing: 24) {
-                TextField(String(localized: "Server URL"), text: $store.registrationDetails.serverAddress)
+                TextField(String.localised("login.serverUrl", table: .login), text: $store.registrationDetails.serverAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                TextField(String(localized: "Port"), text: $store.registrationDetails.port)
+                TextField(String.localised("login.port", table: .login), text: $store.registrationDetails.port)
 
-                Toggle(String(localized: "Use HTTP"), isOn: $store.registrationDetails.useHTTP)
+                Toggle(String.localised("login.useHttp", table: .login), isOn: $store.registrationDetails.useHTTP)
             }
             .frame(maxWidth: 500)
 
             if store.isLoading {
                 ProgressView()
             } else {
-                Button(String(localized: "Next")) {
+                Button(String.localised("generic.next")) {
                     send(.nextButtonTapped)
                 }
                 .disabled(store.registrationDetails.serverAddress.isEmpty)

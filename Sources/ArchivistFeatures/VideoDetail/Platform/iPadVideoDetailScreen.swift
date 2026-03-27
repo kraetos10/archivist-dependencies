@@ -108,7 +108,7 @@ public struct iPadVideoDetailScreen: View {
                 .padding(16)
             }
             .background(Color.Brand.primary)
-            .navigationTitle(String(localized: "Comments"))
+            .navigationTitle(String.localised("generic.comments"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -147,7 +147,7 @@ public struct iPadVideoDetailScreen: View {
                 Button {
                     send(.toggleDescription, animation: .default)
                 } label: {
-                    Text(store.isDescriptionExpanded ? String(localized: "Show Less") : String(localized: "Show More"))
+                    Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Accent.dark)
@@ -224,8 +224,8 @@ public struct iPadVideoDetailScreen: View {
                     actionPillLabel(
                         systemImage: store.isWatched ? "eye.fill" : "eye",
                         label: store.isWatched
-                            ? String(localized: "Watched")
-                            : String(localized: "Unwatched")
+                            ? String.localised("video.watched", table: .videos)
+                            : String.localised("video.unwatched", table: .videos)
                     )
                 }
 
@@ -233,7 +233,7 @@ public struct iPadVideoDetailScreen: View {
                     Button {
                         send(.addToPlayNextTapped)
                     } label: {
-                        actionPillLabel(systemImage: "text.line.last.and.arrowtriangle.forward", label: String(localized: "Play Next"))
+                        actionPillLabel(systemImage: "text.line.last.and.arrowtriangle.forward", label: String.localised("video.playNext", table: .videos))
                     }
                 }
 
@@ -241,11 +241,11 @@ public struct iPadVideoDetailScreen: View {
                     HapticFeedback.selection.play()
                     send(.addToPlaylistTapped)
                 } label: {
-                    actionPillLabel(systemImage: "text.badge.plus", label: String(localized: "Add to Playlist"))
+                    actionPillLabel(systemImage: "text.badge.plus", label: String.localised("video.addToPlaylist", table: .videos))
                 }
 
                 ShareLink(item: store.youtubeURL) {
-                    actionPillLabel(systemImage: "arrowshape.turn.up.right", label: String(localized: "Share"))
+                    actionPillLabel(systemImage: "arrowshape.turn.up.right", label: String.localised("generic.share"))
                 }
 
                 downloadPill
@@ -286,7 +286,7 @@ public struct iPadVideoDetailScreen: View {
                         .frame(width: 18, height: 18)
                         .rotationEffect(.degrees(-90))
                 }
-                Text(String(localized: "Download to Device"))
+                Text(String.localised("video.downloadToDevice", table: .videos))
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
@@ -302,21 +302,21 @@ public struct iPadVideoDetailScreen: View {
                         HapticFeedback.warning.play()
                         send(.deleteDownloadTapped)
                     } label: {
-                        Label(String(localized: "Delete Download"), systemImage: "internaldrive")
+                        Label(String.localised("video.deleteDownload", table: .videos), systemImage: "internaldrive")
                     }
                 } else {
                     Button {
                         HapticFeedback.medium.play()
                         send(.downloadTapped)
                     } label: {
-                        Label(String(localized: "Download to Device"), systemImage: "arrow.down.circle")
+                        Label(String.localised("video.downloadToDevice", table: .videos), systemImage: "arrow.down.circle")
                     }
                 }
                 Button(role: .destructive) {
                     HapticFeedback.warning.play()
                     send(.deleteFromServerTapped)
                 } label: {
-                    Label(String(localized: "Delete from Server"), systemImage: "trash")
+                    Label(String.localised("video.deleteFromServer", table: .videos), systemImage: "trash")
                 }
             } label: {
                 actionPillLabel(systemImage: "ellipsis", label: "")
@@ -332,7 +332,7 @@ public struct iPadVideoDetailScreen: View {
                 showAllComments = true
             } label: {
                 HStack {
-                    Text(String(localized: "Comments"))
+                    Text(String.localised("generic.comments"))
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Text.primary)
@@ -481,7 +481,7 @@ public struct iPadVideoDetailScreen: View {
 
     private var nextUpSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "nextUp"))
+            Text(String.localised("nextUp", table: .videos))
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Text.primary)
@@ -502,7 +502,7 @@ public struct iPadVideoDetailScreen: View {
 
     private func playNextSidebarSection(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Play Next"))
+            Text(String.localised("video.playNext", table: .videos))
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Text.primary)
@@ -556,7 +556,7 @@ public struct iPadVideoDetailScreen: View {
             Button(role: .destructive) {
                 send(.removeFromPlayNextTapped(item.id), animation: .default)
             } label: {
-                Label(String(localized: "Remove from Play Next"), systemImage: "minus.circle")
+                Label(String.localised("video.removeFromPlayNext", table: .videos), systemImage: "minus.circle")
             }
         }
     }
@@ -614,7 +614,7 @@ public struct iPadVideoDetailScreen: View {
 
     private func nextUpSidebarSection(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Up Next"))
+            Text(String.localised("video.upNext", table: .videos))
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Text.primary)
@@ -638,7 +638,7 @@ public struct iPadVideoDetailScreen: View {
 
     private func similarSection(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Similar Videos"))
+            Text(String.localised("video.similarVideos", table: .videos))
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Text.primary)
@@ -657,7 +657,7 @@ public struct iPadVideoDetailScreen: View {
                     Image(systemName: "play.rectangle.on.rectangle")
                         .font(.system(size: 32))
                         .foregroundStyle(Color.Brand.secondary)
-                    Text(String(localized: "No similar videos found"))
+                    Text(String.localised("video.empty.noSimilar", table: .videos))
                         .font(.subheadline)
                         .foregroundStyle(Color.Brand.secondary)
                 }

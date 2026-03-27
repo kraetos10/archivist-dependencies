@@ -102,7 +102,7 @@ public struct DownloadDetailScreen: View {
     }
 
     private var statusBadge: some View {
-        Text(String(localized: "Pending"))
+        Text(String.localised("generic.pending"))
             .font(.caption2)
             .fontWeight(.semibold)
             .foregroundStyle(.white)
@@ -122,10 +122,10 @@ public struct DownloadDetailScreen: View {
                         .tint(.white)
                 } else if store.downloadTriggered {
                     Image(systemName: "checkmark.circle.fill")
-                    Text(String(localized: "Download Queued"))
+                    Text(String.localised("video.downloadQueued", table: .videos))
                 } else {
                     Image(systemName: "arrow.down.circle.fill")
-                    Text(String(localized: "Download Now"))
+                    Text(String.localised("video.downloadNow", table: .videos))
                 }
             }
             .font(.subheadline)

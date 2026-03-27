@@ -46,9 +46,6 @@ let package = Package(
                 "ArchivistComponents",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "SQLiteData", package: "sqlite-data"),
-            ],
-            resources: [
-                .process("Resources"),
             ]
         ),
     ]

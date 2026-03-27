@@ -43,7 +43,7 @@ public struct ActiveDeviceDownloadView: View {
                     .padding(.vertical, 4)
                 }
             } header: {
-                Text(String(localized: "Device Downloads"))
+                Text(String.localised("video.deviceDownloads", table: .videos))
             }
         }
     }

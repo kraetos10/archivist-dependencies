@@ -24,9 +24,9 @@ public struct AddPlaylistScreen: View {
                         .frame(width: 200, height: 200)
 
                     Picker("", selection: $store.mode) {
-                        Text(String(localized: "Subscribe"))
+                        Text(String.localised("generic.subscribe"))
                             .tag(AddPlaylistMode.subscribe)
-                        Text(String(localized: "Create Custom"))
+                        Text(String.localised("login.createCustom", table: .login))
                             .tag(AddPlaylistMode.createCustom)
                     }
                     .pickerStyle(.segmented)
@@ -51,7 +51,7 @@ public struct AddPlaylistScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.Brand.primary)
-            .navigationTitle(String(localized: "Add Playlist"))
+            .navigationTitle(String.localised("login.addPlaylist", table: .login))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -70,7 +70,7 @@ public struct AddPlaylistScreen: View {
 
     private var subscribeTextField: some View {
         TextField(
-            String(localized: "Playlist URL"),
+            String.localised("login.playlistUrl", table: .login),
             text: $store.playlistInput
         )
         .textFieldStyle(.roundedBorder)
@@ -88,7 +88,7 @@ public struct AddPlaylistScreen: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
             } else {
-                Text(String(localized: "Subscribe"))
+                Text(String.localised("generic.subscribe"))
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -104,7 +104,7 @@ public struct AddPlaylistScreen: View {
 
     private var createCustomTextField: some View {
         TextField(
-            String(localized: "Custom Playlist Name"),
+            String.localised("login.customPlaylistName", table: .login),
             text: $store.customName
         )
         .textFieldStyle(.roundedBorder)
@@ -121,7 +121,7 @@ public struct AddPlaylistScreen: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
             } else {
-                Text(String(localized: "Create Custom Playlist"))
+                Text(String.localised("login.createCustomPlaylist", table: .login))
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)

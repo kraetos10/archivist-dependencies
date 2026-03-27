@@ -44,7 +44,7 @@ public struct StatsScreen: View {
         #if os(tvOS)
         .navigationTitle("")
         #else
-        .navigationTitle(String(localized: "Stats"))
+        .navigationTitle(String.localised("settings.stats", table: .settings))
         #endif
         #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -56,13 +56,13 @@ public struct StatsScreen: View {
 
     private func overviewSection(_ video: VideoStatsResponse) -> some View {
         Section {
-            statRow(label: String(localized: "Total Videos"), value: "\(video.docCount ?? 0)", icon: "film.stack")
+            statRow(label: String.localised("video.totalVideos", table: .videos), value: "\(video.docCount ?? 0)", icon: "film.stack")
             statRow(label: "Media Size", value: formatBytes(video.totalSize), icon: "internaldrive")
             statRow(label: "Duration", value: formatDuration(video.totalDuration), icon: "clock")
-            statRow(label: String(localized: "Active"), value: "\(video.activeTrue ?? 0)", icon: "checkmark.circle")
-            statRow(label: String(localized: "Inactive"), value: "\(video.activeFalse ?? 0)", icon: "xmark.circle")
+            statRow(label: String.localised("generic.active"), value: "\(video.activeTrue ?? 0)", icon: "checkmark.circle")
+            statRow(label: String.localised("generic.inactive"), value: "\(video.activeFalse ?? 0)", icon: "xmark.circle")
         } header: {
-            Text(String(localized: "Overview"))
+            Text(String.localised("generic.overview"))
         }
         .listRowBackground(Color.Surface.highlight)
     }
@@ -71,11 +71,11 @@ public struct StatsScreen: View {
 
     private func videoTypeSection(_ video: VideoStatsResponse) -> some View {
         Section {
-            statRow(label: String(localized: "Regular Videos"), value: "\(video.typeVideos ?? 0)", icon: "play.rectangle")
-            statRow(label: String(localized: "Shorts"), value: "\(video.typeShorts ?? 0)", icon: "bolt.circle")
-            statRow(label: String(localized: "Streams"), value: "\(video.typeStreams ?? 0)", icon: "dot.radiowaves.left.and.right")
+            statRow(label: String.localised("video.typeRegular", table: .videos), value: "\(video.typeVideos ?? 0)", icon: "play.rectangle")
+            statRow(label: String.localised("video.typeShorts", table: .videos), value: "\(video.typeShorts ?? 0)", icon: "bolt.circle")
+            statRow(label: String.localised("video.typeStreams", table: .videos), value: "\(video.typeStreams ?? 0)", icon: "dot.radiowaves.left.and.right")
         } header: {
-            Text(String(localized: "Video Type"))
+            Text(String.localised("video.videoType", table: .videos))
         }
         .listRowBackground(Color.Surface.highlight)
     }
@@ -85,18 +85,18 @@ public struct StatsScreen: View {
     private var applicationSection: some View {
         Section {
             if let channel = store.channelStats {
-                statRow(label: String(localized: "Channels"), value: "\(channel.docCount ?? 0)", icon: "person.2")
+                statRow(label: String.localised("generic.channels"), value: "\(channel.docCount ?? 0)", icon: "person.2")
                 statRow(label: "Subscribed Channels", value: "\(channel.subscribedTrue ?? 0)", icon: "bell")
             }
             if let playlist = store.playlistStats {
-                statRow(label: String(localized: "Playlists"), value: "\(playlist.docCount ?? 0)", icon: "list.bullet.rectangle")
+                statRow(label: String.localised("generic.playlists"), value: "\(playlist.docCount ?? 0)", icon: "list.bullet.rectangle")
                 statRow(label: "Subscribed Playlists", value: "\(playlist.subscribedTrue ?? 0)", icon: "bell")
             }
             if let download = store.downloadStats {
-                statRow(label: String(localized: "Downloads Pending"), value: "\(download.pending ?? 0)", icon: "arrow.down.circle")
+                statRow(label: String.localised("video.downloadsPending", table: .videos), value: "\(download.pending ?? 0)", icon: "arrow.down.circle")
             }
         } header: {
-            Text(String(localized: "Application"))
+            Text(String.localised("settings.application", table: .settings))
         }
         .listRowBackground(Color.Surface.highlight)
     }
@@ -105,10 +105,10 @@ public struct StatsScreen: View {
 
     private func watchSection(_ watch: WatchStatsResponse) -> some View {
         Section {
-            statRow(label: String(localized: "Watched"), value: "\(watch.watched ?? 0)", icon: "eye")
-            statRow(label: String(localized: "Unwatched"), value: "\(watch.unwatched ?? 0)", icon: "eye.slash")
+            statRow(label: String.localised("video.watched", table: .videos), value: "\(watch.watched ?? 0)", icon: "eye")
+            statRow(label: String.localised("video.unwatched", table: .videos), value: "\(watch.unwatched ?? 0)", icon: "eye.slash")
         } header: {
-            Text(String(localized: "Watch Progress"))
+            Text(String.localised("video.watchProgress", table: .videos))
         }
         .listRowBackground(Color.Surface.highlight)
     }
@@ -133,7 +133,7 @@ public struct StatsScreen: View {
                 }
             }
         } header: {
-            Text(String(localized: "Biggest Channels"))
+            Text(String.localised("settings.biggestChannels", table: .settings))
         }
         .listRowBackground(Color.Surface.highlight)
     }
@@ -145,10 +145,10 @@ public struct StatsScreen: View {
             statRow(label: "Total Videos", value: "0000", icon: "film.stack")
             statRow(label: "Media Size", value: "00.0 GB", icon: "internaldrive")
             statRow(label: "Duration", value: "000h 00m", icon: "clock")
-            statRow(label: String(localized: "Active"), value: "000", icon: "checkmark.circle")
-            statRow(label: String(localized: "Inactive"), value: "000", icon: "xmark.circle")
+            statRow(label: String.localised("generic.active"), value: "000", icon: "checkmark.circle")
+            statRow(label: String.localised("generic.inactive"), value: "000", icon: "xmark.circle")
         } header: {
-            Text(String(localized: "Overview"))
+            Text(String.localised("generic.overview"))
         }
         .listRowBackground(Color.Surface.highlight)
         .redacted(reason: .placeholder)
@@ -156,12 +156,12 @@ public struct StatsScreen: View {
 
     private var placeholderApplicationSection: some View {
         Section {
-            statRow(label: String(localized: "Channels"), value: "000", icon: "person.2")
+            statRow(label: String.localised("generic.channels"), value: "000", icon: "person.2")
             statRow(label: "Subscribed", value: "000", icon: "bell")
-            statRow(label: String(localized: "Playlists"), value: "000", icon: "list.bullet.rectangle")
-            statRow(label: String(localized: "Downloads Pending"), value: "000", icon: "arrow.down.circle")
+            statRow(label: String.localised("generic.playlists"), value: "000", icon: "list.bullet.rectangle")
+            statRow(label: String.localised("video.downloadsPending", table: .videos), value: "000", icon: "arrow.down.circle")
         } header: {
-            Text(String(localized: "Application"))
+            Text(String.localised("settings.application", table: .settings))
         }
         .listRowBackground(Color.Surface.highlight)
         .redacted(reason: .placeholder)

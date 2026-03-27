@@ -24,7 +24,7 @@ public struct TVChannelDetailScreen: View {
                 Section {
                     videosContent
                 } header: {
-                    PinnedSectionHeader(title: String(localized: "Videos"))
+                    PinnedSectionHeader(title: String.localised("generic.videos"))
                 }
                 .focusSection()
 
@@ -32,7 +32,7 @@ public struct TVChannelDetailScreen: View {
                     Section {
                         pendingDownloadsContent
                     } header: {
-                        PinnedSectionHeader(title: String(localized: "Pending Downloads"))
+                        PinnedSectionHeader(title: String.localised("video.pendingDownloads", table: .videos))
                     }
                     .focusSection()
                 }
@@ -72,7 +72,7 @@ public struct TVChannelDetailScreen: View {
                     Button {
                         send(.descriptionToggleTapped, animation: .default)
                     } label: {
-                        Text(store.isDescriptionExpanded ? String(localized: "Show Less") : String(localized: "Show More"))
+                        Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -156,7 +156,7 @@ public struct TVChannelDetailScreen: View {
                 }
                 .padding(.horizontal, 48)
             } else if store.videos.isEmpty && store.hasLoadedVideos {
-                Text(String(localized: "No videos yet"))
+                Text(String.localised("video.empty.noVideos", table: .videos))
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .focusable()
