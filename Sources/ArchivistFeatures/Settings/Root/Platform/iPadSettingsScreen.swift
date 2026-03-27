@@ -108,6 +108,12 @@ public struct iPadSettingsScreen: View {
             }
 
             Section {
+                Toggle(String(localized: "Autoplay"), isOn: $store.autoPlayEnabled)
+            } header: {
+                Text(String(localized: "Playback"))
+            }
+
+            Section {
                 Button(role: .destructive) {
                     send(.logoutTapped)
                 } label: {

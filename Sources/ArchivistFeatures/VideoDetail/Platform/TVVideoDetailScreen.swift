@@ -116,8 +116,10 @@ public struct TVVideoDetailScreen: View {
                             LazyHStack(spacing: 40) {
                                 ForEach(playNextItems) { item in
                                     playNextCard(item)
+                                        .playNextTransition()
                                 }
                             }
+                            .animation(.default, value: playNextItems.map(\.id))
                             .padding(.horizontal, 48)
                         }
                     }

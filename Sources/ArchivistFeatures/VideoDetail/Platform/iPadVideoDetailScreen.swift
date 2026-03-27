@@ -511,8 +511,10 @@ public struct iPadVideoDetailScreen: View {
             LazyVStack(spacing: 12) {
                 ForEach(playNextItems) { item in
                     playNextSidebarRow(item, compact: compact)
+                        .playNextTransition()
                 }
             }
+            .animation(.default, value: playNextItems.map(\.id))
             .padding(.horizontal, 16)
         }
         .padding(.top, 8)

@@ -283,6 +283,8 @@ extension VideoDetailReducer {
 
     private func handleVideoPlaybackDidEnd(state: inout State) -> Effect<Action> {
         let saveEffect = saveProgressEffect(state: state)
+        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
+        guard autoPlayEnabled else { return saveEffect }
         let config = state.serverConfig
         let currentVideoId = state.video.videoId
         let nextVideos = state.nextVideos
