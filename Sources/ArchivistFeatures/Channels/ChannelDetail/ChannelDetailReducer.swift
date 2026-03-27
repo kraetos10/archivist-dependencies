@@ -1,0 +1,115 @@
+import ArchivistNetworking
+import ComposableArchitecture
+import Foundation
+
+@Reducer
+public struct ChannelDetailReducer: Sendable {
+    public init() {}
+    @ObservableState
+    public struct State: Equatable, Sendable {
+        var serverConfig: ServerConfig
+        var channel: ChannelResponse
+        var videos: IdentifiedArrayOf<VideoResponse> = []
+        var currentPage: Int = 1
+        var lastPage: Int = 1
+        var isLoadingVideos = false
+        var isLoadingMoreVideos = false
+        var hasLoadedVideos = false
+        var pendingDownloads: IdentifiedArrayOf<DownloadResponse> = []
+        var isLoadingDownloads = false
+        var hasLoadedDownloads = false
+        var isDescriptionExpanded = false
+
+        @Presents var alert: AlertState<AlertAction>?
+
+        @Presents var downloadDetail: DownloadDetailReducer.State?
+
+        var channelThumbURL: URL? {
+            guard let path = channel.channelThumbUrl else { return nil }
+            return serverConfig.fullURL(for: path)
+        }
+
+        var channelBannerURL: URL? {
+            guard let path = channel.channelBannerUrl else { return nil }
+            return serverConfig.fullURL(for: path)
+        }
+    }
+
+    public enum AlertAction: Equatable, Sendable {
+        case confirmUnsubscribe
+        case confirmDownload(String)
+    }
+
+    public enum Action: ViewAction {
+        case view(View)
+        case delegate(Delegate)
+        case alert(PresentationAction<AlertAction>)
+        case videosLoaded(PaginatedResponse<VideoResponse>)
+        case videosFailed(Error)
+        case downloadsLoaded(PaginatedResponse<DownloadResponse>)
+        case downloadsFailed(Error)
+        case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
+        case unsubscribeCompleted
+        case unsubscribeFailed
+
+        @CasePathable
+        public enum Delegate: Equatable, Sendable {
+            case videoSelected(VideoResponse, nextVideos: [VideoResponse])
+        }
+
+        @CasePathable
+        public enum View {
+            case viewDidAppear
+            case lastVideoAppeared
+            case videoCardTapped(VideoResponse)
+            case downloadCardTapped(DownloadResponse)
+            case unsubscribeTapped
+            case descriptionToggleTapped
+        }
+    }
+
+    @Dependency(\.videoService) var videoService
+    @Dependency(\.downloadService) var downloadService
+    @Dependency(\.channelService) var channelService
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .view(let viewAction):
+                return handleViewAction(viewAction, state: &state)
+            case .delegate:
+                return .none
+            case .downloadDetail(.presented(.view(.dismissTapped))):
+                state.downloadDetail = nil
+                return .none
+            case .downloadDetail(.presented(.downloadStarted)):
+                state.downloadDetail = nil
+                return .none
+            case .downloadDetail(.presented(.deleteSucceeded)):
+                let youtubeId = state.downloadDetail?.download.youtubeId
+                state.downloadDetail = nil
+                if let youtubeId {
+                    state.pendingDownloads.remove(id: youtubeId)
+                }
+                return .none
+            case .downloadDetail:
+                return .none
+            case .alert(.presented(.confirmUnsubscribe)):
+                return handleUnsubscribeConfirmed(state: &state)
+            case .alert(.presented(.confirmDownload(let videoId))):
+                let config = state.serverConfig
+                return .run { _ in
+                    try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
+                }
+            case .alert:
+                return .none
+            default:
+                return handleInternalAction(action, state: &state)
+            }
+        }
+        .ifLet(\.$alert, action: \.alert)
+        .ifLet(\.$downloadDetail, action: \.downloadDetail) {
+            DownloadDetailReducer()
+        }
+    }
+}
