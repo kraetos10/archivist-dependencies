@@ -62,6 +62,7 @@ public struct VideoDetailReducer {
 
     public enum Action: ViewAction {
         case view(View)
+        case delegate(Delegate)
 
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case alert(PresentationAction<AlertAction>)
@@ -77,6 +78,10 @@ public struct VideoDetailReducer {
         case serverDeleteResult(Result<Void, Error>)
         case loadNextVideo
         case watchedToggleResult(Result<Void, Error>)
+
+        public enum Delegate {
+            case didRequestMinimize(VideoResponse, [VideoResponse], ServerConfig, Bool)
+        }
 
         @CasePathable
         public enum View {
@@ -110,6 +115,8 @@ public struct VideoDetailReducer {
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .delegate:
+                return .none
             case .playlistPicker:
                 return .none
             case .alert:

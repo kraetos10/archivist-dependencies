@@ -143,13 +143,40 @@ extension VideoDetailReducer {
     }
 
     private func handleDismissTapped(state: inout State) -> Effect<Action> {
+        // If playing, minimize to mini player instead of stopping
+        if state.isPlaying {
+            return .send(.delegate(.didRequestMinimize(
+                state.video,
+                state.nextVideos,
+                state.serverConfig,
+                state.showPlayNext
+            )))
+        }
+
         let saveEffect = saveProgressEffect(state: state)
-        state.isPlaying = false
-        let dismiss = self.dismiss
+        let video = state.video
+        let nextVideos = state.nextVideos
+        let serverConfig = state.serverConfig
+        let showPlayNext = state.showPlayNext
         return .merge(
             saveEffect,
-            .run { _ in
-                await MainActor.run { PlayerManager.shared.stop() }
+            .run { [dismiss] send in
+                let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
+                if isInPiP {
+                    // In PiP but not playing — minimise instead
+                    await send(.delegate(
+                        .didRequestMinimize(
+                            video,
+                            nextVideos,
+                            serverConfig,
+                            showPlayNext
+                        )
+                    ))
+                    return
+                }
+                await MainActor.run {
+                    PlayerManager.shared.stop()
+                }
                 await dismiss()
             }
         )

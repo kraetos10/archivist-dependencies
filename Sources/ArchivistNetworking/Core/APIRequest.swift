@@ -119,9 +119,8 @@ public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unc
                 let error = NetworkingError.errorStatusCode(response.statusCode, body)
 
                 if response.statusCode == 403, body.contains("Invalid token") {
-                    Task { @MainActor in
-                        NotificationCenter.default.post(name: .authTokenExpired, object: nil)
-                    }
+                    @Dependency(\.authEventService) var authEventService
+                    Task { await authEventService.tokenExpired() }
                 }
 
                 throw error

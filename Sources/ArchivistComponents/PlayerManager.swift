@@ -1,5 +1,8 @@
 import AVFoundation
 import AVKit
+#if !os(tvOS)
+import UIKit
+#endif
 
 @Observable
 @MainActor
@@ -11,8 +14,12 @@ public final class PlayerManager {
     public private(set) var isBuffering = true
     public private(set) var currentTime: Double = 0
     public private(set) var duration: Double = 0
-    public var onPiPRestore: (() -> Void)?
     public var currentVideoID: String?
+    public var isInPiP = false
+    public var activePiPDelegate: AnyObject?
+    #if !os(tvOS)
+    public weak var activePlayerViewController: AVPlayerViewController?
+    #endif
     private var timeObserver: Any?
     private var durationObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
@@ -55,8 +62,9 @@ public final class PlayerManager {
         duration = 0
         onPlaybackEnd = nil
         onPause = nil
-        onPiPRestore = nil
         currentVideoID = nil
+        isInPiP = false
+        activePiPDelegate = nil
     }
 
     public func pause() {
@@ -87,6 +95,17 @@ public final class PlayerManager {
     public func togglePlayPause() {
         if isPlaying { pause() } else { resume() }
     }
+
+    #if !os(tvOS)
+    public func stopPiP() {
+        guard isInPiP else { return }
+        // Remove the player from the PiP VC to force PiP to end
+        activePlayerViewController?.player = nil
+        isInPiP = false
+        activePiPDelegate = nil
+        activePlayerViewController = nil
+    }
+    #endif
 
     // MARK: - Private
 

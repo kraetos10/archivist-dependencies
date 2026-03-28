@@ -1,5 +1,6 @@
 #if !os(tvOS)
 import AVKit
+import Dependencies
 import SwiftUI
 
 public struct AVPlayerViewControllerWrapper: UIViewControllerRepresentable {
@@ -23,23 +24,43 @@ public struct AVPlayerViewControllerWrapper: UIViewControllerRepresentable {
     }
 
     public func makeCoordinator() -> Coordinator {
-        Coordinator(onFullscreenDismiss: onFullscreenDismiss)
+        @Dependency(\.pipRestoreService) var pipRestoreService
+        return Coordinator(
+            onFullscreenDismiss: onFullscreenDismiss,
+            pipRestoreRequest: pipRestoreService.request
+        )
     }
 
     public final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         public let onFullscreenDismiss: (() -> Void)?
+        private let pipRestoreRequest: @Sendable () async -> Void
         private var isInPiP = false
 
-        public init(onFullscreenDismiss: (() -> Void)?) {
+        public init(
+            onFullscreenDismiss: (() -> Void)?,
+            pipRestoreRequest: @escaping @Sendable () async -> Void
+        ) {
             self.onFullscreenDismiss = onFullscreenDismiss
+            self.pipRestoreRequest = pipRestoreRequest
         }
 
         public func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
             isInPiP = true
+            nonisolated(unsafe) let coordinator = self
+            nonisolated(unsafe) let vc = playerViewController
+            Task { @MainActor in
+                PlayerManager.shared.isInPiP = true
+                PlayerManager.shared.activePiPDelegate = coordinator
+                PlayerManager.shared.activePlayerViewController = vc
+            }
         }
 
         public func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
             isInPiP = false
+            Task { @MainActor in
+                PlayerManager.shared.isInPiP = false
+                PlayerManager.shared.activePiPDelegate = nil
+            }
         }
 
         public func playerViewController(
@@ -50,6 +71,9 @@ public struct AVPlayerViewControllerWrapper: UIViewControllerRepresentable {
             nonisolated(unsafe) let isInPiP = self.isInPiP
             coordinator.animate(alongsideTransition: nil) { @Sendable _ in
                 guard !isInPiP else { return }
+                Task { @MainActor in
+                    PlayerManager.shared.player?.play()
+                }
                 onDismiss?()
             }
         }
@@ -58,8 +82,11 @@ public struct AVPlayerViewControllerWrapper: UIViewControllerRepresentable {
             _ playerViewController: AVPlayerViewController,
             restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
         ) {
-            NotificationCenter.default.post(name: .pipRestoreRequested, object: nil)
-            completionHandler(true)
+            // Dismiss PiP immediately — the original VC may no longer be in the hierarchy.
+            // The mini player will expand to a new video detail with the player still running.
+            completionHandler(false)
+            let request = pipRestoreRequest
+            Task { await request() }
         }
     }
 }

@@ -95,6 +95,9 @@ public struct SettingsReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
+                state.videoDetail = nil
+                return .none
             default:
                 return handleInternalAction(action, state: &state)
             }

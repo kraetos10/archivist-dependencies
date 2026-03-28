@@ -29,8 +29,6 @@ extension VideoListReducer {
         case .addVideoTapped:
             state.addVideo = AddVideoReducer.State(serverConfig: state.serverConfig)
             return .none
-        case .pipRestoreNotificationReceived:
-            return handlePipRestoreNotificationReceived(state: &state)
         }
     }
 
@@ -191,18 +189,6 @@ extension VideoListReducer {
     private func handlePlayNextTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
         return .run { [playNextDatabase] _ in
             try? await playNextDatabase.addToQueue(video)
-        }
-    }
-
-    private func handlePipRestoreNotificationReceived(state: inout State) -> Effect<Action> {
-        guard state.videoDetail == nil else { return .none }
-        let config = state.serverConfig
-        return .run { [videoService] send in
-            let videoId = await MainActor.run { PlayerManager.shared.currentVideoID }
-            guard let videoId else { return }
-            if let video = try? await videoService.getVideo(config: config, id: videoId) {
-                await send(.pipRestoreVideo(video))
-            }
         }
     }
 

@@ -120,8 +120,6 @@ public struct VideoListReducer {
         case videoRefreshed(VideoResponse)
         case searchResult(Result<[VideoResponse], Error>)
         case addVideo(PresentationAction<AddVideoReducer.Action>)
-        case pipRestoreVideo(VideoResponse)
-
         @CasePathable
         public enum View {
             case viewDidAppear
@@ -135,7 +133,6 @@ public struct VideoListReducer {
             case markAsWatchedTapped(VideoResponse)
             case playNextTapped(VideoResponse)
             case addVideoTapped
-            case pipRestoreNotificationReceived
         }
     }
 
@@ -183,10 +180,16 @@ public struct VideoListReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .selectedVideoDetail(.delegate(.didRequestMinimize)):
+                state.selectedVideo = nil
+                return .none
             case .selectedVideoDetail(.serverDeleteResult(.success)):
                 state.selectedVideo = nil
                 return .send(.view(.pullToRefreshTriggered))
             case .selectedVideoDetail:
+                return .none
+            case .presentedVideo(.presented(.delegate(.didRequestMinimize))):
+                state.presentedVideo = nil
                 return .none
             case .presentedVideo(.presented(.serverDeleteResult(.success))):
                 state.presentedVideo = nil
@@ -206,6 +209,9 @@ public struct VideoListReducer {
             case .addVideo:
                 return .none
             case .alert:
+                return .none
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
+                state.videoDetail = nil
                 return .none
             case .videoDetail(.presented(.serverDeleteResult(.success))):
                 state.videoDetail = nil

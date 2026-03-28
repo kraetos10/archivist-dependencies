@@ -112,6 +112,9 @@ public struct PlaylistsReducer {
                     showPlayNext: false
                 )
                 return .none
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
+                state.videoDetail = nil
+                return .none
             case .videoDetail:
                 return .none
             case .path, .addPlaylist, .playlistDetail:
