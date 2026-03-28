@@ -131,6 +131,9 @@ public struct ChannelsReducer {
                 return handleConfirmedUnsubscribe(channelId, state: &state)
             case .alert:
                 return .none
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
+                state.videoDetail = nil
+                return .none
             case .videoDetail:
                 return .none
             case .addChannel, .channelDetail, .path:

@@ -48,6 +48,23 @@ public struct TabScreen: View {
                 .tag(AppTab.settings)
                 .badge(store.activeDownload != nil ? 1 : 0)
         }
+        .safeAreaInset(edge: .bottom) {
+            if let mini = store.miniPlayer {
+                MiniPlayerView(
+                    title: mini.video.title,
+                    channelName: mini.video.channelName,
+                    thumbUrl: mini.video.vidThumbUrl,
+                    serverConfig: mini.serverConfig,
+                    isPlaying: PlayerManager.shared.isPlaying,
+                    isInPiP: PlayerManager.shared.isInPiP,
+                    onTap: { store.send(.miniPlayerTapped) },
+                    onPlayPause: { store.send(.miniPlayerPlayPauseTapped) },
+                    onClose: { store.send(.miniPlayerCloseTapped) }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: store.miniPlayer != nil)
         .tint(Color.Accent.dark)
         .onAppear { store.send(.appeared) }
     }

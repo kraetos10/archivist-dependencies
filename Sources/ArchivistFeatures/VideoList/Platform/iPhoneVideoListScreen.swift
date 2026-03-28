@@ -102,9 +102,6 @@ public struct iPhoneVideoListScreen: View {
                 VideoDetailScreen(store: detailStore)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pipRestoreRequested)) { _ in
-            send(.pipRestoreNotificationReceived)
-        }
     }
 
 }

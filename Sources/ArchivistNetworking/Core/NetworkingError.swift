@@ -46,8 +46,3 @@ extension Error {
         return "A network error occurred"
     }
 }
-
-extension Notification.Name {
-    public static let authTokenExpired = Notification.Name("authTokenExpired")
-    public static let pipRestoreRequested = Notification.Name("pipRestoreRequested")
-}
