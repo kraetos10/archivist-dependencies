@@ -18,12 +18,19 @@ public struct iPhoneVideoListScreen: View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
                 if !store.isSearchActive {
-                    WatchFilterRow(watchFilter: store.watchFilter, onFilterChanged: { send(.watchFilterChanged($0), animation: .default) })
+                    WatchFilterRow(
+                        watchFilter: store.watchFilter,
+                        onFilterChanged: { send(.watchFilterChanged($0), animation: .default) }
+                    )
                         .padding(.top, 8)
                 }
 
                 if (store.hasLoaded || (store.isSearchActive && !store.isSearching)) && store.displayedVideos.isEmpty {
-                    VideoListEmptyState(isSearchActive: store.isSearchActive, isSearching: store.isSearching, watchFilter: store.watchFilter)
+                    VideoListEmptyState(
+                        isSearchActive: store.isSearchActive,
+                        isSearching: store.isSearching,
+                        watchFilter: store.watchFilter
+                    )
                 } else {
                     LazyVGrid(columns: columns, spacing: 16) {
                         if store.isLoading && store.videos.isEmpty {
@@ -35,32 +42,38 @@ public struct iPhoneVideoListScreen: View {
                                 .redacted(reason: .placeholder)
                             }
                         } else {
-                            ForEach(store.displayedVideos) { video in
+                            ForEach(store.displayedVideos) { item in
                                 VideoCardView(
-                                    video: video,
-                                    serverConfig: store.serverConfig
+                                    video: item.video,
+                                    serverConfig: store.serverConfig,
+                                    isDownloaded: item.isDownloaded
                                 )
                                 .contextMenu {
                                     VideoContextMenu(
-                                        youtubeURL: video.youtubeURL,
-                                        onPlayNext: { send(.playNextTapped(video)) },
-                                        onAddToPlaylist: { send(.addToPlaylistTapped(video)) },
-                                        onDownloadToDevice: { send(.downloadToDeviceTapped(video)) },
-                                        onMarkAsWatched: { send(.markAsWatchedTapped(video)) },
-                                        onDeleteFromServer: { send(.deleteFromServerTapped(video)) }
+                                        youtubeURL: item.video.youtubeURL,
+                                        isDownloaded: item.isDownloaded,
+                                        onPlayNext: { send(.playNextTapped(item.video)) },
+                                        onAddToPlaylist: { send(.addToPlaylistTapped(item.video)) },
+                                        onDownloadToDevice: { send(.downloadToDeviceTapped(item.video)) },
+                                        onDeleteFromDevice: item.isDownloaded ? {
+                                            send(.deleteFromDeviceTapped(item.video))
+                                        } : nil,
+                                        onMarkAsWatched: { send(.markAsWatchedTapped(item.video)) },
+                                        onDeleteFromServer: { send(.deleteFromServerTapped(item.video)) }
                                     )
                                 }
                                 .pressable {
-                                    send(.videoTapped(video))
+                                    send(.videoTapped(item.video))
                                 }
                                 .onAppear {
-                                    if video.id == store.videos.last?.id {
+                                    if item.video.id == store.videos.last?.id {
                                         send(.lastItemAppeared)
                                     }
                                 }
                             }
                         }
                     }
+                    .animation(.default, value: store.displayedVideos.map(\.id))
                     .padding()
 
                     if store.isLoadingMore {
@@ -77,9 +90,16 @@ public struct iPhoneVideoListScreen: View {
                     }
             }
             .background(Color.Brand.primary)
-            .refreshable { await send(.pullToRefreshTriggered).finish() }
-            .navigationTitle(String.localised("generic.home"))
+            .refreshable { send(.pullToRefreshTriggered) }
+            .navigationTitle(String.localised("generic.home", table: .generic))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    VideoSortMenu(current: store.sortOrder) { sort in
+                        send(.sortOrderChanged(sort), animation: .default)
+                    }
+                }
+            }
             .searchable(
                 text: $store.searchQuery,
                 placement: .navigationBarDrawer(displayMode: .automatic),

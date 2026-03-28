@@ -94,7 +94,6 @@ public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unc
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method.rawValue
         urlRequest.httpBody = body
-
         headers?.forEach { urlRequest.addValue($0.value, forHTTPHeaderField: $0.field) }
 
         return urlRequest

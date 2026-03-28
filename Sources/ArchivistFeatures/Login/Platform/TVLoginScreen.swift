@@ -21,7 +21,7 @@ public struct TVLoginScreen: View {
 
             Text("Sign In")
                 .font(.title)
-                .fontWeight(.bold)  
+                .fontWeight(.bold)
 
             VStack(spacing: 24) {
                 TextField(String.localised("login.username", table: .login), text: $store.username)

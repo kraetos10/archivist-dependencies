@@ -59,6 +59,7 @@ public struct PlaylistsReducer {
             case lastItemAppeared
             case playlistCardTapped(PlaylistResponse)
             case addPlaylistTapped
+            case splitViewEnabled
         }
     }
 
@@ -80,47 +81,11 @@ public struct PlaylistsReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .addPlaylist(.presented(.subscribeResult(.success))),
-                 .addPlaylist(.presented(.createCustomResult(.success))):
-                return handleInternalAction(action, state: &state)
-            case .playlistDetail(.presented(.unsubscribeResult(.success))):
-                if let playlistId = state.selectedPlaylist?.playlist.playlistId {
-                    state.playlists.remove(id: playlistId)
-                }
-                state.selectedPlaylist = nil
-                return .none
-            case .path(.element(_, action: .playlistDetail(.unsubscribeResult(.success)))):
-                if let last = state.path.last,
-                   case .playlistDetail(let detail) = last {
-                    state.playlists.remove(id: detail.playlist.playlistId)
-                }
-                _ = state.path.popLast()
-                return .none
-            case .path(.element(_, action: .playlistDetail(.delegate(.showVideo(let video, let nextVideos))))):
-                state.videoDetail = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video,
-                    nextVideos: nextVideos,
-                    showPlayNext: false
-                )
-                return .none
-            case .playlistDetail(.presented(.delegate(.showVideo(let video, let nextVideos)))):
-                state.videoDetail = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video,
-                    nextVideos: nextVideos,
-                    showPlayNext: false
-                )
-                return .none
-            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
-                state.videoDetail = nil
-                return .none
-            case .videoDetail(.presented(.delegate(.didDismiss))):
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))),
+                 .videoDetail(.presented(.delegate(.didDismiss))):
                 state.videoDetail = nil
                 return .none
             case .videoDetail:
-                return .none
-            case .path, .addPlaylist, .playlistDetail:
                 return .none
             default:
                 return handleInternalAction(action, state: &state)

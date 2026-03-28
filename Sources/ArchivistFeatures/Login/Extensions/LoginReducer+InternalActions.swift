@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension LoginReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .loginResult(.success):
             return handleLoginCompleted(state: &state)
@@ -44,7 +47,10 @@ extension LoginReducer {
         }
     }
 
-    private func handleLoginFailed(_ error: Error, state: inout State) -> Effect<Action> {
+    private func handleLoginFailed(
+        _ error: Error,
+        state: inout State
+    ) -> Effect<Action> {
         state.isLoading = false
         if let networkError = error as? NetworkingError {
             switch networkError {
@@ -80,7 +86,10 @@ extension LoginReducer {
         return .none
     }
 
-    private func handleTokenReceived(_ token: String, state: inout State) -> Effect<Action> {
+    private func handleTokenReceived(
+        _ token: String,
+        state: inout State
+    ) -> Effect<Action> {
         let details = state.registrationDetails
         let config = ServerConfig(
             baseURL: details.serverAddress,
@@ -98,7 +107,10 @@ extension LoginReducer {
         }
     }
 
-    private func handleTokenFailed(_ error: Error, state: inout State) -> Effect<Action> {
+    private func handleTokenFailed(
+        _ error: Error,
+        state: inout State
+    ) -> Effect<Action> {
         state.isLoading = false
         state.alert = AlertState {
             TextState(String.localised("login.loginFailed", table: .login))

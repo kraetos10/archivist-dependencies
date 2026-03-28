@@ -1,3 +1,4 @@
+#if os(tvOS)
 import ArchivistNetworking
 import SwiftUI
 
@@ -8,7 +9,11 @@ public struct TVPlaylistCardView: View {
 
     @FocusState private var isFocused: Bool
 
-    public init(playlist: PlaylistResponse, serverConfig: ServerConfig, action: @escaping () -> Void = {}) {
+    public init(
+        playlist: PlaylistResponse,
+        serverConfig: ServerConfig,
+        action: @escaping () -> Void = {}
+    ) {
         self.playlist = playlist
         self.serverConfig = serverConfig
         self.action = action
@@ -21,10 +26,10 @@ public struct TVPlaylistCardView: View {
                 infoView
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVCardButtonStyle())
         .focused($isFocused)
         .scaleEffect(isFocused ? 1.05 : 1.0)
-        .shadow(radius: isFocused ? 16 : 4)
+        .shadow(color: isFocused ? .white.opacity(0.5) : .clear, radius: isFocused ? 20 : 0)
         .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 
@@ -90,3 +95,4 @@ public struct TVPlaylistCardView: View {
             }
     }
 }
+#endif

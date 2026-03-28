@@ -14,6 +14,11 @@ public struct TVChannelDetailScreen: View {
 
     private let columns = [GridItem(.adaptive(minimum: 400), spacing: 48)]
 
+    private func isNewVideo(_ video: VideoResponse) -> Bool {
+        guard let since = store.newContentSince,
+              let published = video.publishedDate else { return false }
+        return published > since
+    }
 
     public var body: some View {
         ScrollView {
@@ -24,7 +29,7 @@ public struct TVChannelDetailScreen: View {
                 Section {
                     videosContent
                 } header: {
-                    PinnedSectionHeader(title: String.localised("generic.videos"))
+                    videosSectionHeader
                 }
                 .focusSection()
 
@@ -32,7 +37,7 @@ public struct TVChannelDetailScreen: View {
                     Section {
                         pendingDownloadsContent
                     } header: {
-                        PinnedSectionHeader(title: String.localised("video.pendingDownloads", table: .videos))
+                        downloadsSectionHeader
                     }
                     .focusSection()
                 }
@@ -41,6 +46,43 @@ public struct TVChannelDetailScreen: View {
         }
         .onAppear { send(.viewDidAppear) }
         .alert($store.scope(state: \.alert, action: \.alert))
+    }
+
+    // MARK: - Videos Header
+
+    private var videosSectionHeader: some View {
+        HStack {
+            Text(String.localised("generic.videos", table: .generic))
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            Spacer()
+
+            HStack(spacing: 12) {
+                ForEach(VideoSortOrder.allCases, id: \.self) { sort in
+                    let isSelected = store.videoSortOrder == sort
+                    Button {
+                        send(.videoSortOrderChanged(sort))
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: sort.icon)
+                                .font(.caption)
+                            Text(sort.label)
+                        }
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(isSelected ? Color.Brand.primary : Color.Text.primary)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(isSelected ? Color.Text.primary : Color.Surface.highlight)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(TVCapsuleButtonStyle())
+                }
+            }
+        }
+        .padding(.horizontal, 48)
+        .padding(.vertical, 16)
     }
 
     // MARK: - Header
@@ -72,7 +114,11 @@ public struct TVChannelDetailScreen: View {
                     Button {
                         send(.descriptionToggleTapped, animation: .default)
                     } label: {
-                        Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
+                        Text(
+                            store.isDescriptionExpanded
+                                ? String.localised("generic.showLess", table: .generic)
+                                : String.localised("generic.showMore", table: .generic)
+                        )
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -113,31 +159,44 @@ public struct TVChannelDetailScreen: View {
     }
 
     private var channelThumbView: some View {
-        Group {
-            if let thumbURL = store.channelThumbURL {
-                AsyncImage(url: thumbURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                    default:
-                        thumbPlaceholder
-                    }
-                }
-            } else {
-                thumbPlaceholder
-            }
-        }
-        .frame(width: 120, height: 120)
-        .clipShape(Circle())
-        .offset(y: -60)
-        .padding(.bottom, -60)
+        ChannelThumbView(url: store.channelThumbURL, size: 120)
+            .offset(y: -60)
+            .padding(.bottom, -60)
     }
 
-    private var thumbPlaceholder: some View {
-        Circle()
-            .fill(.secondary.opacity(0.3))
+    // MARK: - Downloads Header
+
+    private var downloadsSectionHeader: some View {
+        HStack {
+            Text(String.localised("video.pendingDownloads", table: .videos))
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            Spacer()
+
+            Button {
+                send(.downloadSortToggled)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.caption)
+                    Text(
+                        store.showNewestDownloadsFirst
+                            ? String(localized: "Newest")
+                            : String(localized: "Oldest")
+                    )
+                }
+                .font(.headline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.Surface.highlight)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(TVCapsuleButtonStyle())
+        }
+        .padding(.horizontal, 48)
+        .padding(.vertical, 16)
     }
 
     // MARK: - Sections
@@ -170,6 +229,19 @@ public struct TVChannelDetailScreen: View {
                             serverConfig: store.serverConfig
                         ) {
                             send(.videoCardTapped(video))
+                        }
+                        .overlay(alignment: .topLeading) {
+                            if isNewVideo(video) {
+                                Text(String(localized: "NEW"))
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.Accent.dark)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    .padding(8)
+                            }
                         }
                         .onAppear {
                             if video.id == store.videos.last?.id {

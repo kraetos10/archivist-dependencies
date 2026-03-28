@@ -1,17 +1,51 @@
 import Foundation
 
 public nonisolated protocol PlaylistServiceType: Sendable {
-    func getPlaylists(config: ServerConfig, page: Int, type: String?, channel: String?, subscribed: Bool?) async throws -> PaginatedResponse<PlaylistResponse>
-    func getPlaylist(config: ServerConfig, id: String) async throws -> PlaylistResponse
-    func subscribePlaylists(config: ServerConfig, items: [PlaylistSubscribeItem]) async throws
-    func updatePlaylist(config: ServerConfig, id: String, subscribed: Bool) async throws
-    func deletePlaylist(config: ServerConfig, id: String, deleteVideos: Bool) async throws
-    func createCustomPlaylist(config: ServerConfig, name: String) async throws
-    func modifyCustomPlaylist(config: ServerConfig, id: String, action: String, videoId: String?, position: Int?) async throws
+    func getPlaylists(
+        config: ServerConfig,
+        page: Int,
+        type: String?,
+        channel: String?,
+        subscribed: Bool?
+    ) async throws -> PaginatedResponse<PlaylistResponse>
+    func getPlaylist(
+        config: ServerConfig,
+        id: String
+    ) async throws -> PlaylistResponse
+    func subscribePlaylists(
+        config: ServerConfig,
+        items: [PlaylistSubscribeItem]
+    ) async throws
+    func updatePlaylist(
+        config: ServerConfig,
+        id: String,
+        subscribed: Bool
+    ) async throws
+    func deletePlaylist(
+        config: ServerConfig,
+        id: String,
+        deleteVideos: Bool
+    ) async throws
+    func createCustomPlaylist(
+        config: ServerConfig,
+        name: String
+    ) async throws
+    func modifyCustomPlaylist(
+        config: ServerConfig,
+        id: String,
+        action: String,
+        videoId: String?,
+        position: Int?
+    ) async throws
 }
 
 extension PlaylistServiceType {
-    public func modifyCustomPlaylist(config: ServerConfig, id: String, action: String, videoId: String?) async throws {
+    public func modifyCustomPlaylist(
+        config: ServerConfig,
+        id: String,
+        action: String,
+        videoId: String?
+    ) async throws {
         try await modifyCustomPlaylist(config: config, id: id, action: action, videoId: videoId, position: nil)
     }
 }
@@ -39,7 +73,10 @@ public nonisolated struct PlaylistService: PlaylistServiceType {
         return try await request.execute().data
     }
 
-    public func getPlaylist(config: ServerConfig, id: String) async throws -> PlaylistResponse {
+    public func getPlaylist(
+        config: ServerConfig,
+        id: String
+    ) async throws -> PlaylistResponse {
         let request = NetworkAPIRequest<PlaylistResponse>(
             config: config,
             path: .playlist(id: id)
@@ -47,7 +84,10 @@ public nonisolated struct PlaylistService: PlaylistServiceType {
         return try await request.execute().data
     }
 
-    public func subscribePlaylists(config: ServerConfig, items: [PlaylistSubscribeItem]) async throws {
+    public func subscribePlaylists(
+        config: ServerConfig,
+        items: [PlaylistSubscribeItem]
+    ) async throws {
         let body = try JSONEncoder().encode(PlaylistSubscribeRequest(data: items))
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
@@ -58,7 +98,11 @@ public nonisolated struct PlaylistService: PlaylistServiceType {
         _ = try await request.execute()
     }
 
-    public func updatePlaylist(config: ServerConfig, id: String, subscribed: Bool) async throws {
+    public func updatePlaylist(
+        config: ServerConfig,
+        id: String,
+        subscribed: Bool
+    ) async throws {
         let body = try JSONEncoder().encode(["playlist_subscribed": subscribed])
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
@@ -69,7 +113,11 @@ public nonisolated struct PlaylistService: PlaylistServiceType {
         _ = try await request.execute()
     }
 
-    public func deletePlaylist(config: ServerConfig, id: String, deleteVideos: Bool = false) async throws {
+    public func deletePlaylist(
+        config: ServerConfig,
+        id: String,
+        deleteVideos: Bool = false
+    ) async throws {
         var queryItems: [URLQueryItem]?
         if deleteVideos {
             queryItems = [URLQueryItem(name: "delete_videos", value: "true")]
@@ -83,7 +131,10 @@ public nonisolated struct PlaylistService: PlaylistServiceType {
         _ = try await request.execute()
     }
 
-    public func createCustomPlaylist(config: ServerConfig, name: String) async throws {
+    public func createCustomPlaylist(
+        config: ServerConfig,
+        name: String
+    ) async throws {
         let body = try JSONEncoder().encode(["playlist_name": name])
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
@@ -94,7 +145,13 @@ public nonisolated struct PlaylistService: PlaylistServiceType {
         _ = try await request.execute()
     }
 
-    public func modifyCustomPlaylist(config: ServerConfig, id: String, action: String, videoId: String?, position: Int? = nil) async throws {
+    public func modifyCustomPlaylist(
+        config: ServerConfig,
+        id: String,
+        action: String,
+        videoId: String?,
+        position: Int? = nil
+    ) async throws {
         let body = try JSONEncoder().encode(CustomPlaylistRequest(action: action, videoId: videoId, position: position))
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,

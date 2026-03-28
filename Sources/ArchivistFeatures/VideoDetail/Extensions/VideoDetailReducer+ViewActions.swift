@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoDetailReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
@@ -37,6 +40,10 @@ extension VideoDetailReducer {
             return handleAddToPlayNextTapped(state: &state)
         case .removeFromPlayNextTapped(let id):
             return handleRemoveFromPlayNextTapped(id, state: &state)
+        case .videoChanged:
+            state.showAllComments = false
+            state.currentCommentIndex = 0
+            return .none
         }
     }
 
@@ -82,7 +89,7 @@ extension VideoDetailReducer {
         if !state.isLoadingComments && state.comments.isEmpty {
             state.isLoadingComments = true
             effects.append(
-                .run { send in
+                .run { [videoService] send in
                     let result = await Result {
                         try await videoService.getComments(config: config, videoId: videoId)
                     }
@@ -94,7 +101,7 @@ extension VideoDetailReducer {
         if !state.isLoadingSimilar && state.similarVideos.isEmpty {
             state.isLoadingSimilar = true
             effects.append(
-                .run { send in
+                .run { [videoService] send in
                     let result = await Result {
                         try await videoService.getSimilar(config: config, videoId: videoId)
                     }
@@ -113,12 +120,20 @@ extension VideoDetailReducer {
         let config = state.serverConfig
         let videoId = state.video.videoId
         let video = state.video
+        let authHeaders = state.isDownloaded ? [:] : config.authHeaders
         return .run { [videoService] send in
-            await MainActor.run {
-                PlayerManager.shared.load(url: url, startPosition: startPosition)
-                PlayerManager.shared.onPlaybackEnd = {
-                    Task { @MainActor in send(.view(.videoPlaybackDidEnd)) }
-                }
+            let stream = await MainActor.run {
+                PlayerManager.shared.configureAuth(
+                    videoId: videoId,
+                    videoService: videoService,
+                    config: config
+                )
+                PlayerManager.shared.load(
+                    url: url,
+                    startPosition: startPosition,
+                    authHeaders: authHeaders,
+                    videoId: videoId
+                )
                 PlayerManager.shared.onPause = {
                     let position = Int(PlayerManager.shared.currentTime)
                     guard position > 0 else { return }
@@ -127,8 +142,20 @@ extension VideoDetailReducer {
                     }
                 }
                 PlayerManager.shared.currentVideoID = videoId
+                PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
+                    title: video.title,
+                    artist: video.channelName,
+                    duration: Double(video.player?.duration ?? 0),
+                    artworkURL: config.fullURL(for: video.vidThumbUrl ?? ""),
+                    authHeaders: config.authHeaders
+                )
+                return PlayerManager.shared.playbackEndEvents()
+            }
+            for await _ in stream {
+                await send(.view(.videoPlaybackDidEnd))
             }
         }
+        .cancellable(id: CancelID.playback, cancelInFlight: true)
     }
 
     private func handleStopPlayback(state: inout State) -> Effect<Action> {
@@ -143,46 +170,45 @@ extension VideoDetailReducer {
     }
 
     private func handleDismissTapped(state: inout State) -> Effect<Action> {
-        // If playing, minimize to mini player instead of stopping
-        if state.isPlaying {
-            return .send(.delegate(.didRequestMinimize(
-                state.video,
-                state.nextVideos,
-                state.serverConfig,
-                state.showPlayNext
-            )))
-        }
-
         let config = state.serverConfig
         let videoId = state.video.videoId
         let video = state.video
         let nextVideos = state.nextVideos
         let showPlayNext = state.showPlayNext
-        return .run { [videoService, dismiss] send in
-            // Save progress and wait for server acknowledgement
+        let shouldAutoPlay = state.shouldAutoPlayNextVideo
+
+        // Save progress in the background — don't block the dismiss
+        let saveEffect: Effect<Action> = .run { [videoService] _ in
             let position = await Int(PlayerManager.shared.currentTime)
-            if position > 0 {
-                try? await videoService.setProgress(config: config, videoId: videoId, position: position)
-            }
+            guard position > 0 else { return }
+            try? await videoService.setProgress(config: config, videoId: videoId, position: position)
+        }
+
+        return .merge(saveEffect, .run { [dismiss] send in
+            let isPlaying = await MainActor.run { PlayerManager.shared.isPlaying }
             let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
-            if isInPiP {
-                // In PiP but not playing — minimise instead
+
+            // Minimize to mini player only if actively playing or in PiP
+            if isPlaying || isInPiP {
                 await send(.delegate(
                     .didRequestMinimize(
                         video,
                         nextVideos,
                         config,
-                        showPlayNext
+                        showPlayNext,
+                        shouldAutoPlay
                     )
                 ))
                 return
             }
+
+            // Not playing — stop and dismiss
             await MainActor.run {
                 PlayerManager.shared.stop()
             }
             await send(.delegate(.didDismiss(videoId)))
             await dismiss()
-        }
+        })
     }
 
     private func saveProgressEffect(state: State) -> Effect<Action> {
@@ -220,9 +246,8 @@ extension VideoDetailReducer {
         let channelName = state.video.channelName
         let thumbUrl = state.video.vidThumbUrl
         let authHeaders = state.serverConfig.authHeaders
-        return .run { [persistentDownloadManager] send in
-            @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
-
+        let expectedSize = state.video.mediaSize.map { Int64($0) }
+        return .run { [deviceDownloadDatabase, persistentDownloadManager] send in
             let download = DeviceDownload(
                 id: videoId,
                 title: title,
@@ -235,12 +260,12 @@ extension VideoDetailReducer {
             try deviceDownloadDatabase.insertDownload(download)
 
             await persistentDownloadManager.startDownload(
-                url: mediaURL, videoId: videoId, title: title, authHeaders: authHeaders
+                url: mediaURL, videoId: videoId, title: title, expectedSize: expectedSize, authHeaders: authHeaders
             )
             for await event in await persistentDownloadManager.observe(videoId: videoId) {
                 switch event {
-                case .progress(let p):
-                    await send(.downloadProgressUpdated(p))
+                case .progress(let progress):
+                    await send(.downloadProgressUpdated(progress))
                 case .completed:
                     await send(.downloadCompleted)
                 case .failed(let msg):
@@ -263,6 +288,25 @@ extension VideoDetailReducer {
 
     private func handleDeleteFromServerTapped(state: inout State) -> Effect<Action> {
         guard !state.isDeletingFromServer else { return .none }
+        let message = state.isDownloaded
+            ? String.localised("video.confirmDeleteFromServerWithLocal", table: .videos)
+            : String.localised("video.confirmDeleteFromServer", table: .videos)
+        state.alert = AlertState {
+            TextState(String.localised("video.deleteFromServer", table: .videos))
+        } actions: {
+            ButtonState(role: .destructive, action: .confirmDeleteFromServer) {
+                TextState(String.localised("generic.delete", table: .generic))
+            }
+            ButtonState(role: .cancel, action: .dismissed) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(message)
+        }
+        return .none
+    }
+
+    func handleConfirmedDeleteFromServer(state: inout State) -> Effect<Action> {
         state.isDeletingFromServer = true
         let config = state.serverConfig
         let videoId = state.video.videoId
@@ -288,7 +332,10 @@ extension VideoDetailReducer {
         }
     }
 
-    private func handleSimilarVideoTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleSimilarVideoTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         let saveEffect = saveProgressEffect(state: state)
         state.resetForNewVideo(video)
         state.nextVideos = []
@@ -304,10 +351,22 @@ extension VideoDetailReducer {
     private func handleVideoPlaybackDidEnd(state: inout State) -> Effect<Action> {
         let saveEffect = saveProgressEffect(state: state)
         @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
-        guard autoPlayEnabled else { return saveEffect }
+        guard autoPlayEnabled else {
+            state.isPlaying = false
+            state.localWatchProgress = 1.0
+            state.watchedOverride = true
+            return .merge(
+                saveEffect,
+                .cancel(id: CancelID.playback),
+                .run { _ in
+                    await MainActor.run { PlayerManager.shared.stop() }
+                }
+            )
+        }
         let config = state.serverConfig
         let currentVideoId = state.video.videoId
         let nextVideos = state.nextVideos
+        let shouldAutoPlayNext = state.shouldAutoPlayNextVideo
         let similarVideos = state.similarVideos
         return .merge(saveEffect, .run { [playNextDatabase, videoService] send in
             // 1. Play Next queue (user-curated, highest priority)
@@ -322,7 +381,7 @@ extension VideoDetailReducer {
             }
 
             // 2. Up Next (contextual queue from video list / playlist)
-            if let firstNext = nextVideos.first {
+            if shouldAutoPlayNext, let firstNext = nextVideos.first {
                 await send(.autoPlayVideo(firstNext))
                 return
             }
@@ -360,13 +419,19 @@ extension VideoDetailReducer {
         }
     }
 
-    private func handleRemoveFromPlayNextTapped(_ id: Int, state: inout State) -> Effect<Action> {
+    private func handleRemoveFromPlayNextTapped(
+        _ id: Int,
+        state: inout State
+    ) -> Effect<Action> {
         return .run { [playNextDatabase] _ in
             try? await playNextDatabase.removeFromQueue(id)
         }
     }
 
-    private func handleNextUpVideoTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleNextUpVideoTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         let saveEffect = saveProgressEffect(state: state)
         if let index = state.nextVideos.firstIndex(where: { $0.videoId == video.videoId }) {
             state.nextVideos.removeSubrange(...index)

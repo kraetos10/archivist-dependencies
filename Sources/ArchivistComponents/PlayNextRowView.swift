@@ -70,7 +70,7 @@ public struct PlayNextRowView: View {
         .frame(width: 200)
         .contextMenu {
             Button(role: .destructive, action: onRemove) {
-                Label(String.localised("generic.remove"), systemImage: "minus.circle")
+                Label(String.localised("generic.remove", table: .generic), systemImage: "minus.circle")
             }
         }
     }

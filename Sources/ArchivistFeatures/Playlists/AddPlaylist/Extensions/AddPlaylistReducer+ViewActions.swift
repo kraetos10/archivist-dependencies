@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension AddPlaylistReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .addButtonTapped:
             return handleAddButtonTapped(state: &state)

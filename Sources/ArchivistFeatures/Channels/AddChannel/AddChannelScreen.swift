@@ -53,7 +53,10 @@ public struct AddChannelScreen: View {
                 }
                 .background(Color.Accent.dark)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .disabled(store.channelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isSubscribing)
+                .disabled(
+                    store.channelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || store.isSubscribing
+                )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }

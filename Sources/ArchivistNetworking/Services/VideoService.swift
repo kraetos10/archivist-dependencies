@@ -11,14 +11,49 @@ public nonisolated protocol VideoServiceType: Sendable {
         channel: String?,
         playlist: String?
     ) async throws -> PaginatedResponse<VideoResponse>
-    func getVideo(config: ServerConfig, id: String) async throws -> VideoResponse
-    func deleteVideo(config: ServerConfig, id: String) async throws
-    func getComments(config: ServerConfig, videoId: String) async throws -> [VideoComment]
-    func getSimilar(config: ServerConfig, videoId: String) async throws -> [VideoResponse]
-    func getNav(config: ServerConfig, videoId: String) async throws -> VideoNavResponse
-    func setProgress(config: ServerConfig, videoId: String, position: Int) async throws
-    func deleteProgress(config: ServerConfig, videoId: String) async throws
-    func setWatched(config: ServerConfig, videoId: String, isWatched: Bool) async throws
+    func getVideo(
+        config: ServerConfig,
+        id: String
+    ) async throws -> VideoResponse
+    func deleteVideo(
+        config: ServerConfig,
+        id: String
+    ) async throws
+    func getComments(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> [VideoComment]
+    func getSimilar(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> [VideoResponse]
+    func getNav(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> VideoNavResponse
+    func setProgress(
+        config: ServerConfig,
+        videoId: String,
+        position: Int
+    ) async throws
+    func deleteProgress(
+        config: ServerConfig,
+        videoId: String
+    ) async throws
+    func setWatched(
+        config: ServerConfig,
+        videoId: String,
+        isWatched: Bool
+    ) async throws
+    func getStreamToken(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> StreamTokenResponse
+    func revokeStreamToken(
+        config: ServerConfig,
+        videoId: String,
+        sig: String
+    ) async throws
 }
 
 public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
@@ -79,7 +114,12 @@ public nonisolated struct VideoNavResponse: Decodable, Sendable, Equatable {
     public let previous: String?
     public let next: String?
 
-    public init(playlist: String?, index: Int?, previous: String?, next: String?) {
+    public init(
+        playlist: String?,
+        index: Int?,
+        previous: String?,
+        next: String?
+    ) {
         self.playlist = playlist
         self.index = index
         self.previous = previous
@@ -116,7 +156,10 @@ public nonisolated struct VideoService: VideoServiceType {
         return try await request.execute().data
     }
 
-    public func getVideo(config: ServerConfig, id: String) async throws -> VideoResponse {
+    public func getVideo(
+        config: ServerConfig,
+        id: String
+    ) async throws -> VideoResponse {
         let request = NetworkAPIRequest<VideoResponse>(
             config: config,
             path: .video(id: id)
@@ -124,7 +167,10 @@ public nonisolated struct VideoService: VideoServiceType {
         return try await request.execute().data
     }
 
-    public func deleteVideo(config: ServerConfig, id: String) async throws {
+    public func deleteVideo(
+        config: ServerConfig,
+        id: String
+    ) async throws {
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
             path: .video(id: id),
@@ -133,7 +179,10 @@ public nonisolated struct VideoService: VideoServiceType {
         _ = try await request.execute()
     }
 
-    public func getComments(config: ServerConfig, videoId: String) async throws -> [VideoComment] {
+    public func getComments(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> [VideoComment] {
         let request = NetworkAPIRequest<[VideoComment]>(
             config: config,
             path: .videoComments(id: videoId)
@@ -141,7 +190,10 @@ public nonisolated struct VideoService: VideoServiceType {
         return try await request.execute().data
     }
 
-    public func getSimilar(config: ServerConfig, videoId: String) async throws -> [VideoResponse] {
+    public func getSimilar(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> [VideoResponse] {
         let request = NetworkAPIRequest<[VideoResponse]>(
             config: config,
             path: .videoSimilar(id: videoId)
@@ -149,7 +201,10 @@ public nonisolated struct VideoService: VideoServiceType {
         return try await request.execute().data
     }
 
-    public func getNav(config: ServerConfig, videoId: String) async throws -> VideoNavResponse {
+    public func getNav(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> VideoNavResponse {
         let request = NetworkAPIRequest<VideoNavResponse>(
             config: config,
             path: .videoNav(id: videoId)
@@ -157,7 +212,11 @@ public nonisolated struct VideoService: VideoServiceType {
         return try await request.execute().data
     }
 
-    public func setProgress(config: ServerConfig, videoId: String, position: Int) async throws {
+    public func setProgress(
+        config: ServerConfig,
+        videoId: String,
+        position: Int
+    ) async throws {
         let body = try JSONEncoder().encode(VideoProgressRequest(position: position))
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
@@ -168,7 +227,10 @@ public nonisolated struct VideoService: VideoServiceType {
         _ = try await request.execute()
     }
 
-    public func deleteProgress(config: ServerConfig, videoId: String) async throws {
+    public func deleteProgress(
+        config: ServerConfig,
+        videoId: String
+    ) async throws {
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
             path: .videoProgress(id: videoId),
@@ -177,12 +239,43 @@ public nonisolated struct VideoService: VideoServiceType {
         _ = try await request.execute()
     }
 
-    public func setWatched(config: ServerConfig, videoId: String, isWatched: Bool) async throws {
+    public func setWatched(
+        config: ServerConfig,
+        videoId: String,
+        isWatched: Bool
+    ) async throws {
         let body = try JSONEncoder().encode(WatchedRequest(id: videoId, isWatched: isWatched))
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
             path: .watched,
             method: .post,
+            body: body
+        )
+        _ = try await request.execute()
+    }
+
+    public func getStreamToken(
+        config: ServerConfig,
+        videoId: String
+    ) async throws -> StreamTokenResponse {
+        let request = NetworkAPIRequest<StreamTokenResponse>(
+            config: config,
+            path: .videoStreamToken(id: videoId),
+            method: .post
+        )
+        return try await request.execute().data
+    }
+
+    public func revokeStreamToken(
+        config: ServerConfig,
+        videoId: String,
+        sig: String
+    ) async throws {
+        let body = try JSONEncoder().encode(["sig": sig])
+        let request = NetworkAPIRequest<EmptyResponse>(
+            config: config,
+            path: .videoStreamToken(id: videoId),
+            method: .delete,
             body: body
         )
         _ = try await request.execute()

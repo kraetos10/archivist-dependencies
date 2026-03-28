@@ -11,6 +11,8 @@ public struct CardData {
     public let isPartiallyWatched: Bool
     public let watchProgress: Double
     public let isPending: Bool
+    public var isDownloaded: Bool
+    public let fileSize: String?
 
     public init(
         title: String,
@@ -21,7 +23,9 @@ public struct CardData {
         isWatched: Bool,
         isPartiallyWatched: Bool,
         watchProgress: Double,
-        isPending: Bool
+        isPending: Bool,
+        isDownloaded: Bool = false,
+        fileSize: String? = nil
     ) {
         self.title = title
         self.channelName = channelName
@@ -32,6 +36,8 @@ public struct CardData {
         self.isPartiallyWatched = isPartiallyWatched
         self.watchProgress = watchProgress
         self.isPending = isPending
+        self.isDownloaded = isDownloaded
+        self.fileSize = fileSize
     }
 }
 
@@ -72,13 +78,30 @@ public struct VideoCardView: View {
     public let data: CardData
     public let serverConfig: ServerConfig
 
-    public init(video: VideoResponse, serverConfig: ServerConfig) {
-        self.data = video.cardData
+    public init(
+        video: VideoResponse,
+        serverConfig: ServerConfig,
+        isDownloaded: Bool = false
+    ) {
+        var data = video.cardData
+        data.isDownloaded = isDownloaded
+        self.data = data
         self.serverConfig = serverConfig
     }
 
-    public init(download: DownloadResponse, serverConfig: ServerConfig) {
+    public init(
+        download: DownloadResponse,
+        serverConfig: ServerConfig
+    ) {
         self.data = download.cardData
+        self.serverConfig = serverConfig
+    }
+
+    public init(
+        data: CardData,
+        serverConfig: ServerConfig
+    ) {
+        self.data = data
         self.serverConfig = serverConfig
     }
 
@@ -119,15 +142,7 @@ public struct VideoCardView: View {
 
             VStack {
                 HStack {
-                    if data.isWatched {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                            .padding(6)
-                            .background(.black.opacity(0.7))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                            .padding(8)
-                    } else if data.isPartiallyWatched {
+                    if data.isPartiallyWatched {
                         Image(systemName: "circle.lefthalf.filled")
                             .font(.caption)
                             .foregroundStyle(.white)
@@ -137,6 +152,15 @@ public struct VideoCardView: View {
                             .padding(8)
                     }
                     Spacer()
+                    if data.isDownloaded {
+                        Image(systemName: "iphone")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .padding(6)
+                            .background(.black.opacity(0.7))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .padding(8)
+                    }
                 }
 
                 Spacer()
@@ -188,7 +212,7 @@ public struct VideoCardView: View {
 
             HStack(spacing: 6) {
                 if data.isPending {
-                    Text(String.localised("generic.pending"))
+                    Text(String.localised("generic.pending", table: .generic))
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
@@ -196,6 +220,12 @@ public struct VideoCardView: View {
                         .padding(.vertical, 2)
                         .background(Color.Accent.dark)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+
+                if let fileSize = data.fileSize {
+                    Text(fileSize)
+                        .font(.caption2)
+                        .foregroundStyle(Color.Brand.secondary)
                 }
 
                 if let published = data.publishedRelative {

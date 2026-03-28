@@ -1,7 +1,7 @@
 import Foundation
 import IdentifiedCollections
 
-public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Identifiable {
+public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let playlistId: String
     public let playlistName: String
     public let playlistType: PlaylistType
@@ -92,9 +92,9 @@ public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Iden
 
     public static let placeholders: IdentifiedArrayOf<PlaylistResponse> = {
         var items = IdentifiedArrayOf<PlaylistResponse>()
-        for i in 0..<6 {
-            let p = PlaylistResponse(
-                playlistId: "placeholder-\(i)",
+        for index in 0..<6 {
+            let playlist = PlaylistResponse(
+                playlistId: "placeholder-\(index)",
                 playlistName: placeholder.playlistName,
                 playlistType: .regular,
                 playlistChannelId: nil,
@@ -107,7 +107,7 @@ public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Iden
                 playlistLastRefresh: nil,
                 playlistEntries: nil
             )
-            items.append(p)
+            items.append(playlist)
         }
         return items
     }()
@@ -128,12 +128,12 @@ public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Iden
     }
 }
 
-public nonisolated enum PlaylistType: String, Decodable, Sendable, Equatable {
+public nonisolated enum PlaylistType: String, Decodable, Sendable, Equatable, Hashable {
     case regular
     case custom
 }
 
-public nonisolated struct PlaylistEntry: Decodable, Sendable, Equatable, Identifiable {
+public nonisolated struct PlaylistEntry: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let youtubeId: String?
     public let title: String?
     public let idx: Int?

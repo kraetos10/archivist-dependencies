@@ -8,6 +8,7 @@ public nonisolated enum Paths {
     case videoSimilar(id: String)
     case videoNav(id: String)
     case videoProgress(id: String)
+    case videoStreamToken(id: String)
 
     // Channels
     case channelList
@@ -83,6 +84,7 @@ public nonisolated enum Paths {
         case .videoSimilar(let id): "/api/video/\(id)/similar/"
         case .videoNav(let id): "/api/video/\(id)/nav/"
         case .videoProgress(let id): "/api/video/\(id)/progress/"
+        case .videoStreamToken(let id): "/api/video/\(id)/stream-token/"
 
         case .channelList: "/api/channel/"
         case .channel(let id): "/api/channel/\(id)/"

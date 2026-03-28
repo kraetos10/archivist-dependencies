@@ -17,7 +17,7 @@ public struct iPhoneChannelsScreen: View {
     public var body: some View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             channelListContent
-                .navigationTitle(String.localised("generic.channels"))
+                .navigationTitle(String.localised("generic.channels", table: .generic))
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(
                     text: $store.searchQuery,
@@ -44,10 +44,28 @@ public struct iPhoneChannelsScreen: View {
 
     private var channelListContent: some View {
         ScrollView {
-            if store.hasLoaded && store.filteredChannels.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(icon: "person.2.rectangle.stack", title: String.localised("login.noChannels", table: .login), description: String.localised("login.subscribeChannelsDescription", table: .login))
+            newContentFilterRow
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+            if store.hasLoaded && store.filteredChannels.isEmpty && store.showNewOnly {
+                EmptyStateView(
+                    icon: "sparkles",
+                    title: String.localised("generic.noNewVideos", table: .generic),
+                    description: String.localised("generic.noNewVideosDescription", table: .generic)
+                )
+            } else if store.hasLoaded && store.filteredChannels.isEmpty && store.searchQuery.isEmpty {
+                EmptyStateView(
+                    icon: "person.2.rectangle.stack",
+                    title: String.localised("login.noChannels", table: .login),
+                    description: String.localised("login.subscribeChannelsDescription", table: .login)
+                )
             } else if store.hasLoaded && store.filteredChannels.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: String.localised("video.empty.noSearchResults", table: .videos),
+                    description: String.localised("video.empty.tryDifferentSearch", table: .videos)
+                )
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.filteredChannels.isEmpty {
@@ -62,13 +80,17 @@ public struct iPhoneChannelsScreen: View {
                         ForEach(store.filteredChannels) { channel in
                             ChannelCardView(
                                 channel: channel,
-                                serverConfig: store.serverConfig
+                                serverConfig: store.serverConfig,
+                                hasNewContent: store.channelIdsWithNewContent.contains(channel.channelId)
                             )
                             .contextMenu {
                                 Button(role: .destructive) {
                                     send(.unsubscribeTapped(channel))
                                 } label: {
-                                    Label(String.localised("generic.unsubscribe"), systemImage: "xmark.circle")
+                                    Label(
+                                        String.localised("generic.unsubscribe", table: .generic),
+                                        systemImage: "xmark.circle"
+                                    )
                                 }
                             }
                             .pressable {
@@ -92,13 +114,56 @@ public struct iPhoneChannelsScreen: View {
             }
         }
         .background(Color.Brand.primary)
-        .refreshable { await send(.pullToRefreshTriggered).finish() }
+        .refreshable { send(.pullToRefreshTriggered) }
         .safeAreaInset(edge: .bottom) {
             FloatingAddButton { send(.addChannelTapped) }
         }
         .sheet(item: $store.scope(state: \.addChannel, action: \.addChannel)) { addChannelStore in
             AddChannelScreen(store: addChannelStore)
                 .presentationDetents([.medium])
+        }
+    }
+    private var newContentFilterRow: some View {
+        HStack(spacing: 8) {
+            filterPill(
+                label: String.localised("generic.all", table: .generic),
+                icon: "line.3.horizontal.decrease.circle",
+                isSelected: !store.showNewOnly,
+                showNewOnly: false
+            )
+
+            filterPill(
+                label: String.localised("generic.newVideos", table: .generic),
+                icon: "sparkles",
+                isSelected: store.showNewOnly,
+                showNewOnly: true
+            )
+
+            Spacer()
+        }
+    }
+
+    private func filterPill(
+        label: String,
+        icon: String,
+        isSelected: Bool,
+        showNewOnly: Bool
+    ) -> some View {
+        Button {
+            send(.newFilterToggled(showNewOnly), animation: .default)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(label)
+            }
+            .font(.subheadline)
+            .fontWeight(.medium)
+            .foregroundStyle(isSelected ? Color.Brand.primary : Color.Text.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.Text.primary : Color.Surface.highlight)
+            .clipShape(Capsule())
         }
     }
 }

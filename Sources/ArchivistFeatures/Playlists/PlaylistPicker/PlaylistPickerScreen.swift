@@ -63,7 +63,10 @@ public struct PlaylistPickerScreen: View {
         .onAppear { send(.viewDidAppear) }
     }
 
-    private func playlistRow(_ playlist: PlaylistResponse, alreadyAdded: Bool) -> some View {
+    private func playlistRow(
+        _ playlist: PlaylistResponse,
+        alreadyAdded: Bool
+    ) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.playlistName)

@@ -45,6 +45,12 @@ public struct VideoListEmptyState: View {
                     title: String.localised("video.empty.noWatched", table: .videos),
                     description: String.localised("video.empty.watchDescription", table: .videos)
                 )
+            case .continueWatching:
+                EmptyStateView(
+                    icon: "play.circle",
+                    title: String.localised("video.empty.noContinueWatching", table: .videos),
+                    description: String.localised("video.empty.continueWatchingDescription", table: .videos)
+                )
             case .downloaded:
                 EmptyStateView(
                     icon: "arrow.down.circle",

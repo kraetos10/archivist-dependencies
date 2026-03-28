@@ -1,12 +1,25 @@
 import Foundation
 
 public nonisolated protocol UserServiceType: Sendable {
-    func login(baseURL: String, port: Int?, useHTTP: Bool, username: String, password: String) async throws
-    func getToken(baseURL: String, port: Int?, useHTTP: Bool) async throws -> TokenResponse
+    func login(
+        baseURL: String,
+        port: Int?,
+        useHTTP: Bool,
+        username: String,
+        password: String
+    ) async throws
+    func getToken(
+        baseURL: String,
+        port: Int?,
+        useHTTP: Bool
+    ) async throws -> TokenResponse
     func logout(config: ServerConfig) async throws
     func getAccount(config: ServerConfig) async throws -> UserAccountResponse
     func getUserConfig(config: ServerConfig) async throws -> UserConfigResponse
-    func updateUserConfig(config: ServerConfig, updates: [String: String]) async throws
+    func updateUserConfig(
+        config: ServerConfig,
+        updates: [String: String]
+    ) async throws
 }
 
 public nonisolated struct UserService: UserServiceType {
@@ -66,7 +79,10 @@ public nonisolated struct UserService: UserServiceType {
         return try await request.execute().data
     }
 
-    public func updateUserConfig(config: ServerConfig, updates: [String: String]) async throws {
+    public func updateUserConfig(
+        config: ServerConfig,
+        updates: [String: String]
+    ) async throws {
         let body = try JSONEncoder().encode(updates)
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,

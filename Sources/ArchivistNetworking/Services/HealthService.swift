@@ -2,13 +2,21 @@ import Dependencies
 import Foundation
 
 public protocol HealthServiceType: Sendable {
-    func checkHealth(baseURL: String, port: Int?, useHTTP: Bool) async throws
+    func checkHealth(
+        baseURL: String,
+        port: Int?,
+        useHTTP: Bool
+    ) async throws
 }
 
 public struct HealthService: HealthServiceType {
     public init() {}
 
-    public func checkHealth(baseURL: String, port: Int?, useHTTP: Bool) async throws {
+    public func checkHealth(
+        baseURL: String,
+        port: Int?,
+        useHTTP: Bool
+    ) async throws {
         @Dependency(\.urlSession) var urlSession
 
         var components = URLComponents()

@@ -144,6 +144,17 @@
         }
       }
     },
+    "settings.refreshSessionSubtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force a cookie refresh if images or assets stop loading"
+          }
+        }
+      }
+    },
     "settings.server": {
       "extractionState": "manual",
       "localizations": {
@@ -162,6 +173,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "Port"
+          }
+        }
+      }
+    },
+    "settings.support": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support Me"
+          }
+        }
+      }
+    },
+    "settings.supportHeader": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support"
+          }
+        }
+      }
+    },
+    "settings.downloadHistory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download History"
+          }
+        }
+      }
+    },
+    "settings.checkForChannelUpdates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Channel Updates"
           }
         }
       }

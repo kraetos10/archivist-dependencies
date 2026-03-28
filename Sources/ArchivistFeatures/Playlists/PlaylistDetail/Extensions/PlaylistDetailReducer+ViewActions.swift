@@ -5,7 +5,10 @@ import Foundation
 import SwiftUI
 
 extension PlaylistDetailReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
@@ -28,6 +31,12 @@ extension PlaylistDetailReducer {
                 playlistId: state.playlist.playlistId
             )
             return .none
+        case .downloadToDeviceTapped(let entry):
+            return handleDownloadToDeviceTapped(entry, state: &state)
+        case .queueServerDownloadTapped(let entry):
+            return handleQueueServerDownloadTapped(entry, state: &state)
+        case .markAsWatchedTapped(let entry):
+            return handleMarkAsWatchedTapped(entry, state: &state)
         }
     }
 
@@ -38,10 +47,12 @@ extension PlaylistDetailReducer {
         state.isLoadingEntries = true
         let config = state.serverConfig
         let playlistId = state.playlist.playlistId
-        let playlistService = self.playlistService
-        return .run { send in
+        return .run { [playlistService] send in
             let result = await Result {
-                try await playlistService.getPlaylist(config: config, id: playlistId)
+                try await playlistService.getPlaylist(
+                    config: config,
+                    id: playlistId
+                )
             }
             await send(.playlistResult(result))
         }
@@ -52,18 +63,26 @@ extension PlaylistDetailReducer {
             TextState(String.localised("video.removePlaylist", table: .videos))
         } actions: {
             ButtonState(role: .cancel) {
-                TextState(String.localised("generic.cancel"))
+                TextState(String.localised("generic.cancel", table: .generic))
             }
             ButtonState(role: .destructive, action: .confirmUnsubscribe) {
-                TextState(String.localised("generic.remove"))
+                TextState(String.localised("generic.remove", table: .generic))
             }
         } message: { [state] in
-            TextState(String.localised("Are you sure you want to remove \(state.playlist.playlistName)?", table: .login))
+            TextState(
+                String.localised(
+                    "Are you sure you want to remove \(state.playlist.playlistName)?",
+                    table: .login
+                )
+            )
         }
         return .none
     }
 
-    private func handleEntryTapped(_ entry: PlaylistEntry, state: inout State) -> Effect<Action> {
+    private func handleEntryTapped(
+        _ entry: PlaylistEntry,
+        state: inout State
+    ) -> Effect<Action> {
         guard let videoId = entry.youtubeId else { return .none }
         let config = state.serverConfig
         let entries = state.entries
@@ -97,7 +116,10 @@ extension PlaylistDetailReducer {
         }
     }
 
-    private func handleRemoveEntryTapped(_ entry: PlaylistEntry, state: inout State) -> Effect<Action> {
+    private func handleRemoveEntryTapped(
+        _ entry: PlaylistEntry,
+        state: inout State
+    ) -> Effect<Action> {
         guard let videoId = entry.youtubeId, state.isCustomPlaylist else { return .none }
         let config = state.serverConfig
         let playlistId = state.playlist.playlistId
@@ -115,7 +137,11 @@ extension PlaylistDetailReducer {
         }
     }
 
-    private func handleMoveEntry(source: IndexSet, destination: Int, state: inout State) -> Effect<Action> {
+    private func handleMoveEntry(
+        source: IndexSet,
+        destination: Int,
+        state: inout State
+    ) -> Effect<Action> {
         guard state.isCustomPlaylist,
               let sourceIndex = source.first,
               sourceIndex < state.entries.count,
@@ -143,5 +169,77 @@ extension PlaylistDetailReducer {
             }
             await send(.moveEntryResult(result))
         }
+    }
+
+    private func handleDownloadToDeviceTapped(
+        _ entry: PlaylistEntry,
+        state: inout State
+    ) -> Effect<Action> {
+        guard let videoId = entry.youtubeId else { return .none }
+        let config = state.serverConfig
+        return .run { [videoService, deviceDownloadDatabase, persistentDownloadManager] _ in
+            let video = try await videoService.getVideo(config: config, id: videoId)
+            guard let mediaPath = video.mediaUrl,
+                  let mediaURL = config.fullURL(for: mediaPath) else { return }
+
+            let download = DeviceDownload(
+                id: videoId,
+                title: video.title,
+                channelName: video.channelName,
+                thumbUrl: video.vidThumbUrl,
+                status: .downloading,
+                progress: 0,
+                createdAt: Date().timeIntervalSince1970
+            )
+            try? deviceDownloadDatabase.insertDownload(download)
+
+            await persistentDownloadManager.startDownload(
+                url: mediaURL,
+                videoId: videoId,
+                title: video.title,
+                expectedSize: video.mediaSize.map { Int64($0) },
+                authHeaders: config.authHeaders
+            )
+        }
+    }
+
+    private func handleMarkAsWatchedTapped(
+        _ entry: PlaylistEntry,
+        state: inout State
+    ) -> Effect<Action> {
+        guard let videoId = entry.youtubeId else { return .none }
+        let config = state.serverConfig
+        return .run { [videoService] _ in
+            try? await videoService.setProgress(
+                config: config,
+                videoId: videoId,
+                position: 0
+            )
+        }
+    }
+
+    private func handleQueueServerDownloadTapped(
+        _ entry: PlaylistEntry,
+        state: inout State
+    ) -> Effect<Action> {
+        guard let videoId = entry.youtubeId else { return .none }
+        let config = state.serverConfig
+        state.alert = AlertState {
+            TextState(entry.title ?? videoId)
+        } actions: {
+            ButtonState(action: .confirmServerDownload(videoId)) {
+                TextState(String.localised("video.downloadNow", table: .videos))
+            }
+            ButtonState(role: .cancel) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(
+                String(
+                    localized: "This video hasn't been downloaded to the server yet. Add it to the download queue?"
+                )
+            )
+        }
+        return .none
     }
 }

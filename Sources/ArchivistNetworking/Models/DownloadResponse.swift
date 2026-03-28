@@ -81,9 +81,9 @@ public nonisolated struct DownloadResponse: Decodable, Sendable, Equatable, Iden
 
     public static let placeholders: IdentifiedArrayOf<DownloadResponse> = {
         var items = IdentifiedArrayOf<DownloadResponse>()
-        for i in 0..<6 {
+        for index in 0..<6 {
             let download = DownloadResponse(
-                youtubeId: "placeholder-\(i)",
+                youtubeId: "placeholder-\(index)",
                 title: placeholder.title,
                 channelId: placeholder.channelId,
                 channelName: placeholder.channelName,
@@ -130,7 +130,13 @@ public nonisolated struct DownloadAggsResponse: Decodable, Sendable, Equatable {
     public let pendingShorts: Int?
     public let pendingStreams: Int?
 
-    public init(pending: Int?, ignore: Int?, pendingVideos: Int?, pendingShorts: Int?, pendingStreams: Int?) {
+    public init(
+        pending: Int?,
+        ignore: Int?,
+        pendingVideos: Int?,
+        pendingShorts: Int?,
+        pendingStreams: Int?
+    ) {
         self.pending = pending
         self.ignore = ignore
         self.pendingVideos = pendingVideos

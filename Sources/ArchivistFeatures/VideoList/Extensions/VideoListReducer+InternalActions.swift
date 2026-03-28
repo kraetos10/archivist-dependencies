@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoListReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .videosResult(.success(let response)):
             return handleVideosLoaded(response, state: &state)
@@ -33,6 +36,9 @@ extension VideoListReducer {
         case .videoRefreshed(let video):
             state.videos.updateOrAppend(video)
             return .none
+        case .downloadedVideosLoaded(let videos):
+            state.downloadedVideos = IdentifiedArrayOf(uniqueElements: videos)
+            return .none
         default:
             return .none
         }
@@ -48,7 +54,6 @@ extension VideoListReducer {
             // Full refresh — replace everything
             state.videos = IdentifiedArrayOf(uniqueElements: response.data)
             state.searchResults = []
-            state.downloadedVideoIDs = []
         } else {
             // Pagination — append
             for video in response.data {
@@ -60,12 +65,7 @@ extension VideoListReducer {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
-        state.videos.sort { lhs, rhs in
-            guard let lhsDate = lhs.publishedDate, let rhsDate = rhs.publishedDate else {
-                return lhs.publishedDate != nil
-            }
-            return lhsDate > rhsDate
-        }
+        // downloadedVideoIDs is reactive via @FetchAll
 
         // Pre-cache thumbnails for Top Shelf
         let unwatched = state.videos.filter { !$0.isWatched }
@@ -78,19 +78,25 @@ extension VideoListReducer {
         return .none
     }
 
-    private func handleVideosFailed(_ error: Error, state: inout State) -> Effect<Action> {
+    private func handleVideosFailed(
+        _ error: Error,
+        state: inout State
+    ) -> Effect<Action> {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
         state.alert = AlertState {
-            TextState(String.localised("generic.error"))
+            TextState(String.localised("generic.error", table: .generic))
         } message: {
             TextState(error.localizedDescription)
         }
         return .none
     }
 
-    private func handleSearchResultsLoaded(_ videos: [VideoResponse], state: inout State) -> Effect<Action> {
+    private func handleSearchResultsLoaded(
+        _ videos: [VideoResponse],
+        state: inout State
+    ) -> Effect<Action> {
         state.searchResults = IdentifiedArrayOf(uniqueElements: videos)
         state.isSearching = false
         return .none
@@ -117,9 +123,12 @@ extension VideoListReducer {
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }
 
-    private func handleContextDeleteFailed(_ error: Error, state: inout State) -> Effect<Action> {
+    private func handleContextDeleteFailed(
+        _ error: Error,
+        state: inout State
+    ) -> Effect<Action> {
         state.alert = AlertState {
-            TextState(String.localised("generic.error"))
+            TextState(String.localised("generic.error", table: .generic))
         } message: {
             TextState(error.localizedDescription)
         }

@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension PlaylistsReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleOnAppear(state: &state)
@@ -15,6 +18,9 @@ extension PlaylistsReducer {
             return handlePlaylistCardTapped(playlist, state: &state)
         case .addPlaylistTapped:
             return handleAddPlaylistTapped(state: &state)
+        case .splitViewEnabled:
+            state.useSplitView = true
+            return .none
         }
     }
 
@@ -40,7 +46,10 @@ extension PlaylistsReducer {
         return fetchPlaylists(config: state.serverConfig, page: nextPage)
     }
 
-    private func handlePlaylistCardTapped(_ playlist: PlaylistResponse, state: inout State) -> Effect<Action> {
+    private func handlePlaylistCardTapped(
+        _ playlist: PlaylistResponse,
+        state: inout State
+    ) -> Effect<Action> {
         if state.useSplitView {
             guard state.selectedPlaylist?.playlist.playlistId != playlist.playlistId else {
                 return .none
@@ -62,7 +71,10 @@ extension PlaylistsReducer {
         return .none
     }
 
-    func fetchPlaylists(config: ServerConfig, page: Int) -> Effect<Action> {
+    func fetchPlaylists(
+        config: ServerConfig,
+        page: Int
+    ) -> Effect<Action> {
         let playlistService = self.playlistService
         return .run { send in
             let result = await Result {

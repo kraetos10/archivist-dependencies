@@ -5,7 +5,11 @@ public nonisolated struct ActiveDownload: Equatable, Sendable {
     public let messages: [String]
     public let progress: Double?
 
-    public init(title: String, messages: [String], progress: Double?) {
+    public init(
+        title: String,
+        messages: [String],
+        progress: Double?
+    ) {
         self.title = title
         self.messages = messages
         self.progress = progress

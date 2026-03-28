@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension ActiveTaskReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .pollResult(.success(let notifications)):
             if let notification = notifications.first {

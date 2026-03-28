@@ -10,10 +10,12 @@ public struct VideoListScreen: View {
         self.store = store
     }
 
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     public var body: some View {
-        if sizeClass == .regular {
+        if isIPad {
             iPadVideoListScreen(store: store)
         } else {
             iPhoneVideoListScreen(store: store)

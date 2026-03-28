@@ -65,7 +65,12 @@ public struct ServerSetupReducer {
         .forEach(\.path, action: \.path)
     }
 
-    private func handleLoginSucceeded(token: String, username: String, password: String, state: inout State) -> Effect<Action> {
+    private func handleLoginSucceeded(
+        token: String,
+        username: String,
+        password: String,
+        state: inout State
+    ) -> Effect<Action> {
         let details = state.registrationDetails
         return .run { [database, keychainService] send in
             try await database.write { db in
@@ -76,13 +81,19 @@ public struct ServerSetupReducer {
                             port: details.port,
                             useHTTP: details.useHTTP
                         )
+                    } onConflict: {
+                        $0.id
+                    } doUpdate: { conn, excluded in
+                        conn.serverAddress = excluded.serverAddress
+                        conn.port = excluded.port
+                        conn.useHTTP = excluded.useHTTP
                     }
                     .execute(db)
             }
-            try await keychainService.save(token: token)
-            try await keychainService.saveCredentials(username: username, password: password)
+            try keychainService.save(token: token)
+            try keychainService.saveCredentials(username: username, password: password)
             await send(.loginCompleted)
-        } catch: { error, send in
+        } catch: { error, _ in
             print("[ServerSetup] login save failed: \(error)")
         }
     }

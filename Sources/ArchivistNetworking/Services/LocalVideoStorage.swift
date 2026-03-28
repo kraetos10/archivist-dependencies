@@ -5,7 +5,11 @@ public nonisolated protocol LocalVideoStorageType: Sendable {
     func localFileURL(for videoId: String) -> URL
     func isDownloaded(videoId: String) -> Bool
     func deleteVideo(videoId: String) throws
-    func moveDownloadedFile(from tempURL: URL, videoId: String) throws -> URL
+    func deleteAllVideos() throws
+    func moveDownloadedFile(
+        from tempURL: URL,
+        videoId: String
+    ) throws -> URL
 }
 
 public nonisolated struct LocalVideoStorage: LocalVideoStorageType, Sendable {
@@ -35,6 +39,16 @@ public nonisolated struct LocalVideoStorage: LocalVideoStorageType, Sendable {
         }
     }
 
+    public func deleteAllVideos() throws {
+        let dir = videosDirectory
+        if FileManager.default.fileExists(atPath: dir.path) {
+            let contents = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+            for file in contents {
+                try FileManager.default.removeItem(at: file)
+            }
+        }
+    }
+
     public static func totalDownloadsSize() -> Int64 {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = documents.appendingPathComponent("OfflineVideos", isDirectory: true)
@@ -52,7 +66,10 @@ public nonisolated struct LocalVideoStorage: LocalVideoStorageType, Sendable {
         return total
     }
 
-    public func moveDownloadedFile(from tempURL: URL, videoId: String) throws -> URL {
+    public func moveDownloadedFile(
+        from tempURL: URL,
+        videoId: String
+    ) throws -> URL {
         let destination = localFileURL(for: videoId)
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)

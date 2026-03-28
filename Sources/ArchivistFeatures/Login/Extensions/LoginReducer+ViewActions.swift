@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension LoginReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .loginButtonTapped:
             return handleLoginButtonTapped(state: &state)

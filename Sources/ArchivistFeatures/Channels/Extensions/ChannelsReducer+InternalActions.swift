@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension ChannelsReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .channelsResult(.success(let response)):
             return handleChannelsLoaded(response, state: &state)
@@ -23,6 +26,9 @@ extension ChannelsReducer {
             return .none
         case .unsubscribeResult(.failure):
             return .none
+        case .newContentIdsLoaded(let ids):
+            state.channelIdsWithNewContent = ids
+            return .none
         default:
             return .none
         }
@@ -30,7 +36,10 @@ extension ChannelsReducer {
 
     // MARK: - Private Handlers
 
-    private func handleChannelsLoaded(_ response: PaginatedResponse<ChannelResponse>, state: inout State) -> Effect<Action> {
+    private func handleChannelsLoaded(
+        _ response: PaginatedResponse<ChannelResponse>,
+        state: inout State
+    ) -> Effect<Action> {
         if state.isLoading {
             state.channels = IdentifiedArrayOf(uniqueElements: response.data)
         } else {
@@ -43,7 +52,10 @@ extension ChannelsReducer {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
-        return .none
+        return .run { [newContentSyncManager] send in
+            let ids = await newContentSyncManager.allNewChannelIds()
+            await send(.newContentIdsLoaded(ids))
+        }
     }
 
     private func handleChannelsFailed(state: inout State) -> Effect<Action> {

@@ -15,7 +15,6 @@ public struct ChannelDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-
     private var columns: [GridItem] {
         #if os(tvOS)
         [GridItem(.adaptive(minimum: 400), spacing: 48)]
@@ -28,6 +27,24 @@ public struct ChannelDetailScreen: View {
         #endif
     }
 
+    private func isNewVideo(_ video: VideoResponse) -> Bool {
+        guard let since = store.newContentSince,
+              let published = video.publishedDate else { return false }
+        return published > since
+    }
+
+    private var pendingColumns: [GridItem] {
+        #if os(tvOS)
+        [GridItem(.adaptive(minimum: 300), spacing: 32)]
+        #else
+        if horizontalSizeClass == .regular {
+            [GridItem(.adaptive(minimum: 220), spacing: 12)]
+        } else {
+            [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+        }
+        #endif
+    }
+
     public var body: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
@@ -36,14 +53,14 @@ public struct ChannelDetailScreen: View {
                 Section {
                     videosContent
                 } header: {
-                    PinnedSectionHeader(title: String.localised("generic.videos"))
+                    videosSectionHeader
                 }
 
                 if !store.pendingDownloads.isEmpty || store.isLoadingDownloads {
                     Section {
                         pendingDownloadsContent
                     } header: {
-                        PinnedSectionHeader(title: String.localised("video.pendingDownloads", table: .videos))
+                        downloadsSectionHeader
                     }
                 }
             }
@@ -56,13 +73,13 @@ public struct ChannelDetailScreen: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     ShareLink(item: store.channel.youtubeURL) {
-                        Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
+                        Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
                     }
 
                     Button(role: .destructive) {
                         send(.unsubscribeTapped)
                     } label: {
-                        Label(String.localised("generic.unsubscribe"), systemImage: "xmark.circle")
+                        Label(String.localised("generic.unsubscribe", table: .generic), systemImage: "xmark.circle")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -72,9 +89,11 @@ public struct ChannelDetailScreen: View {
             #endif
         }
         .onAppear { send(.viewDidAppear) }
+        .onChange(of: store.channel.channelId) {
+            send(.viewDidAppear)
+        }
         .alert($store.scope(state: \.alert, action: \.alert))
     }
-
 
     private var headerView: some View {
         VStack(spacing: 12) {
@@ -83,7 +102,7 @@ public struct ChannelDetailScreen: View {
             channelThumbView
 
             Text(store.channel.channelName)
-                .font(.title2)
+                .font(horizontalSizeClass == .regular ? .title : .title2)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Text.primary)
 
@@ -104,7 +123,11 @@ public struct ChannelDetailScreen: View {
                     Button {
                         send(.descriptionToggleTapped, animation: .default)
                     } label: {
-                        Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
+                        Text(
+                            store.isDescriptionExpanded
+                                ? String.localised("generic.showLess", table: .generic)
+                                : String.localised("generic.showMore", table: .generic)
+                        )
                             .font(.caption)
                             .foregroundStyle(Color.Brand.secondary)
                     }
@@ -152,33 +175,91 @@ public struct ChannelDetailScreen: View {
             .fill(Color.Surface.highlight)
     }
 
-    private var channelThumbView: some View {
-        Group {
-            if let thumbURL = store.channelThumbURL {
-                AsyncImage(url: thumbURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                    default:
-                        thumbPlaceholder
-                    }
-                }
-            } else {
-                thumbPlaceholder
-            }
-        }
-        .frame(width: 80, height: 80)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Color.Brand.primary, lineWidth: 3))
-        .offset(y: -40)
-        .padding(.bottom, -40)
+    private var avatarSize: CGFloat {
+        horizontalSizeClass == .regular ? 120 : 80
     }
 
-    private var thumbPlaceholder: some View {
-        Circle()
-            .fill(Color.Brand.secondary.opacity(0.3))
+    private var videosSectionHeader: some View {
+        HStack {
+            Text(String.localised("generic.videos", table: .generic))
+                .font(.headline)
+                .foregroundStyle(Color.Text.primary)
+
+            Spacer()
+
+            VideoSortMenu(current: store.videoSortOrder) { sort in
+                send(.videoSortOrderChanged(sort), animation: .default)
+            }
+
+            HStack(spacing: 8) {
+                filterPill(String(localized: "All"), filter: .all)
+                filterPill(String(localized: "Unwatched"), filter: .unwatched)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    private func filterPill(_ title: String, filter: ChannelVideoFilter) -> some View {
+        let isSelected = store.videoFilter == filter
+        return Button {
+            send(.videoFilterChanged(filter), animation: .default)
+        } label: {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(isSelected ? .white : Color.Text.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.Accent.dark : Color.Surface.highlight)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var downloadsSectionHeader: some View {
+        HStack {
+            Text(String.localised("video.pendingDownloads", table: .videos))
+                .font(.headline)
+                .foregroundStyle(Color.Text.primary)
+
+            Spacer()
+
+            Button {
+                send(.downloadSortToggled, animation: .default)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.caption2)
+                    Text(store.showNewestDownloadsFirst
+                         ? String.localised("generic.recentlyAdded", table: .generic)
+                         : String.localised("generic.oldestAdded", table: .generic))
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(Color.Text.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.Surface.highlight)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    private var channelThumbView: some View {
+        ChannelThumbView(url: store.channelThumbURL, size: avatarSize)
+            .overlay(Circle().stroke(Color.Brand.primary, lineWidth: 3))
+            .offset(y: -(avatarSize / 2))
+            .padding(.bottom, -(avatarSize / 2))
+    }
+
+    private var videoCardWidth: CGFloat {
+        horizontalSizeClass == .regular ? 300 : 260
     }
 
     private var videosContent: some View {
@@ -187,16 +268,24 @@ public struct ChannelDetailScreen: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
                         ForEach(VideoResponse.placeholders.prefix(4)) { video in
-                            videoCard(video)
-                                .redacted(reason: .placeholder)
+                            VideoCardView(
+                                video: video,
+                                serverConfig: store.serverConfig
+                            )
+                            .frame(width: videoCardWidth)
+                            .redacted(reason: .placeholder)
                         }
                     }
+                    .padding(.vertical, 8)
                     .scrollTargetLayout()
                 }
+                .scrollClipDisabled()
                 .contentMargins(.horizontal, 16)
                 .scrollTargetBehavior(.viewAligned)
-            } else if store.videos.isEmpty && store.hasLoadedVideos {
-                Text(String.localised("video.empty.noVideos", table: .videos))
+            } else if store.filteredVideos.isEmpty && store.hasLoadedVideos {
+                Text(store.videoFilter == .unwatched
+                     ? String(localized: "No unwatched videos")
+                     : String.localised("video.empty.noVideos", table: .videos))
                     .font(.subheadline)
                     .foregroundStyle(Color.Brand.secondary)
                     .frame(maxWidth: .infinity)
@@ -204,16 +293,44 @@ public struct ChannelDetailScreen: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
-                        ForEach(store.videos) { video in
-                            videoCard(video)
-                                .pressable {
-                                    send(.videoCardTapped(video))
+                        ForEach(store.filteredVideos) { video in
+                            VideoCardView(
+                                video: video,
+                                serverConfig: store.serverConfig
+                            )
+                            .overlay(alignment: .topLeading) {
+                                if isNewVideo(video) {
+                                    Text(String(localized: "NEW"))
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.Accent.dark)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                        .padding(6)
                                 }
-                                .onAppear {
-                                    if video.id == store.videos.last?.id {
-                                        send(.lastVideoAppeared)
-                                    }
+                            }
+                            .frame(width: videoCardWidth)
+                            #if !os(tvOS)
+                            .contextMenu {
+                                VideoContextMenu(
+                                    youtubeURL: video.youtubeURL,
+                                    onAddToPlaylist: {},
+                                    onDownloadToDevice: { send(.downloadToDeviceTapped(video)) },
+                                    onMarkAsWatched: { send(.markAsWatchedTapped(video)) },
+                                    onDeleteFromServer: { send(.deleteFromServerTapped(video)) }
+                                )
+                            }
+                            #endif
+                            .pressable {
+                                send(.videoCardTapped(video))
+                            }
+                            .onAppear {
+                                if video.id == store.videos.last?.id {
+                                    send(.lastVideoAppeared)
                                 }
+                            }
                         }
 
                         if store.isLoadingMoreVideos {
@@ -222,8 +339,10 @@ public struct ChannelDetailScreen: View {
                                 .frame(width: 60)
                         }
                     }
+                    .padding(.vertical, 8)
                     .scrollTargetLayout()
                 }
+                .scrollClipDisabled()
                 .contentMargins(.horizontal, 16)
                 .scrollTargetBehavior(.viewAligned)
             }
@@ -231,141 +350,32 @@ public struct ChannelDetailScreen: View {
         .padding(.bottom, 8)
     }
 
-    private func videoCard(_ video: VideoResponse) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .topLeading) {
-                if let thumbPath = video.vidThumbUrl,
-                   let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
-                    AsyncImage(url: thumbURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(16 / 9, contentMode: .fill)
-                        default:
-                            Rectangle()
-                                .fill(Color.Brand.secondary.opacity(0.3))
-                                .aspectRatio(16 / 9, contentMode: .fill)
-                        }
-                    }
-                }
-
-                VStack {
-                    HStack {
-                        if video.isWatched {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.white)
-                                .padding(4)
-                                .background(.black.opacity(0.7))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .padding(6)
-                        } else if video.isPartiallyWatched {
-                            Image(systemName: "circle.lefthalf.filled")
-                                .font(.caption2)
-                                .foregroundStyle(.white)
-                                .padding(4)
-                                .background(.black.opacity(0.7))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .padding(6)
-                        }
-                        Spacer()
-                    }
-
-                    Spacer()
-
-                    if video.watchProgress > 0 {
-                        WatchProgressBar(progress: video.watchProgress)
-                    }
-                }
-            }
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            Text(video.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(Color.Text.primary)
-                .lineLimit(1)
-
-            if let published = video.publishedFormatted {
-                Text(published)
-                    .font(.caption2)
-                    .foregroundStyle(Color.Brand.secondary)
-            }
-        }
-        .frame(width: 260)
-    }
-
     private var pendingDownloadsContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             if store.isLoadingDownloads {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(DownloadResponse.placeholders) { download in
-                        VideoCardView(
-                            download: download,
-                            serverConfig: store.serverConfig
-                        )
+                ForEach(DownloadResponse.placeholders) { download in
+                    pendingRow(download)
                         .redacted(reason: .placeholder)
-                    }
                 }
-                .padding(.horizontal, 16)
             } else {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(store.pendingDownloads) { download in
-                        DownloadCardWithPopover(
-                            download: download,
-                            store: store
-                        )
-                    }
+                ForEach(store.pendingDownloads) { download in
+                    DownloadRowWithPopover(
+                        download: download,
+                        store: store
+                    )
                 }
-                .padding(.horizontal, 16)
             }
         }
         .padding(.bottom, 24)
     }
 
-}
-
-private struct DownloadCardWithPopover: View {
-    let download: DownloadResponse
-    @Bindable var store: StoreOf<ChannelDetailReducer>
-    @State private var showPopover = false
-    @State private var showSheet = false
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
-    public var body: some View {
-        VideoCardView(
-            download: download,
-            serverConfig: store.serverConfig
+    private func pendingRow(_ download: DownloadResponse) -> some View {
+        VideoRowView(
+            title: download.title ?? "",
+            subtitle: download.publishedRelative,
+            thumbnailURL: download.thumbURL(config: store.serverConfig)
         )
-        .pressable {
-            store.send(.view(.downloadCardTapped(download)))
-            if sizeClass == .regular {
-                showPopover = true
-            } else {
-                showSheet = true
-            }
-        }
-        .popover(isPresented: $showPopover) {
-            if let detailStore = store.scope(state: \.downloadDetail, action: \.downloadDetail.presented) {
-                DownloadDetailScreen(store: detailStore)
-                    .frame(idealWidth: 420)
-            }
-        }
-        .sheet(isPresented: $showSheet) {
-            if let detailStore = store.scope(state: \.downloadDetail, action: \.downloadDetail.presented) {
-                DownloadDetailScreen(store: detailStore)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-        .onChange(of: store.downloadDetail == nil) { _, isNil in
-            if isNil {
-                showPopover = false
-                showSheet = false
-            }
-        }
     }
+
 }
 #endif

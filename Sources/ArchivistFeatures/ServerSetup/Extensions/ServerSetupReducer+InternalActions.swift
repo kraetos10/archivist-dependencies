@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension ServerSetupReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .healthCheckResult(.success):
             return handleHealthCheckSucceeded(state: &state)

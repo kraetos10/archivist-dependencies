@@ -2,6 +2,11 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
+public enum DownloadSortOrder: Sendable, Equatable {
+    case newestFirst
+    case oldestFirst
+}
+
 @Reducer
 public struct DownloadsReducer {
     public init() {}
@@ -14,9 +19,11 @@ public struct DownloadsReducer {
         var isLoading = false
         var isLoadingMore = false
         var hasLoaded = false
+        var sortOrder: DownloadSortOrder = .newestFirst
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<DownloadResponse> = []
         var isSearching = false
+        var scrollPositionID: String?
         @Presents var downloadDetail: DownloadDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 
@@ -60,6 +67,7 @@ public struct DownloadsReducer {
             case lastItemAppeared
             case downloadTapped(DownloadResponse)
             case deleteTapped(DownloadResponse)
+            case sortOrderChanged(DownloadSortOrder)
         }
     }
 
@@ -90,6 +98,7 @@ public struct DownloadsReducer {
                 let videoId = state.downloadDetail?.download.youtubeId
                 state.downloadDetail = nil
                 if let videoId {
+                    anchorScrollBeforeRemoval(of: videoId, state: &state)
                     state.downloads.remove(id: videoId)
                 }
                 return .none

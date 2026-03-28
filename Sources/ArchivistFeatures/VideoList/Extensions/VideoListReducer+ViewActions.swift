@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoListReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleOnAppear(state: &state)
@@ -16,6 +19,8 @@ extension VideoListReducer {
             return handleVideoTapped(video, state: &state)
         case .downloadToDeviceTapped(let video):
             return handleDownloadToDeviceTapped(video, state: &state)
+        case .deleteFromDeviceTapped(let video):
+            return handleDeleteFromDeviceTapped(video, state: &state)
         case .deleteFromServerTapped(let video):
             return handleDeleteFromServerTapped(video, state: &state)
         case .watchFilterChanged(let filter):
@@ -29,22 +34,29 @@ extension VideoListReducer {
         case .addVideoTapped:
             state.addVideo = AddVideoReducer.State(serverConfig: state.serverConfig)
             return .none
+        case .splitViewEnabled:
+            state.useSplitView = true
+            return .none
+        case .sortOrderChanged(let sort):
+            return handleSortOrderChanged(sort, state: &state)
         }
     }
 
     // MARK: - Private Handlers
 
     private func handleOnAppear(state: inout State) -> Effect<Action> {
+        // downloadedVideoIDs is now reactive via @FetchAll — no manual refresh needed
         guard state.videos.isEmpty, !state.isLoading else { return .none }
         state.isLoading = true
         let config = state.serverConfig
+        let sort = state.sortOrder.apiValue
         let videoService = self.videoService
-        return .run { send in
+        return .run { [videoService] send in
             let result = await Result {
                 try await videoService.getVideos(
                     config: config,
                     page: 1,
-                    sort: "published",
+                    sort: sort,
                     order: "desc",
                     type: nil,
                     watch: nil,
@@ -60,12 +72,13 @@ extension VideoListReducer {
         state.isLoading = true
         state.isLoadingMore = false
         let config = state.serverConfig
+        let sort = state.sortOrder.apiValue
         return .run { [videoService] send in
             let result = await Result {
                 try await videoService.getVideos(
                     config: config,
                     page: 1,
-                    sort: "published",
+                    sort: sort,
                     order: "desc",
                     type: nil,
                     watch: nil,
@@ -82,12 +95,13 @@ extension VideoListReducer {
         state.isLoadingMore = true
         let config = state.serverConfig
         let nextPage = state.currentPage + 1
+        let sort = state.sortOrder.apiValue
         return .run { [videoService] send in
             let result = await Result {
                 try await videoService.getVideos(
                     config: config,
                     page: nextPage,
-                    sort: "published",
+                    sort: sort,
                     order: "desc",
                     type: nil,
                     watch: nil,
@@ -99,34 +113,57 @@ extension VideoListReducer {
         }
     }
 
-    private func handleWatchFilterChanged(_ filter: WatchFilter, state: inout State) -> Effect<Action> {
+    private func handleWatchFilterChanged(
+        _ filter: WatchFilter,
+        state: inout State
+    ) -> Effect<Action> {
         if filter == .downloaded && state.watchFilter == .downloaded {
             state.watchFilter = .unwatched
             return .none
         }
         state.watchFilter = filter
-        if filter == .downloaded {
-            state.downloadedVideoIDs = Set(
-                state.videos.map(\.videoId).filter {
-                    localVideoStorage.isDownloaded(videoId: $0)
+        guard filter == .downloaded else { return .none }
+
+        // downloadedVideoIDs is reactive via @FetchAll
+        // Fetch video details for downloaded IDs not already in the loaded pages
+        let loadedIDs = Set(state.videos.map(\.videoId))
+        let missingIDs = state.downloadedVideoIDs.subtracting(loadedIDs)
+        guard !missingIDs.isEmpty else { return .none }
+
+        let config = state.serverConfig
+        return .run { [videoService] send in
+            var fetched: [VideoResponse] = []
+            for id in missingIDs {
+                if let video = try? await videoService.getVideo(config: config, id: id) {
+                    fetched.append(video)
                 }
-            )
+            }
+            await send(.downloadedVideosLoaded(fetched))
         }
-        return .none
     }
 
-    private func handleVideoTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleVideoTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         let displayed = state.displayedVideos
         let nextVideos: [VideoResponse]
-        if let index = displayed.firstIndex(where: { $0.id == video.id }) {
-            nextVideos = Array(displayed.suffix(from: displayed.index(after: index)).filter { !$0.isWatched })
+        if let index = displayed.firstIndex(where: { $0.video.videoId == video.videoId }) {
+            nextVideos = Array(
+                displayed.suffix(
+                    from: displayed.index(
+                        after: index
+                    )
+                ).map(\.video).filter { !$0.isWatched })
         } else {
             nextVideos = []
         }
+        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
         let detailState = VideoDetailReducer.State(
             serverConfig: state.serverConfig,
             video: video,
-            nextVideos: nextVideos
+            nextVideos: nextVideos,
+            shouldAutoPlayNextVideo: autoPlayEnabled
         )
         #if os(tvOS)
         state.path.append(.videoDetail(detailState))
@@ -136,7 +173,10 @@ extension VideoListReducer {
         return .none
     }
 
-    private func handleDownloadToDeviceTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleDownloadToDeviceTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         guard let mediaPath = video.mediaUrl,
               let mediaURL = state.serverConfig.fullURL(for: mediaPath) else {
             return .none
@@ -146,9 +186,8 @@ extension VideoListReducer {
         let channelName = video.channelName
         let thumbUrl = video.vidThumbUrl
         let authHeaders = state.serverConfig.authHeaders
-        return .run { [persistentDownloadManager] _ in
-            @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
-
+        let expectedSize = video.mediaSize.map { Int64($0) }
+        return .run { [deviceDownloadDatabase, persistentDownloadManager] _ in
             let download = DeviceDownload(
                 id: videoId,
                 title: title,
@@ -161,12 +200,26 @@ extension VideoListReducer {
             try? deviceDownloadDatabase.insertDownload(download)
 
             await persistentDownloadManager.startDownload(
-                url: mediaURL, videoId: videoId, title: title, authHeaders: authHeaders
+                url: mediaURL, videoId: videoId, title: title, expectedSize: expectedSize, authHeaders: authHeaders
             )
         }
     }
 
-    private func handleAddToPlaylistTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleDeleteFromDeviceTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
+        let videoId = video.videoId
+        return .run { [localVideoStorage, deviceDownloadDatabase] _ in
+            try? localVideoStorage.deleteVideo(videoId: videoId)
+            try? deviceDownloadDatabase.deleteDownload(videoId)
+        }
+    }
+
+    private func handleAddToPlaylistTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         state.playlistPicker = PlaylistPickerReducer.State(
             serverConfig: state.serverConfig,
             videoId: video.videoId
@@ -174,7 +227,10 @@ extension VideoListReducer {
         return .none
     }
 
-    private func handleDeleteFromServerTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleDeleteFromServerTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = video.videoId
         let videoService = self.videoService
@@ -186,13 +242,19 @@ extension VideoListReducer {
         }
     }
 
-    private func handlePlayNextTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handlePlayNextTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         return .run { [playNextDatabase] _ in
             try? await playNextDatabase.addToQueue(video)
         }
     }
 
-    private func handleMarkAsWatchedTapped(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleMarkAsWatchedTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = video.videoId
         return .run { [videoService] send in
@@ -200,6 +262,35 @@ extension VideoListReducer {
                 try await videoService.setWatched(config: config, videoId: videoId, isWatched: true)
             }
             await send(.markWatchedResult(result.map { videoId }))
+        }
+    }
+
+    private func handleSortOrderChanged(
+        _ sort: VideoSortOrder,
+        state: inout State
+    ) -> Effect<Action> {
+        guard sort != state.sortOrder else { return .none }
+        state.sortOrder = sort
+        state.videos = []
+        state.currentPage = 1
+        state.lastPage = 1
+        state.hasLoaded = false
+        state.isLoading = true
+        let config = state.serverConfig
+        return .run { [videoService] send in
+            let result = await Result {
+                try await videoService.getVideos(
+                    config: config,
+                    page: 1,
+                    sort: sort.apiValue,
+                    order: "desc",
+                    type: nil,
+                    watch: nil,
+                    channel: nil,
+                    playlist: nil
+                )
+            }
+            await send(.videosResult(result))
         }
     }
 }

@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension ChannelDetailReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .videosResult(.success(let response)):
             return handleVideosLoaded(response, state: &state)
@@ -14,6 +17,11 @@ extension ChannelDetailReducer {
         case .downloadsResult(.failure):
             state.isLoadingDownloads = false
             state.hasLoadedDownloads = true
+            return .none
+        case .deleteVideoResult(.success(let videoId)):
+            state.videos.remove(id: videoId)
+            return .none
+        case .deleteVideoResult(.failure):
             return .none
         default:
             return .none
@@ -48,9 +56,34 @@ extension ChannelDetailReducer {
         _ response: PaginatedResponse<DownloadResponse>,
         state: inout State
     ) -> Effect<Action> {
-        state.pendingDownloads = IdentifiedArrayOf(uniqueElements: response.data)
-        state.pendingDownloads.sort { lhs, rhs in
-            (lhs.published ?? "") > (rhs.published ?? "")
+        let lastPage = response.paginate.lastPage
+
+        // When showing newest first, fetch the last page to get the most recent additions
+        if state.showNewestDownloadsFirst
+            && state.isLoadingDownloads
+            && lastPage > 1
+            && response.paginate.currentPage == 1 {
+            let config = state.serverConfig
+            let channelId = state.channel.channelId
+            return .run { send in
+                let result = await Result {
+                    try await downloadService.getDownloads(
+                        config: config,
+                        page: lastPage,
+                        filter: "pending",
+                        channel: channelId,
+                        query: nil,
+                        vidType: nil
+                    )
+                }
+                await send(.downloadsResult(result))
+            }
+        }
+
+        if state.showNewestDownloadsFirst {
+            state.pendingDownloads = IdentifiedArrayOf(uniqueElements: response.data.reversed())
+        } else {
+            state.pendingDownloads = IdentifiedArrayOf(uniqueElements: response.data)
         }
         state.isLoadingDownloads = false
         state.hasLoadedDownloads = true

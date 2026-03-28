@@ -19,7 +19,7 @@ public struct PlaylistDetailScreen: View {
                 Section {
                     entriesContent
                 } header: {
-                    PinnedSectionHeader(title: String.localised("generic.videos"))
+                    PinnedSectionHeader(title: String.localised("generic.videos", table: .generic))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -36,25 +36,26 @@ public struct PlaylistDetailScreen: View {
         }
         .toolbar {
             #if !os(tvOS)
-            if store.isCustomPlaylist {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        send(.editTapped)
-                    } label: {
-                        Text(store.isEditing ? String.localised("generic.done") : String.localised("generic.edit"))
-                    }
-                }
-            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    ShareLink(item: store.playlist.youtubeURL) {
-                        Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
+                    if !store.isCustomPlaylist {
+                        ShareLink(item: store.playlist.youtubeURL) {
+                            Label(
+                                String.localised("generic.share", table: .generic),
+                                systemImage: "square.and.arrow.up"
+                            )
+                        }
                     }
 
                     Button(role: .destructive) {
                         send(.unsubscribeTapped)
                     } label: {
-                        Label(String.localised("video.removePlaylist", table: .videos), systemImage: "trash")
+                        Label(
+                            store.isCustomPlaylist
+                                ? String.localised("generic.delete", table: .generic)
+                                : String.localised("video.removePlaylist", table: .videos),
+                            systemImage: "trash"
+                        )
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -70,6 +71,9 @@ public struct PlaylistDetailScreen: View {
         }
         #endif
         .onAppear { send(.viewDidAppear) }
+        .onChange(of: store.playlist.playlistId) {
+            send(.viewDidAppear)
+        }
     }
 
     private var headerView: some View {
@@ -91,7 +95,9 @@ public struct PlaylistDetailScreen: View {
                 .font(.caption)
                 .foregroundStyle(Color.Brand.secondary)
 
-            if let description = store.playlist.playlistDescription, !description.isEmpty {
+            if let description = store.playlist.playlistDescription,
+               !description.isEmpty,
+               description.lowercased() != "false" {
                 Text(description)
                     .font(.caption)
                     .foregroundStyle(Color.Text.primary)
@@ -152,91 +158,91 @@ public struct PlaylistDetailScreen: View {
                 .foregroundStyle(Color.Brand.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 24)
-        } else if store.isEditing {
-            List {
-                ForEach(Array(store.entries.enumerated()), id: \.element.id) { index, entry in
-                    entryRow(entry, index: index)
-                }
-                .onMove { source, destination in
-                    send(.moveEntry(source, destination))
-                }
-                .onDelete { offsets in
-                    for index in offsets {
-                        send(.removeEntryTapped(store.entries[index]))
-                    }
-                }
-            }
-            .listStyle(.plain)
-            #if !os(tvOS)
-            .scrollContentBackground(.hidden)
-            #endif
-            .frame(minHeight: CGFloat(store.entries.count) * 84)
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(store.entries.enumerated()), id: \.element.id) { index, entry in
-                    entryRow(entry, index: index)
+                    let isAvailable = entry.youtubeId.map { store.availableVideoIDs.contains($0) } ?? false
+                    entryRow(entry, index: index, isAvailable: isAvailable)
                         .pressable {
-                            send(.entryTapped(entry))
+                            if isAvailable {
+                                send(.entryTapped(entry))
+                            } else {
+                                send(.queueServerDownloadTapped(entry))
+                            }
                         }
                         #if !os(tvOS)
                         .contextMenu {
+                            if let videoId = entry.youtubeId,
+                               let url = URL(string: "https://www.youtube.com/watch?v=\(videoId)") {
+                                ShareLink(item: url) {
+                                    Label(
+                                        String.localised("generic.share", table: .generic),
+                                        systemImage: "square.and.arrow.up"
+                                    )
+                                }
+                            }
+
+                            Button {
+                                send(.downloadToDeviceTapped(entry))
+                            } label: {
+                                Label(
+                                    String.localised("video.downloadToDevice", table: .videos),
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+
+                            Button {
+                                send(.markAsWatchedTapped(entry))
+                            } label: {
+                                Label(
+                                    String.localised("video.markAsWatched", table: .videos),
+                                    systemImage: "eye"
+                                )
+                            }
+
                             if store.isCustomPlaylist {
                                 Button(role: .destructive) {
                                     send(.removeEntryTapped(entry))
                                 } label: {
-                                    Label(String.localised("video.removeFromPlaylist", table: .videos), systemImage: "minus.circle")
+                                    Label(
+                                        String.localised("video.removeFromPlaylist", table: .videos),
+                                        systemImage: "minus.circle"
+                                    )
                                 }
                             }
                         }
                         #endif
+                        .transition(.asymmetric(
+                            insertion: .identity,
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
                 }
             }
+            .animation(.default, value: store.entries.map(\.id))
             .padding(.bottom, 24)
         }
     }
 
-    private func entryRow(_ entry: PlaylistEntry, index: Int) -> some View {
-        HStack(spacing: 12) {
-            if let videoId = entry.youtubeId, let thumbURL = store.entryThumbURLs[videoId] {
-                AsyncImage(url: thumbURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(16 / 9, contentMode: .fill)
-                    default:
-                        Rectangle()
-                            .fill(Color.Brand.secondary.opacity(0.3))
-                            .aspectRatio(16 / 9, contentMode: .fill)
-                    }
-                }
-                .frame(width: 120, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                Rectangle()
-                    .fill(Color.Brand.secondary.opacity(0.3))
-                    .frame(width: 120, height: 68)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+    private func entryRow(
+        _ entry: PlaylistEntry,
+        index: Int,
+        isAvailable: Bool = true
+    ) -> some View {
+        HStack {
+            VideoRowView(
+                title: entry.title ?? "",
+                subtitle: entry.uploader,
+                thumbnailURL: entry.youtubeId.flatMap { store.entryThumbURLs[$0] }
+            )
+
+            if !isAvailable {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title3)
+                    .foregroundStyle(Color.Accent.dark)
+                    .padding(.trailing, 16)
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.title ?? "")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.Text.primary)
-                    .lineLimit(2)
-
-                if let uploader = entry.uploader {
-                    Text(uploader)
-                        .font(.caption)
-                        .foregroundStyle(Color.Brand.secondary)
-                }
-            }
-
-            Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .opacity(isAvailable ? 1 : 0.6)
     }
 
 }

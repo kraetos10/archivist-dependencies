@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension HistoryReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleOnAppear(state: &state)
@@ -25,8 +28,6 @@ extension HistoryReducer {
     private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
         state.isLoading = true
         state.currentPage = 1
-        state.continueVideos = []
-        state.watchedVideos = []
         return fetchAll(config: state.serverConfig, watchedPage: 1)
     }
 
@@ -53,7 +54,10 @@ extension HistoryReducer {
         }
     }
 
-    private func fetchAll(config: ServerConfig, watchedPage: Int) -> Effect<Action> {
+    private func fetchAll(
+        config: ServerConfig,
+        watchedPage: Int
+    ) -> Effect<Action> {
         let videoService = self.videoService
         return .merge(
             .run { send in

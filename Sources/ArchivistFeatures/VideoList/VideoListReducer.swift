@@ -1,6 +1,15 @@
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
+internal import SQLiteData
+import StructuredQueries
+
+public struct DisplayedVideo: Identifiable, Sendable {
+    public let video: VideoResponse
+    public let isDownloaded: Bool
+
+    public var id: String { video.videoId }
+}
 
 public enum VideoListItem: Identifiable, Sendable, Equatable {
     case video(VideoResponse)
@@ -8,8 +17,8 @@ public enum VideoListItem: Identifiable, Sendable, Equatable {
 
     public var id: String {
         switch self {
-        case .video(let v): v.videoId
-        case .download(let d): d.youtubeId
+        case .video(let video): video.videoId
+        case .download(let download): download.youtubeId
         }
     }
 
@@ -40,8 +49,8 @@ public enum VideoListItem: Identifiable, Sendable, Equatable {
 
     var isWatched: Bool {
         switch self {
-        case .video(let v):
-            v.isWatched
+        case .video(let video):
+            video.isWatched
         case .download: false
         }
     }
@@ -60,7 +69,17 @@ public struct VideoListReducer {
         var isLoadingMore = false
         var hasLoaded = false
         var watchFilter: WatchFilter = .unwatched
-        var downloadedVideoIDs: Set<String> = []
+        var sortOrder: VideoSortOrder = .published
+        @FetchAll(
+            DeviceDownload
+                .where { $0.status.eq(DeviceDownloadStatus.completed) }
+        )
+        var completedDownloads
+
+        var downloadedVideoIDs: Set<String> {
+            Set(completedDownloads.map(\.id))
+        }
+        var downloadedVideos: IdentifiedArrayOf<VideoResponse> = []
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<VideoResponse> = []
         var isSearching = false
@@ -77,7 +96,8 @@ public struct VideoListReducer {
             !searchQuery.isEmpty
         }
 
-        var displayedVideos: IdentifiedArrayOf<VideoResponse> {
+        var displayedVideos: [DisplayedVideo] {
+            let filtered: IdentifiedArrayOf<VideoResponse>
             if isSearchActive {
                 let localMatches = videos.filter {
                     $0.title.localizedCaseInsensitiveContains(searchQuery)
@@ -86,17 +106,30 @@ public struct VideoListReducer {
                 for video in localMatches {
                     merged.updateOrAppend(video)
                 }
-                return merged
+                filtered = merged
+            } else {
+                switch watchFilter {
+                case .all:
+                    filtered = videos
+                case .unwatched:
+                    filtered = videos.filter { !$0.isWatched }
+                case .continueWatching:
+                    filtered = videos.filter { $0.isPartiallyWatched }
+                case .watched:
+                    filtered = videos.filter { $0.isWatched }
+                case .downloaded:
+                    var merged = videos.filter { downloadedVideoIDs.contains($0.videoId) }
+                    for video in downloadedVideos {
+                        merged.updateOrAppend(video)
+                    }
+                    filtered = merged
+                }
             }
-            switch watchFilter {
-            case .all:
-                return videos
-            case .unwatched:
-                return videos.filter { !$0.isWatched }
-            case .watched:
-                return videos.filter { $0.isWatched }
-            case .downloaded:
-                return videos.filter { downloadedVideoIDs.contains($0.videoId) }
+            return filtered.map { video in
+                DisplayedVideo(
+                    video: video,
+                    isDownloaded: downloadedVideoIDs.contains(video.videoId)
+                )
             }
         }
     }
@@ -119,6 +152,7 @@ public struct VideoListReducer {
         case markWatchedResult(Result<String, Error>)
         case videoRefreshed(VideoResponse)
         case searchResult(Result<[VideoResponse], Error>)
+        case downloadedVideosLoaded([VideoResponse])
         case addVideo(PresentationAction<AddVideoReducer.Action>)
         @CasePathable
         public enum View {
@@ -127,12 +161,15 @@ public struct VideoListReducer {
             case lastItemAppeared
             case videoTapped(VideoResponse)
             case downloadToDeviceTapped(VideoResponse)
+            case deleteFromDeviceTapped(VideoResponse)
             case deleteFromServerTapped(VideoResponse)
             case watchFilterChanged(WatchFilter)
             case addToPlaylistTapped(VideoResponse)
             case markAsWatchedTapped(VideoResponse)
             case playNextTapped(VideoResponse)
             case addVideoTapped
+            case splitViewEnabled
+            case sortOrderChanged(VideoSortOrder)
         }
     }
 
@@ -146,6 +183,7 @@ public struct VideoListReducer {
 
     nonisolated enum CancelID: Hashable, Sendable {
         case search
+        case fetchVideos
     }
 
     public var body: some Reducer<State, Action> {
@@ -236,7 +274,10 @@ public struct VideoListReducer {
         }
     }
 
-    private func refreshVideo(videoId: String, config: ServerConfig) -> Effect<Action> {
+    private func refreshVideo(
+        videoId: String,
+        config: ServerConfig
+    ) -> Effect<Action> {
         .run { [videoService] send in
             if let video = try? await videoService.getVideo(config: config, id: videoId) {
                 await send(.videoRefreshed(video))

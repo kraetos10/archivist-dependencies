@@ -24,7 +24,7 @@ public struct AddPlaylistScreen: View {
                         .frame(width: 200, height: 200)
 
                     Picker("", selection: $store.mode) {
-                        Text(String.localised("generic.subscribe"))
+                        Text(String.localised("generic.subscribe", table: .generic))
                             .tag(AddPlaylistMode.subscribe)
                         Text(String.localised("login.createCustom", table: .login))
                             .tag(AddPlaylistMode.createCustom)
@@ -88,7 +88,7 @@ public struct AddPlaylistScreen: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
             } else {
-                Text(String.localised("generic.subscribe"))
+                Text(String.localised("generic.subscribe", table: .generic))
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)

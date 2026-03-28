@@ -33,7 +33,8 @@ public struct TVChannelsScreen: View {
                             ForEach(store.channels) { channel in
                                 TVChannelCardView(
                                     channel: channel,
-                                    serverConfig: store.serverConfig
+                                    serverConfig: store.serverConfig,
+                                    hasNewContent: store.channelIdsWithNewContent.contains(channel.channelId)
                                 ) {
                                     send(.channelTapped(channel))
                                 }

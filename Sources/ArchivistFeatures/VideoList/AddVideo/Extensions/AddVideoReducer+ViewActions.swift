@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension AddVideoReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .addButtonTapped:
             return handleAddButtonTapped(state: &state)
@@ -27,11 +30,20 @@ extension AddVideoReducer {
             return .none
         }
         let playlistId = state.playlistId
+        let autostart = state.autoDownload
+        let flat = state.fastAdd
+        let force = state.reDownload
         let downloadService = self.downloadService
         let playlistService = self.playlistService
         return .run { send in
             let result = await Result {
-                try await downloadService.addDownloads(config: config, items: items)
+                try await downloadService.addDownloads(
+                    config: config,
+                    items: items,
+                    autostart: autostart,
+                    flat: flat,
+                    force: force
+                )
                 if let playlistId {
                     for videoId in videoIds {
                         try? await playlistService.modifyCustomPlaylist(

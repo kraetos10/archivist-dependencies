@@ -18,6 +18,8 @@ public struct ChannelsReducer {
         var searchResults: IdentifiedArrayOf<ChannelResponse> = []
         var isSearching = false
         var useSplitView = false
+        var channelIdsWithNewContent: Set<String> = []
+        var showNewOnly = false
 
         @Presents var alert: AlertState<AlertAction>?
         @Presents var addChannel: AddChannelReducer.State?
@@ -32,15 +34,21 @@ public struct ChannelsReducer {
         }
 
         var filteredChannels: IdentifiedArrayOf<ChannelResponse> {
-            guard isSearchActive else { return channels }
-            let localMatches = channels.filter {
-                $0.channelName.localizedCaseInsensitiveContains(searchQuery)
+            let base: IdentifiedArrayOf<ChannelResponse>
+            if isSearchActive {
+                let localMatches = channels.filter {
+                    $0.channelName.localizedCaseInsensitiveContains(searchQuery)
+                }
+                var merged = searchResults
+                for channel in localMatches {
+                    merged.updateOrAppend(channel)
+                }
+                base = merged
+            } else {
+                base = channels
             }
-            var merged = searchResults
-            for channel in localMatches {
-                merged.updateOrAppend(channel)
-            }
-            return merged
+            guard showNewOnly else { return base }
+            return base.filter { channelIdsWithNewContent.contains($0.channelId) }
         }
     }
 
@@ -62,6 +70,7 @@ public struct ChannelsReducer {
 
         case searchResult(Result<[ChannelResponse], Error>)
         case unsubscribeResult(Result<String, Error>)
+        case newContentIdsLoaded(Set<String>)
 
         @CasePathable
         public enum View {
@@ -71,6 +80,8 @@ public struct ChannelsReducer {
             case channelTapped(ChannelResponse)
             case addChannelTapped
             case unsubscribeTapped(ChannelResponse)
+            case newFilterToggled(Bool)
+            case splitViewEnabled
         }
     }
 
@@ -82,6 +93,7 @@ public struct ChannelsReducer {
     @Dependency(\.channelService) var channelService
     @Dependency(\.searchService) var searchService
     @Dependency(\.continuousClock) var clock
+    @Dependency(\.newContentSyncManager) var newContentSyncManager
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
@@ -100,17 +112,21 @@ public struct ChannelsReducer {
                 state.selectedChannel = nil
                 return .none
             case .channelDetail(.presented(.delegate(.videoSelected(let video, let nextVideos)))):
+                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled1 = true
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
-                    nextVideos: nextVideos
+                    nextVideos: nextVideos,
+                    shouldAutoPlayNextVideo: autoPlayEnabled1
                 )
                 return .none
             case .path(.element(_, action: .channelDetail(.delegate(.videoSelected(let video, let nextVideos))))):
+                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled2 = true
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
-                    nextVideos: nextVideos
+                    nextVideos: nextVideos,
+                    shouldAutoPlayNextVideo: autoPlayEnabled2
                 )
                 return .none
             case .path(.element(_, action: .channelDetail(.unsubscribeResult(.success)))):

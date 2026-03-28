@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension DownloadDetailReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .downloadResult(.success):
             state.isDownloading = false

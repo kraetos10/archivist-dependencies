@@ -4,7 +4,10 @@ public struct WatchProgressBar: View {
     public let progress: Double
     public var height: CGFloat = 4
 
-    public init(progress: Double, height: CGFloat = 4) {
+    public init(
+        progress: Double,
+        height: CGFloat = 4
+    ) {
         self.progress = progress
         self.height = height
     }

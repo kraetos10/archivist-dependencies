@@ -46,7 +46,10 @@ private struct TVServerSetupContentView: View {
             }
 
             VStack(spacing: 24) {
-                TextField(String.localised("login.serverUrl", table: .login), text: $store.registrationDetails.serverAddress)
+                TextField(
+                    String.localised("login.serverUrl", table: .login),
+                    text: $store.registrationDetails.serverAddress
+                )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
@@ -59,7 +62,7 @@ private struct TVServerSetupContentView: View {
             if store.isLoading {
                 ProgressView()
             } else {
-                Button(String.localised("generic.next")) {
+                Button(String.localised("generic.next", table: .generic)) {
                     send(.nextButtonTapped)
                 }
                 .disabled(store.registrationDetails.serverAddress.isEmpty)

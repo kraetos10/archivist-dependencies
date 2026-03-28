@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension HistoryReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .continueVideosResult(.success(let response)):
             state.continueVideos = IdentifiedArrayOf(uniqueElements: response.data)
@@ -17,8 +20,12 @@ extension HistoryReducer {
         case .watchedVideosResult(.success(let response)):
             state.currentPage = response.paginate.currentPage
             state.lastPage = response.paginate.lastPage
-            for video in response.data {
-                state.watchedVideos.updateOrAppend(video)
+            if state.isLoading {
+                state.watchedVideos = IdentifiedArrayOf(uniqueElements: response.data)
+            } else {
+                for video in response.data {
+                    state.watchedVideos.updateOrAppend(video)
+                }
             }
             state.isLoading = false
             state.isLoadingMore = false

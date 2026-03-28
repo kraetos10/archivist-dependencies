@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension PlaylistDetailReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .playlistResult(.success(let playlist)):
             return handlePlaylistLoaded(playlist, state: &state)
@@ -28,8 +31,9 @@ extension PlaylistDetailReducer {
             return .send(.view(.viewDidAppear))
         case .moveEntryResult(.success):
             return .none
-        case .thumbnailsLoaded(let thumbs):
+        case .thumbnailsLoaded(let thumbs, let availableIDs):
             state.entryThumbnails.merge(thumbs) { _, new in new }
+            state.availableVideoIDs.formUnion(availableIDs)
             return .none
         default:
             return .none
@@ -38,35 +42,46 @@ extension PlaylistDetailReducer {
 
     // MARK: - Private Handlers
 
-    private func handlePlaylistLoaded(_ playlist: PlaylistResponse, state: inout State) -> Effect<Action> {
+    private func handlePlaylistLoaded(
+        _ playlist: PlaylistResponse,
+        state: inout State
+    ) -> Effect<Action> {
         state.playlist = playlist
         state.isLoadingEntries = false
         state.hasLoadedEntries = true
 
         let entries = playlist.playlistEntries ?? []
-        let entryIds = entries.compactMap(\.youtubeId).filter { state.entryThumbnails[$0] == nil }
+        let entryIds = entries.compactMap(\.youtubeId).filter {
+            state.entryThumbnails[$0] == nil
+        }
+
         guard !entryIds.isEmpty else { return .none }
 
         let config = state.serverConfig
         return .run { [videoService] send in
-            let thumbs: [String: String] = await withTaskGroup(of: (String, String?).self) { group in
+            var thumbs: [String: String] = [:]
+            var available: Set<String> = []
+
+            await withTaskGroup(of: (String, String?, Bool).self) { group in
                 for videoId in entryIds {
                     group.addTask {
-                        let video = try? await videoService.getVideo(config: config, id: videoId)
-                        return (videoId, video?.vidThumbUrl)
+                        let video = try? await videoService.getVideo(
+                            config: config,
+                            id: videoId
+                        )
+                        return (videoId, video?.vidThumbUrl, video != nil)
                     }
                 }
-                var result: [String: String] = [:]
-                for await (id, thumbUrl) in group {
+                for await (id, thumbUrl, exists) in group {
                     if let thumbUrl {
-                        result[id] = thumbUrl
+                        thumbs[id] = thumbUrl
+                    }
+                    if exists {
+                        available.insert(id)
                     }
                 }
-                return result
             }
-            if !thumbs.isEmpty {
-                await send(.thumbnailsLoaded(thumbs))
-            }
+            await send(.thumbnailsLoaded(thumbs, availableIDs: available))
         }
     }
 

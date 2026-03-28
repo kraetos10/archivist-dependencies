@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension ChannelsReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleOnAppear(state: &state)
@@ -18,28 +21,46 @@ extension ChannelsReducer {
             return handleAddChannelTapped(state: &state)
         case .unsubscribeTapped(let channel):
             return handleUnsubscribeTapped(channel, state: &state)
+        case .newFilterToggled(let showNewOnly):
+            state.showNewOnly = showNewOnly
+            return .none
+        case .splitViewEnabled:
+            state.useSplitView = true
+            return .none
         }
     }
 
     // MARK: - Private Handlers
 
     private func handleOnAppear(state: inout State) -> Effect<Action> {
-        guard state.channels.isEmpty, !state.isLoading else { return .none }
+        // Refresh new content badges every time view appears
+        let refreshBadges: Effect<Action> = .run { [newContentSyncManager] send in
+            let ids = await newContentSyncManager.allNewChannelIds()
+            await send(.newContentIdsLoaded(ids))
+        }
+
+        guard state.channels.isEmpty, !state.isLoading else {
+            return refreshBadges
+        }
+
         state.isLoading = true
         let config = state.serverConfig
         let channelService = self.channelService
-        return .run { send in
-            let result = await Result {
-                try await channelService.getChannels(
-                    config: config,
-                    page: 1,
-                    filter: nil,
-                    query: nil
-                )
+        return .merge(
+            refreshBadges,
+            .run { send in
+                let result = await Result {
+                    try await channelService.getChannels(
+                        config: config,
+                        page: 1,
+                        filter: nil,
+                        query: nil
+                    )
+                }
+                await send(.channelsResult(result))
             }
-            await send(.channelsResult(result))
-        }
-        .cancellable(id: CancelID.loadChannels)
+            .cancellable(id: CancelID.loadChannels)
+        )
     }
 
     private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
@@ -81,21 +102,32 @@ extension ChannelsReducer {
         .cancellable(id: CancelID.loadChannels)
     }
 
-    private func handleChannelTapped(_ channel: ChannelResponse, state: inout State) -> Effect<Action> {
+    private func handleChannelTapped(
+        _ channel: ChannelResponse,
+        state: inout State
+    ) -> Effect<Action> {
         if state.useSplitView {
             guard state.selectedChannel?.channel.channelId != channel.channelId else {
                 return .none
             }
         }
-        let detailState = ChannelDetailReducer.State(
+        // Clear the "new" badge when the user taps a channel
+        state.channelIdsWithNewContent.remove(channel.channelId)
+        var detailState = ChannelDetailReducer.State(
             serverConfig: state.serverConfig,
             channel: channel
         )
+        detailState.newContentSince = UserDefaults.standard.object(
+            forKey: "newContentSync.lastLaunchDate"
+        ) as? Date
         state.selectedChannel = detailState
         if !state.useSplitView {
             state.path.append(.channelDetail(detailState))
         }
-        return .none
+        let channelId = channel.channelId
+        return .run { [newContentSyncManager] _ in
+            await newContentSyncManager.markSeen(channelId: channelId)
+        }
     }
 
     private func handleAddChannelTapped(state: inout State) -> Effect<Action> {
@@ -103,23 +135,34 @@ extension ChannelsReducer {
         return .none
     }
 
-    private func handleUnsubscribeTapped(_ channel: ChannelResponse, state: inout State) -> Effect<Action> {
+    private func handleUnsubscribeTapped(
+        _ channel: ChannelResponse,
+        state: inout State
+    ) -> Effect<Action> {
         state.alert = AlertState {
-            TextState(String.localised("generic.unsubscribe"))
+            TextState(String.localised("generic.unsubscribe", table: .generic))
         } actions: {
             ButtonState(role: .cancel) {
-                TextState(String.localised("generic.cancel"))
+                TextState(String.localised("generic.cancel", table: .generic))
             }
             ButtonState(role: .destructive, action: .confirmUnsubscribe(channel.channelId)) {
-                TextState(String.localised("generic.unsubscribe"))
+                TextState(String.localised("generic.unsubscribe", table: .generic))
             }
         } message: {
-            TextState(String.localised("Are you sure you want to unsubscribe from \(channel.channelName)?", table: .login))
+            TextState(
+                String.localised(
+                    "Are you sure you want to unsubscribe from \(channel.channelName)?",
+                    table: .login
+                )
+            )
         }
         return .none
     }
 
-    public func handleConfirmedUnsubscribe(_ channelId: String, state: inout State) -> Effect<Action> {
+    public func handleConfirmedUnsubscribe(
+        _ channelId: String,
+        state: inout State
+    ) -> Effect<Action> {
         let config = state.serverConfig
         let channelService = self.channelService
         return .run { send in

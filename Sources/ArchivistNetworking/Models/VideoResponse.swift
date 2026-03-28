@@ -1,7 +1,7 @@
 import Foundation
 import IdentifiedCollections
 
-public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identifiable {
+public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let videoId: String
     public let title: String
     public let description: String?
@@ -24,6 +24,10 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
 
     public var id: String { videoId }
 
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(videoId)
+    }
+
     public var youtubeURL: URL {
         URL(string: "https://www.youtube.com/watch?v=\(videoId)")!
     }
@@ -32,12 +36,28 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
     public var channelId: String { channel.channelId }
     public var durationStr: String? { player?.durationStr }
 
+    public var remainingStr: String? {
+        guard let position = player?.position, position > 0,
+              let duration = player?.duration, duration > 0 else { return nil }
+        let remaining = max(duration - Int(position), 0)
+        return Self.remainingFormatter.string(from: TimeInterval(remaining))
+            .map { "\($0) remaining" }
+    }
+
+    private static let remainingFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = [.hour, .minute]
+        formatter.zeroFormattingBehavior = .dropLeading
+        return formatter
+    }()
+
     public var isWatched: Bool { player?.watched ?? false }
     public var isPartiallyWatched: Bool { !isWatched && watchProgress > 0 }
 
     /// Normalized watch progress from 0 to 1
     public var watchProgress: Double {
-        if isWatched { return 1 }
+        if isWatched { return 0 }
         guard let progress = player?.progress, progress > 0 else { return 0 }
         return min(max(progress / 100, 0), 1)
     }
@@ -90,6 +110,17 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
               let width = videoStream.width,
               let height = videoStream.height else { return nil }
         return "\(width)x\(height)"
+    }
+
+    public var qualityLabel: String? {
+        guard let videoStream = streams?.first(where: { $0.type == "video" }),
+              let height = videoStream.height else { return nil }
+        return switch height {
+        case 2160...: "4K"
+        case 1440...: "UHD"
+        case 720...: "HD"
+        default: "SD"
+        }
     }
 
     public var videoCodec: String? {
@@ -177,7 +208,14 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         active: nil,
         mediaUrl: nil,
         mediaSize: nil,
-        player: VideoPlayer(watched: false, watchedDate: nil, duration: 754, durationStr: "12m 34s", progress: nil, position: nil),
+        player: VideoPlayer(
+            watched: false,
+            watchedDate: nil,
+            duration: 754,
+            durationStr: "12m 34s",
+            progress: nil,
+            position: nil
+        ),
         stats: nil,
         subtitles: nil,
         streams: nil,
@@ -187,9 +225,9 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
 
     public static let placeholders: IdentifiedArrayOf<VideoResponse> = {
         var items = IdentifiedArrayOf<VideoResponse>()
-        for i in 0..<8 {
+        for index in 0..<8 {
             let video = VideoResponse(
-                videoId: "placeholder-\(i)",
+                videoId: "placeholder-\(index)",
                 title: placeholder.title,
                 description: nil,
                 category: nil,
@@ -353,7 +391,12 @@ public nonisolated struct VideoStats: Decodable, Sendable, Equatable {
     public let dislikeCount: Int?
     public let averageRating: Double?
 
-    public init(viewCount: Int?, likeCount: Int?, dislikeCount: Int?, averageRating: Double?) {
+    public init(
+        viewCount: Int?,
+        likeCount: Int?,
+        dislikeCount: Int?,
+        averageRating: Double?
+    ) {
         self.viewCount = viewCount
         self.likeCount = likeCount
         self.dislikeCount = dislikeCount
@@ -376,7 +419,14 @@ public nonisolated struct VideoSubtitle: Decodable, Sendable, Equatable {
     public let source: String?
     public let mediaUrl: String?
 
-    public init(ext: String?, url: String?, name: String?, lang: String?, source: String?, mediaUrl: String?) {
+    public init(
+        ext: String?,
+        url: String?,
+        name: String?,
+        lang: String?,
+        source: String?,
+        mediaUrl: String?
+    ) {
         self.ext = ext
         self.url = url
         self.name = name
@@ -403,7 +453,14 @@ public nonisolated struct VideoStream: Decodable, Sendable, Equatable {
     public let height: Int?
     public let bitrate: Int?
 
-    public init(type: String?, index: Int?, codec: String?, width: Int?, height: Int?, bitrate: Int?) {
+    public init(
+        type: String?,
+        index: Int?,
+        codec: String?,
+        width: Int?,
+        height: Int?,
+        bitrate: Int?
+    ) {
         self.type = type
         self.index = index
         self.codec = codec

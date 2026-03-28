@@ -15,25 +15,28 @@ public struct iPadPlaylistsScreen: View {
     private let columns = [GridItem(.adaptive(minimum: 200), spacing: 16)]
 
     public var body: some View {
-        NavigationStack {
+        NavigationSplitView {
             playlistListContent
-                .navigationTitle(String.localised("generic.playlists"))
+                .navigationTitle(String.localised("generic.playlists", table: .generic))
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(
                     text: $store.searchQuery,
-                    placement: .navigationBarDrawer(displayMode: .automatic),
+                    placement: .navigationBarDrawer(displayMode: .always),
                     prompt: String.localised("login.searchPlaylists", table: .login)
                 )
-                .toolbarBackground(Color.Brand.primary, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
                 .background(Color.Brand.primary)
                 .onAppear {
-                    store.useSplitView = true
+                    send(.splitViewEnabled)
                     send(.viewDidAppear)
                 }
-                .navigationDestination(item: $store.scope(state: \.selectedPlaylist, action: \.playlistDetail)) { detailStore in
-                    PlaylistDetailScreen(store: detailStore)
-                }
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
+        } detail: {
+            if let detailStore = store.scope(state: \.selectedPlaylist, action: \.playlistDetail.presented) {
+                PlaylistDetailScreen(store: detailStore)
+                    .id(store.selectedPlaylist?.playlist.playlistId)
+            } else {
+                emptyDetailView
+            }
         }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
@@ -42,14 +45,37 @@ public struct iPadPlaylistsScreen: View {
         }
     }
 
+    // MARK: - Empty Detail
+
+    private var emptyDetailView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "music.note.list")
+                .font(.system(size: 48))
+                .foregroundStyle(Color.Brand.secondary)
+            Text(String(localized: "Select a playlist"))
+                .font(.headline)
+                .foregroundStyle(Color.Brand.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.Brand.primary)
+    }
+
     // MARK: - List Content
 
     private var playlistListContent: some View {
         ScrollView {
             if store.hasLoaded && store.filteredPlaylists.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(icon: "music.note.list", title: String.localised("login.noPlaylists", table: .login), description: String.localised("login.subscribePlaylistsDescription", table: .login))
+                EmptyStateView(
+                    icon: "music.note.list",
+                    title: String.localised("login.noPlaylists", table: .login),
+                    description: String.localised("login.subscribePlaylistsDescription", table: .login)
+                )
             } else if store.hasLoaded && store.filteredPlaylists.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: String.localised("video.empty.noSearchResults", table: .videos),
+                    description: String.localised("video.empty.tryDifferentSearch", table: .videos)
+                )
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.playlists.isEmpty {
@@ -62,9 +88,14 @@ public struct iPadPlaylistsScreen: View {
                         }
                     } else {
                         ForEach(store.filteredPlaylists) { playlist in
+                            let isSelected = store.selectedPlaylist?.playlist.playlistId == playlist.playlistId
                             PlaylistCardView(
                                 playlist: playlist,
                                 serverConfig: store.serverConfig
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.Accent.dark, lineWidth: isSelected ? 2.5 : 0)
                             )
                             .pressable {
                                 send(.playlistCardTapped(playlist))
@@ -87,13 +118,19 @@ public struct iPadPlaylistsScreen: View {
             }
         }
         .background(Color.Brand.primary)
-        .refreshable { await send(.pullToRefreshTriggered).finish() }
+        .refreshable { send(.pullToRefreshTriggered) }
         .safeAreaInset(edge: .bottom) {
-            FloatingAddButton { send(.addPlaylistTapped) }
-                .popover(item: $store.scope(state: \.addPlaylist, action: \.addPlaylist)) { addPlaylistStore in
-                    AddPlaylistScreen(store: addPlaylistStore)
-                        .frame(width: 400)
-                }
+            HStack {
+                Spacer()
+                FloatingAddButton(action: { send(.addPlaylistTapped) })
+                    .button
+                    .popover(item: $store.scope(state: \.addPlaylist, action: \.addPlaylist)) { addPlaylistStore in
+                        AddPlaylistScreen(store: addPlaylistStore)
+                            .frame(width: 400)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 8)
+            }
         }
     }
 }

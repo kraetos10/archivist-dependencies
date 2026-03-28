@@ -75,34 +75,34 @@ public struct DownloadDetailScreen: View {
     }
 
     private var thumbnailView: some View {
-        Group {
+        GeometryReader { geo in
             if let thumbURL = store.thumbURL {
                 AsyncImage(url: thumbURL) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(16 / 9, contentMode: .fill)
+                            .scaledToFill()
                     default:
                         thumbnailPlaceholder
                     }
                 }
+                .frame(width: geo.size.width, height: geo.size.width * 9 / 16)
+                .clipped()
             } else {
                 thumbnailPlaceholder
+                    .frame(width: geo.size.width, height: geo.size.width * 9 / 16)
             }
         }
         .aspectRatio(16 / 9, contentMode: .fit)
-        .clipped()
     }
 
     private var thumbnailPlaceholder: some View {
-        Rectangle()
-            .fill(Color.Brand.secondary.opacity(0.3))
-            .aspectRatio(16 / 9, contentMode: .fit)
+        Color.Brand.secondary.opacity(0.3)
     }
 
     private var statusBadge: some View {
-        Text(String.localised("generic.pending"))
+        Text(String.localised("generic.pending", table: .generic))
             .font(.caption2)
             .fontWeight(.semibold)
             .foregroundStyle(.white)

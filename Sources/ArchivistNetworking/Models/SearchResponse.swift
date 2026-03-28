@@ -13,7 +13,11 @@ public nonisolated struct SearchResponse: Decodable, Sendable, Equatable {
     public let channelResults: [ChannelResponse]?
     public let playlistResults: [PlaylistResponse]?
 
-    public init(videoResults: [VideoResponse]?, channelResults: [ChannelResponse]?, playlistResults: [PlaylistResponse]?) {
+    public init(
+        videoResults: [VideoResponse]?,
+        channelResults: [ChannelResponse]?,
+        playlistResults: [PlaylistResponse]?
+    ) {
         self.videoResults = videoResults
         self.channelResults = channelResults
         self.playlistResults = playlistResults

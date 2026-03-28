@@ -2,60 +2,49 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
-public enum SettingsDetail: String, Hashable, Sendable {
-    case queue
-    case stats
-    #if !os(tvOS)
-    case deviceDownloads
-    #endif
-    case history
-}
-
 @Reducer
 public struct SettingsReducer {
     public init() {}
     @ObservableState
     public struct State: Sendable {
-        var serverConfig: ServerConfig
-        var downloads: DownloadsReducer.State
-        var stats: StatsReducer.State
+        public var serverConfig: ServerConfig
         var activeTask: ActiveTaskReducer.State
-        #if !os(tvOS)
-        var deviceDownloads: DeviceDownloadsReducer.State
-        #endif
-        var history: HistoryReducer.State
-        var selectedDetail: SettingsDetail?
+        var path = StackState<SettingsPath.State>()
         var isRescanningSubscriptions = false
         var isReAuthenticating = false
+        var supportURL: URL?
         @Shared(.appStorage("autoPlayEnabled")) public var autoPlayEnabled = true
+        @Shared(.appStorage("autoPlayPlaylist")) public var autoPlayPlaylist = true
+        @Shared(.appStorage("useVLCPlayer")) public var useVLCPlayer = false
+        @Shared(.appStorage("checkForChannelUpdates")) public var checkForChannelUpdates = true
         @Presents var videoDetail: VideoDetailReducer.State?
+        @Presents var alert: AlertState<AlertAction>?
 
-        public init(serverConfig: ServerConfig) {
+        public init(
+            serverConfig: ServerConfig,
+            supportURL: URL? = nil
+        ) {
             self.serverConfig = serverConfig
-            self.downloads = DownloadsReducer.State(serverConfig: serverConfig)
-            self.stats = StatsReducer.State(serverConfig: serverConfig)
+            self.supportURL = supportURL
             self.activeTask = ActiveTaskReducer.State(serverConfig: serverConfig)
-            #if !os(tvOS)
-            self.deviceDownloads = DeviceDownloadsReducer.State(serverConfig: serverConfig)
-            #endif
-            self.history = HistoryReducer.State(serverConfig: serverConfig)
         }
+    }
+
+    public enum AlertAction: Equatable, Sendable {
+        case dismissed
     }
 
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
         case didRequestLogout
+        case didRefreshToken(String)
         case rescanSubscriptionsResult(Result<Void, Error>)
         case reAuthResult(Result<String, Error>)
+        case alert(PresentationAction<AlertAction>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
-        case downloads(DownloadsReducer.Action)
-        case stats(StatsReducer.Action)
         case activeTask(ActiveTaskReducer.Action)
-        #if !os(tvOS)
-        case deviceDownloads(DeviceDownloadsReducer.Action)
-        #endif
-        case history(HistoryReducer.Action)
+        case path(StackActionOf<SettingsPath>)
 
         @CasePathable
         public enum View {
@@ -63,6 +52,15 @@ public struct SettingsReducer {
             case rescanSubscriptionsTapped
             case pullToRefreshTriggered
             case reAuthTapped
+            case downloadsTapped
+            case statsTapped
+            #if !os(tvOS)
+            case deviceDownloadsTapped
+            #endif
+            case historyTapped
+            #if !os(watchOS)
+            case playbackCacheTapped
+            #endif
         }
     }
 
@@ -72,26 +70,14 @@ public struct SettingsReducer {
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
-        Scope(state: \.downloads, action: \.downloads) {
-            DownloadsReducer()
-        }
-        Scope(state: \.stats, action: \.stats) {
-            StatsReducer()
-        }
         Scope(state: \.activeTask, action: \.activeTask) {
             ActiveTaskReducer()
-        }
-        #if !os(tvOS)
-        Scope(state: \.deviceDownloads, action: \.deviceDownloads) {
-            DeviceDownloadsReducer()
-        }
-        #endif
-        Scope(state: \.history, action: \.history) {
-            HistoryReducer()
         }
         Reduce { state, action in
             switch action {
             case .binding:
+                return .none
+            case .alert:
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
@@ -101,12 +87,36 @@ public struct SettingsReducer {
             case .videoDetail(.presented(.delegate(.didDismiss))):
                 state.videoDetail = nil
                 return .none
+            case .path(.element(_, action: .history(.delegate(.videoSelected(let video))))):
+                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled1 = true
+                state.videoDetail = VideoDetailReducer.State(
+                    serverConfig: state.serverConfig,
+                    video: video,
+                    nextVideos: [],
+                    shouldAutoPlayNextVideo: autoPlayEnabled1
+                )
+                return .none
+            #if !os(tvOS)
+            case .path(.element(_, action: .deviceDownloads(.delegate(.playVideo(let video, let nextVideos))))):
+                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled2 = true
+                state.videoDetail = VideoDetailReducer.State(
+                    serverConfig: state.serverConfig,
+                    video: video,
+                    nextVideos: nextVideos,
+                    shouldAutoPlayNextVideo: autoPlayEnabled2
+                )
+                return .none
+            #endif
+            case .path:
+                return .none
             default:
                 return handleInternalAction(action, state: &state)
             }
         }
+        .ifLet(\.$alert, action: \.alert)
         .ifLet(\.$videoDetail, action: \.videoDetail) {
             VideoDetailReducer()
         }
+        .forEach(\.path, action: \.path)
     }
 }

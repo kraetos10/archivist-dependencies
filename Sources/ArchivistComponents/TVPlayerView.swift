@@ -16,7 +16,10 @@ public struct TVPlayerView: UIViewControllerRepresentable {
         return vc
     }
 
-    public func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
+    public func updateUIViewController(
+        _ uiViewController: AVPlayerViewController,
+        context: Context
+    ) {
         uiViewController.player = PlayerManager.shared.player
     }
 

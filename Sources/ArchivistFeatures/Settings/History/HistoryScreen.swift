@@ -40,7 +40,7 @@ public struct HistoryScreen: View {
             }
         }
         .background(Color.Brand.primary.ignoresSafeArea())
-        .refreshable { await send(.pullToRefreshTriggered).finish() }
+        .refreshable { send(.pullToRefreshTriggered) }
         #if os(tvOS)
         .navigationTitle("")
         #else
@@ -88,66 +88,14 @@ public struct HistoryScreen: View {
     }
 
     private func historyRow(_ video: VideoResponse) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                if let thumbPath = video.vidThumbUrl,
-                   let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
-                    AsyncImage(url: thumbURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(16 / 9, contentMode: .fill)
-                        default:
-                            Rectangle()
-                                .fill(Color.Brand.secondary.opacity(0.3))
-                                .aspectRatio(16 / 9, contentMode: .fill)
-                        }
-                    }
-                } else {
-                    Rectangle()
-                        .fill(Color.Brand.secondary.opacity(0.3))
-                        .aspectRatio(16 / 9, contentMode: .fill)
-                }
-
-                if let durationStr = video.durationStr {
-                    Text(durationStr)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.black.opacity(0.7))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .padding(6)
-                }
-            }
-            .frame(width: 160)
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(video.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.Text.primary)
-                    .lineLimit(3)
-
-                Text(video.channelName)
-                    .font(.caption)
-                    .foregroundStyle(Color.Brand.secondary)
-
-                if let views = video.formattedViewCount {
-                    Text("\(views) views")
-                        .font(.caption)
-                        .foregroundStyle(Color.Brand.secondary)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        VideoRowView(
+            title: video.title,
+            subtitle: video.channelName,
+            secondarySubtitle: video.formattedViewCount.map { "\($0) views" },
+            thumbnailURL: video.vidThumbUrl.flatMap { store.serverConfig.fullURL(for: $0) },
+            badge: video.durationStr,
+            thumbnailWidth: 160
+        )
     }
 
     // MARK: - iPad Layout (grid cards)

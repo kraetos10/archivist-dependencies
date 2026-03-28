@@ -10,6 +10,7 @@ public struct DeviceDownloadDatabase: Sendable {
     public var markCompleted: @Sendable (_ videoId: String, _ fileSize: Int?) throws -> Void
     public var markFailed: @Sendable (_ videoId: String) throws -> Void
     public var deleteDownload: @Sendable (_ videoId: String) throws -> Void
+    public var deleteAll: @Sendable () throws -> Void
     public var cleanupStaleDownloads: @Sendable () throws -> Void
 }
 
@@ -72,6 +73,11 @@ extension DeviceDownloadDatabase: DependencyKey {
                         .execute(db)
                 }
             },
+            deleteAll: {
+                try database.write { db in
+                    try DeviceDownload.delete().execute(db)
+                }
+            },
             cleanupStaleDownloads: {
                 try database.write { db in
                     try DeviceDownload
@@ -89,6 +95,7 @@ extension DeviceDownloadDatabase: DependencyKey {
         markCompleted: { _, _ in },
         markFailed: { _ in },
         deleteDownload: { _ in },
+        deleteAll: { },
         cleanupStaleDownloads: { }
     )
 }

@@ -8,13 +8,21 @@ public struct TVVideoCardView: View {
     let serverConfig: ServerConfig
     var onTap: (() -> Void)?
 
-    public init(video: VideoResponse, serverConfig: ServerConfig, onTap: (() -> Void)? = nil) {
+    public init(
+        video: VideoResponse,
+        serverConfig: ServerConfig,
+        onTap: (() -> Void)? = nil
+    ) {
         self.data = video.cardData
         self.serverConfig = serverConfig
         self.onTap = onTap
     }
 
-    public init(download: DownloadResponse, serverConfig: ServerConfig, onTap: (() -> Void)? = nil) {
+    public init(
+        download: DownloadResponse,
+        serverConfig: ServerConfig,
+        onTap: (() -> Void)? = nil
+    ) {
         self.data = download.cardData
         self.serverConfig = serverConfig
         self.onTap = onTap
@@ -31,9 +39,10 @@ public struct TVVideoCardView: View {
                 infoView
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVCardButtonStyle())
         .focused($isFocused)
-        .shadow(color: isFocused ? .white.opacity(0.4) : .black.opacity(0.3), radius: isFocused ? 24 : 4)
+        .scaleEffect(isFocused ? 1.05 : 1.0)
+        .shadow(color: isFocused ? .white.opacity(0.5) : .clear, radius: isFocused ? 20 : 0)
         .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 

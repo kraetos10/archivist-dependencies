@@ -4,7 +4,10 @@ public nonisolated struct PaginatedResponse<T: Decodable & Sendable>: Decodable,
     public let data: [T]
     public let paginate: PaginateInfo
 
-    public init(data: [T], paginate: PaginateInfo) {
+    public init(
+        data: [T],
+        paginate: PaginateInfo
+    ) {
         self.data = data
         self.paginate = paginate
     }
