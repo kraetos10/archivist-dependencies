@@ -68,8 +68,8 @@ extension VideoDetailReducer {
                 await send(.downloadResumed(progress))
                 for await event in await persistentDownloadManager.observe(videoId: videoId) {
                     switch event {
-                    case .progress(let p):
-                        await send(.downloadProgressUpdated(p))
+                    case .progress(let progress):
+                        await send(.downloadProgressUpdated(progress))
                     case .completed:
                         await send(.downloadCompleted)
                     case .failed(let msg):
@@ -153,33 +153,36 @@ extension VideoDetailReducer {
             )))
         }
 
-        let saveEffect = saveProgressEffect(state: state)
+        let config = state.serverConfig
+        let videoId = state.video.videoId
         let video = state.video
         let nextVideos = state.nextVideos
-        let serverConfig = state.serverConfig
         let showPlayNext = state.showPlayNext
-        return .merge(
-            saveEffect,
-            .run { [dismiss] send in
-                let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
-                if isInPiP {
-                    // In PiP but not playing — minimise instead
-                    await send(.delegate(
-                        .didRequestMinimize(
-                            video,
-                            nextVideos,
-                            serverConfig,
-                            showPlayNext
-                        )
-                    ))
-                    return
-                }
-                await MainActor.run {
-                    PlayerManager.shared.stop()
-                }
-                await dismiss()
+        return .run { [videoService, dismiss] send in
+            // Save progress and wait for server acknowledgement
+            let position = await Int(PlayerManager.shared.currentTime)
+            if position > 0 {
+                try? await videoService.setProgress(config: config, videoId: videoId, position: position)
             }
-        )
+            let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
+            if isInPiP {
+                // In PiP but not playing — minimise instead
+                await send(.delegate(
+                    .didRequestMinimize(
+                        video,
+                        nextVideos,
+                        config,
+                        showPlayNext
+                    )
+                ))
+                return
+            }
+            await MainActor.run {
+                PlayerManager.shared.stop()
+            }
+            await send(.delegate(.didDismiss(videoId)))
+            await dismiss()
+        }
     }
 
     private func saveProgressEffect(state: State) -> Effect<Action> {
@@ -188,9 +191,7 @@ extension VideoDetailReducer {
         return .run { [videoService] _ in
             let position = await Int(PlayerManager.shared.currentTime)
             guard position > 0 else { return }
-            Task.detached {
-                try? await videoService.setProgress(config: config, videoId: videoId, position: position)
-            }
+            try? await videoService.setProgress(config: config, videoId: videoId, position: position)
         }
     }
 

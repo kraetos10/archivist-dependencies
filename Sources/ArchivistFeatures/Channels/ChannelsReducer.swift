@@ -134,6 +134,9 @@ public struct ChannelsReducer {
             case .videoDetail(.presented(.delegate(.didRequestMinimize))):
                 state.videoDetail = nil
                 return .none
+            case .videoDetail(.presented(.delegate(.didDismiss))):
+                state.videoDetail = nil
+                return .none
             case .videoDetail:
                 return .none
             case .addChannel, .channelDetail, .path:
