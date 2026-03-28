@@ -19,6 +19,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-identified-collections", from: "1.1.0"),
         .package(url: "https://github.com/airbnb/lottie-ios.git", from: "4.4.3"),
         .package(url: "https://github.com/pointfreeco/sqlite-data", from: "1.0.0"),
+        .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2"),
     ],
     targets: [
         .target(
@@ -26,6 +27,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "IdentifiedCollections", package: "swift-identified-collections"),
+                .product(name: "KeychainAccess", package: "KeychainAccess"),
             ]
         ),
         .target(

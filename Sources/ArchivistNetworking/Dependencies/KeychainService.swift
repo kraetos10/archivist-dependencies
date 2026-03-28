@@ -1,6 +1,6 @@
 import Dependencies
 import Foundation
-import Security
+import KeychainAccess
 
 public protocol KeychainServiceType: Sendable {
     func save(token: String) throws
@@ -22,83 +22,53 @@ public struct KeychainService: KeychainServiceType {
     private static let accountUsername = "username"
     private static let accountPassword = "password"
 
+    private var keychain: Keychain { Keychain(service: Self.service) }
+
     public init() {}
 
     public func save(token: String) throws {
-        try saveItem(account: Self.accountToken, data: Data(token.utf8))
+        do {
+            try keychain.set(token, key: Self.accountToken)
+        } catch {
+            throw KeychainError.saveFailed((error as? Status)?.rawValue ?? errSecParam)
+        }
     }
 
     public func loadToken() -> String? {
-        loadItem(account: Self.accountToken)
+        try? keychain.get(Self.accountToken)
     }
 
     public func deleteToken() throws {
-        try deleteItem(account: Self.accountToken)
+        do {
+            try keychain.remove(Self.accountToken)
+        } catch {
+            throw KeychainError.deleteFailed((error as? Status)?.rawValue ?? errSecParam)
+        }
     }
 
     public func saveCredentials(username: String, password: String) throws {
-        try saveItem(account: Self.accountUsername, data: Data(username.utf8))
-        try saveItem(account: Self.accountPassword, data: Data(password.utf8))
+        do {
+            try keychain.set(username, key: Self.accountUsername)
+            try keychain.set(password, key: Self.accountPassword)
+        } catch {
+            throw KeychainError.saveFailed((error as? Status)?.rawValue ?? errSecParam)
+        }
     }
 
     public func loadCredentials() -> (username: String, password: String)? {
-        guard let username = loadItem(account: Self.accountUsername),
-              let password = loadItem(account: Self.accountPassword) else {
+        guard let username = try? keychain.get(Self.accountUsername),
+              let password = try? keychain.get(Self.accountPassword) else {
             return nil
         }
         return (username, password)
     }
 
     public func deleteCredentials() throws {
-        try deleteItem(account: Self.accountUsername)
-        try deleteItem(account: Self.accountPassword)
-    }
-
-    // MARK: - Private
-
-    private func saveItem(account: String, data: Data) throws {
-        try? deleteItem(account: account)
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-        ]
-
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw KeychainError.saveFailed(status)
-        }
-    }
-
-    private func loadItem(account: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
-    }
-
-    private func deleteItem(account: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: account,
-        ]
-
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainError.deleteFailed(status)
+        do {
+            try keychain.remove(Self.accountUsername)
+            try keychain.remove(Self.accountPassword)
+        } catch {
+            throw KeychainError.deleteFailed((error as? Status)?.rawValue ?? errSecParam)
         }
     }
 }
