@@ -2,8 +2,8 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
-public enum StatsSection: Hashable, Sendable {
-    case video, channel, playlist, download, watch, biggestChannels
+public enum StatsSection: Hashable, Sendable, CaseIterable {
+    case video, channel, playlist, download, watch, biggestChannels, downloadHistory
 }
 
 @Reducer
@@ -18,6 +18,8 @@ public struct StatsReducer {
         var downloadStats: DownloadStatsResponse?
         var watchStats: WatchStatsResponse?
         var biggestChannels: [BiggestChannelResponse] = []
+        var downloadHistory: [DownloadHistResponse] = []
+        var isDownloadHistoryExpanded = false
         var isLoading = false
         var hasLoaded = false
         var loadedSections: Set<StatsSection> = []
@@ -31,10 +33,12 @@ public struct StatsReducer {
         case downloadStatsResult(Result<DownloadStatsResponse, Error>)
         case watchStatsResult(Result<WatchStatsResponse, Error>)
         case biggestChannelsResult(Result<[BiggestChannelResponse], Error>)
+        case downloadHistoryResult(Result<[DownloadHistResponse], Error>)
 
         @CasePathable
         public enum View {
             case viewDidAppear
+            case downloadHistoryToggleTapped
         }
     }
 

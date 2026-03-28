@@ -7,7 +7,7 @@ import StructuredQueries
 public struct PlayNextDatabase: Sendable {
     var addToQueue: @Sendable (VideoResponse) async throws -> Void
     var removeFromQueue: @Sendable (Int) async throws -> Void
-    var clearQueue: @Sendable () async throws -> Void
+    public var clearQueue: @Sendable () async throws -> Void
     var popNext: @Sendable () async throws -> PlayNextItem?
 }
 

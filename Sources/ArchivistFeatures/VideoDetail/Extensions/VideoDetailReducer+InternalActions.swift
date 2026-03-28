@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoDetailReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .videoRefreshed(let video):
             state.video = video
@@ -39,7 +42,7 @@ extension VideoDetailReducer {
             state.isDownloading = false
             state.downloadError = message
             state.alert = AlertState {
-                TextState(String.localised("generic.error"))
+                TextState(String.localised("generic.error", table: .generic))
             } message: {
                 TextState(message)
             }
@@ -54,7 +57,7 @@ extension VideoDetailReducer {
         case .serverDeleteResult(.failure(let error)):
             state.isDeletingFromServer = false
             state.alert = AlertState {
-                TextState(String.localised("generic.error"))
+                TextState(String.localised("generic.error", table: .generic))
             } message: {
                 TextState(error.localizedDescription)
             }
@@ -73,7 +76,10 @@ extension VideoDetailReducer {
         }
     }
 
-    private func handleAutoPlayVideo(_ video: VideoResponse, state: inout State) -> Effect<Action> {
+    private func handleAutoPlayVideo(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         // Remove the autoplayed video from the up next queue
         state.nextVideos.removeAll { $0.videoId == video.videoId }
         state.resetForNewVideo(video)
@@ -83,26 +89,38 @@ extension VideoDetailReducer {
         let config = state.serverConfig
         let videoId = state.video.videoId
         let currentVideo = video
+        let authHeaders = state.isDownloaded ? [:] : config.authHeaders
         return .merge(
             .run { [videoService] send in
-                await MainActor.run {
+                let stream = await MainActor.run {
                     PlayerManager.shared.stop()
-                    if let url {
-                        PlayerManager.shared.load(url: url, startPosition: startPosition)
-                        PlayerManager.shared.onPlaybackEnd = {
-                            Task { @MainActor in send(.view(.videoPlaybackDidEnd)) }
+                    guard let url else { return nil as AsyncStream<Void>? }
+                    PlayerManager.shared.load(
+                        url: url,
+                        startPosition: startPosition,
+                        authHeaders: authHeaders,
+                        videoId: videoId
+                    )
+                    PlayerManager.shared.onPause = {
+                        let position = Int(PlayerManager.shared.currentTime)
+                        guard position > 0 else { return }
+                        Task.detached {
+                            try? await videoService.setProgress(
+                                config: config,
+                                videoId: videoId,
+                                position: position
+                            )
                         }
-                        PlayerManager.shared.onPause = {
-                            let position = Int(PlayerManager.shared.currentTime)
-                            guard position > 0 else { return }
-                            Task.detached {
-                                try? await videoService.setProgress(config: config, videoId: videoId, position: position)
-                            }
-                        }
-                        PlayerManager.shared.currentVideoID = videoId
                     }
+                    PlayerManager.shared.currentVideoID = videoId
+                    return PlayerManager.shared.playbackEndEvents()
                 }
-            },
+                guard let stream else { return }
+                for await _ in stream {
+                    await send(.view(.videoPlaybackDidEnd))
+                }
+            }
+            .cancellable(id: CancelID.playback, cancelInFlight: true),
             .send(.view(.viewDidAppear))
         )
     }
@@ -116,25 +134,37 @@ extension VideoDetailReducer {
         let startPosition = state.video.player?.position
         let config = state.serverConfig
         let videoId = state.video.videoId
+        let authHeaders = state.isDownloaded ? [:] : config.authHeaders
         return .merge(
             .run { [videoService] send in
-                await MainActor.run {
+                let stream = await MainActor.run {
                     PlayerManager.shared.stop()
-                    if let url {
-                        PlayerManager.shared.load(url: url, startPosition: startPosition)
-                        PlayerManager.shared.onPlaybackEnd = {
-                            Task { @MainActor in send(.view(.videoPlaybackDidEnd)) }
-                        }
-                        PlayerManager.shared.onPause = {
-                            let position = Int(PlayerManager.shared.currentTime)
-                            guard position > 0 else { return }
-                            Task.detached {
-                                try? await videoService.setProgress(config: config, videoId: videoId, position: position)
-                            }
+                    guard let url else { return nil as AsyncStream<Void>? }
+                    PlayerManager.shared.load(
+                        url: url,
+                        startPosition: startPosition,
+                        authHeaders: authHeaders,
+                        videoId: videoId
+                    )
+                    PlayerManager.shared.onPause = {
+                        let position = Int(PlayerManager.shared.currentTime)
+                        guard position > 0 else { return }
+                        Task.detached {
+                            try? await videoService.setProgress(
+                                config: config,
+                                videoId: videoId,
+                                position: position
+                            )
                         }
                     }
+                    return PlayerManager.shared.playbackEndEvents()
                 }
-            },
+                guard let stream else { return }
+                for await _ in stream {
+                    await send(.view(.videoPlaybackDidEnd))
+                }
+            }
+            .cancellable(id: CancelID.playback, cancelInFlight: true),
             .send(.view(.viewDidAppear))
         )
     }

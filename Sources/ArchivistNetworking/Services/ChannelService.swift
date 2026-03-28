@@ -1,14 +1,41 @@
 import Foundation
 
 public nonisolated protocol ChannelServiceType: Sendable {
-    func getChannels(config: ServerConfig, page: Int, filter: String?, query: String?) async throws -> PaginatedResponse<ChannelResponse>
-    func getChannel(config: ServerConfig, id: String) async throws -> ChannelResponse
-    func subscribeChannels(config: ServerConfig, items: [ChannelSubscribeItem]) async throws
-    func updateChannel(config: ServerConfig, id: String, update: ChannelUpdateRequest) async throws
-    func deleteChannel(config: ServerConfig, id: String) async throws
-    func getChannelAggs(config: ServerConfig, id: String) async throws -> ChannelAggsResponse
-    func getChannelNav(config: ServerConfig, id: String) async throws -> ChannelNavResponse
-    func searchChannel(config: ServerConfig, query: String) async throws -> [ChannelResponse]
+    func getChannels(
+        config: ServerConfig,
+        page: Int,
+        filter: String?,
+        query: String?
+    ) async throws -> PaginatedResponse<ChannelResponse>
+    func getChannel(
+        config: ServerConfig,
+        id: String
+    ) async throws -> ChannelResponse
+    func subscribeChannels(
+        config: ServerConfig,
+        items: [ChannelSubscribeItem]
+    ) async throws
+    func updateChannel(
+        config: ServerConfig,
+        id: String,
+        update: ChannelUpdateRequest
+    ) async throws
+    func deleteChannel(
+        config: ServerConfig,
+        id: String
+    ) async throws
+    func getChannelAggs(
+        config: ServerConfig,
+        id: String
+    ) async throws -> ChannelAggsResponse
+    func getChannelNav(
+        config: ServerConfig,
+        id: String
+    ) async throws -> ChannelNavResponse
+    func searchChannel(
+        config: ServerConfig,
+        query: String
+    ) async throws -> [ChannelResponse]
 }
 
 public nonisolated struct ChannelService: ChannelServiceType {
@@ -32,7 +59,10 @@ public nonisolated struct ChannelService: ChannelServiceType {
         return try await request.execute().data
     }
 
-    public func getChannel(config: ServerConfig, id: String) async throws -> ChannelResponse {
+    public func getChannel(
+        config: ServerConfig,
+        id: String
+    ) async throws -> ChannelResponse {
         let request = NetworkAPIRequest<ChannelResponse>(
             config: config,
             path: .channel(id: id)
@@ -40,7 +70,10 @@ public nonisolated struct ChannelService: ChannelServiceType {
         return try await request.execute().data
     }
 
-    public func subscribeChannels(config: ServerConfig, items: [ChannelSubscribeItem]) async throws {
+    public func subscribeChannels(
+        config: ServerConfig,
+        items: [ChannelSubscribeItem]
+    ) async throws {
         let body = try JSONEncoder().encode(ChannelSubscribeRequest(data: items))
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
@@ -51,7 +84,11 @@ public nonisolated struct ChannelService: ChannelServiceType {
         _ = try await request.execute()
     }
 
-    public func updateChannel(config: ServerConfig, id: String, update: ChannelUpdateRequest) async throws {
+    public func updateChannel(
+        config: ServerConfig,
+        id: String,
+        update: ChannelUpdateRequest
+    ) async throws {
         let body = try JSONEncoder().encode(update)
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
@@ -62,7 +99,10 @@ public nonisolated struct ChannelService: ChannelServiceType {
         _ = try await request.execute()
     }
 
-    public func deleteChannel(config: ServerConfig, id: String) async throws {
+    public func deleteChannel(
+        config: ServerConfig,
+        id: String
+    ) async throws {
         let request = NetworkAPIRequest<EmptyResponse>(
             config: config,
             path: .channel(id: id),
@@ -71,7 +111,10 @@ public nonisolated struct ChannelService: ChannelServiceType {
         _ = try await request.execute()
     }
 
-    public func getChannelAggs(config: ServerConfig, id: String) async throws -> ChannelAggsResponse {
+    public func getChannelAggs(
+        config: ServerConfig,
+        id: String
+    ) async throws -> ChannelAggsResponse {
         let request = NetworkAPIRequest<ChannelAggsResponse>(
             config: config,
             path: .channelAggs(id: id)
@@ -79,7 +122,10 @@ public nonisolated struct ChannelService: ChannelServiceType {
         return try await request.execute().data
     }
 
-    public func getChannelNav(config: ServerConfig, id: String) async throws -> ChannelNavResponse {
+    public func getChannelNav(
+        config: ServerConfig,
+        id: String
+    ) async throws -> ChannelNavResponse {
         let request = NetworkAPIRequest<ChannelNavResponse>(
             config: config,
             path: .channelNav(id: id)
@@ -87,7 +133,10 @@ public nonisolated struct ChannelService: ChannelServiceType {
         return try await request.execute().data
     }
 
-    public func searchChannel(config: ServerConfig, query: String) async throws -> [ChannelResponse] {
+    public func searchChannel(
+        config: ServerConfig,
+        query: String
+    ) async throws -> [ChannelResponse] {
         let queryItems = [URLQueryItem(name: "q", value: query)]
         let request = NetworkAPIRequest<[ChannelResponse]>(
             config: config,

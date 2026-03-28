@@ -10,6 +10,9 @@ public struct AddVideoReducer {
         var serverConfig: ServerConfig
         var playlistId: String?
         var videoInput: String = ""
+        var fastAdd = false
+        var reDownload = false
+        var autoDownload = false
         var isAdding = false
     }
 

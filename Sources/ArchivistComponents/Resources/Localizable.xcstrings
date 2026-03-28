@@ -1,281 +1,96 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "generic.cancel": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        }
-      }
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+
     },
-    "generic.delete": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
-          }
-        }
-      }
+    "·" : {
+
     },
-    "generic.remove": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remove"
-          }
-        }
-      }
+    "· %@ views" : {
+
     },
-    "generic.share": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share"
-          }
-        }
-      }
+    "%@ subscribers" : {
+
     },
-    "generic.edit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit"
-          }
-        }
-      }
+    "%@ views" : {
+
     },
-    "generic.error": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Error"
-          }
-        }
-      }
+    "%lld" : {
+
     },
-    "generic.refresh": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Refresh"
-          }
-        }
-      }
+    "%lld videos" : {
+
     },
-    "generic.next": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Next"
-          }
-        }
-      }
+    "generic.comments" : {
+
     },
-    "generic.done": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Done"
-          }
-        }
-      }
+    "generic.pending" : {
+
     },
-    "generic.subscribe": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Subscribe"
-          }
-        }
-      }
+    "generic.remove" : {
+
     },
-    "generic.unsubscribe": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unsubscribe"
-          }
-        }
-      }
+    "generic.share" : {
+
     },
-    "generic.channels": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Channels"
-          }
-        }
-      }
+    "video.addToPlaylist" : {
+
     },
-    "generic.playlists": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playlists"
-          }
-        }
-      }
+    "video.deleteDownload" : {
+
     },
-    "generic.videos": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Videos"
-          }
-        }
-      }
+    "video.deleteFromServer" : {
+
     },
-    "generic.comments": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comments"
-          }
-        }
-      }
+    "video.downloadToDevice" : {
+
     },
-    "generic.home": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Home"
-          }
-        }
-      }
+    "video.empty.allWatched" : {
+
     },
-    "generic.settings": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Settings"
-          }
-        }
-      }
+    "video.empty.channelDescription" : {
+
     },
-    "generic.actions": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Actions"
-          }
-        }
-      }
+    "video.empty.continueWatchingDescription" : {
+
     },
-    "generic.overview": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Overview"
-          }
-        }
-      }
+    "video.empty.downloadDescription" : {
+
     },
-    "generic.pending": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pending"
-          }
-        }
-      }
+    "video.empty.noContinueWatching" : {
+
     },
-    "generic.active": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Active"
-          }
-        }
-      }
+    "video.empty.noDownloads" : {
+
     },
-    "generic.inactive": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inactive"
-          }
-        }
-      }
+    "video.empty.noResults" : {
+
     },
-    "generic.showMore": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show More"
-          }
-        }
-      }
+    "video.empty.noSearchMatch" : {
+
     },
-    "generic.showLess": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show Less"
-          }
-        }
-      }
+    "video.empty.noUnwatched" : {
+
     },
-    "generic.tapToRetry": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to Retry"
-          }
-        }
-      }
+    "video.empty.noVideos" : {
+
+    },
+    "video.empty.noWatched" : {
+
+    },
+    "video.empty.watchDescription" : {
+
+    },
+    "video.markAsUnwatched" : {
+
+    },
+    "video.markAsWatched" : {
+
+    },
+    "video.playNext" : {
+
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

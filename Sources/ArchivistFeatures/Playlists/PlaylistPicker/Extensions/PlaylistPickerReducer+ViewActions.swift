@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension PlaylistPickerReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
@@ -49,7 +52,10 @@ extension PlaylistPickerReducer {
         }
     }
 
-    private func handlePlaylistTapped(_ playlist: PlaylistResponse, state: inout State) -> Effect<Action> {
+    private func handlePlaylistTapped(
+        _ playlist: PlaylistResponse,
+        state: inout State
+    ) -> Effect<Action> {
         guard !state.isAdding, !state.alreadyInPlaylistIds.contains(playlist.playlistId) else { return .none }
         state.isAdding = true
         let config = state.serverConfig

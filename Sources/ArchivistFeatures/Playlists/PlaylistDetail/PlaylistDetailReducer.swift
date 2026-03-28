@@ -13,6 +13,7 @@ public struct PlaylistDetailReducer {
         var hasLoadedEntries = false
         var isEditing = false
         var entryThumbnails: [String: String] = [:]
+        var availableVideoIDs: Set<String> = []
         @Presents var alert: AlertState<AlertAction>?
         @Presents var videoPicker: VideoPickerReducer.State?
 
@@ -45,6 +46,7 @@ public struct PlaylistDetailReducer {
 
     public enum AlertAction: Equatable, Sendable {
         case confirmUnsubscribe
+        case confirmServerDownload(String)
     }
 
     public enum Action: ViewAction {
@@ -56,7 +58,7 @@ public struct PlaylistDetailReducer {
         case unsubscribeResult(Result<Void, Error>)
         case removeEntryResult(Result<String, Error>)
         case moveEntryResult(Result<Void, Error>)
-        case thumbnailsLoaded([String: String])
+        case thumbnailsLoaded([String: String], availableIDs: Set<String>)
         case videoPicker(PresentationAction<VideoPickerReducer.Action>)
 
         @CasePathable
@@ -69,6 +71,9 @@ public struct PlaylistDetailReducer {
             case moveEntry(IndexSet, Int)
             case editTapped
             case addVideoTapped
+            case downloadToDeviceTapped(PlaylistEntry)
+            case queueServerDownloadTapped(PlaylistEntry)
+            case markAsWatchedTapped(PlaylistEntry)
         }
 
         @CasePathable
@@ -79,6 +84,9 @@ public struct PlaylistDetailReducer {
 
     @Dependency(\.playlistService) var playlistService
     @Dependency(\.videoService) var videoService
+    @Dependency(\.downloadService) var downloadService
+    @Dependency(\.persistentDownloadManager) var persistentDownloadManager
+    @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
 
     public var body: some Reducer<State, Action> {
         Reduce { state, action in
@@ -87,6 +95,18 @@ public struct PlaylistDetailReducer {
                 return handleViewAction(viewAction, state: &state)
             case .alert(.presented(.confirmUnsubscribe)):
                 return handleUnsubscribeConfirmed(state: &state)
+            case .alert(.presented(.confirmServerDownload(let videoId))):
+                let config = state.serverConfig
+                let items = [AddDownloadItem(youtubeId: videoId, status: "pending")]
+                return .run { [downloadService] _ in
+                    try? await downloadService.addDownloads(
+                        config: config,
+                        items: items,
+                        autostart: true,
+                        flat: false,
+                        force: false
+                    )
+                }
             case .alert:
                 return .none
             case .delegate:

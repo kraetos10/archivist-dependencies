@@ -6,7 +6,10 @@ public protocol KeychainServiceType: Sendable {
     func save(token: String) throws
     func loadToken() -> String?
     func deleteToken() throws
-    func saveCredentials(username: String, password: String) throws
+    func saveCredentials(
+        username: String,
+        password: String
+    ) throws
     func loadCredentials() -> (username: String, password: String)?
     func deleteCredentials() throws
 }
@@ -46,7 +49,10 @@ public struct KeychainService: KeychainServiceType {
         }
     }
 
-    public func saveCredentials(username: String, password: String) throws {
+    public func saveCredentials(
+        username: String,
+        password: String
+    ) throws {
         do {
             try keychain.set(username, key: Self.accountUsername)
             try keychain.set(password, key: Self.accountPassword)

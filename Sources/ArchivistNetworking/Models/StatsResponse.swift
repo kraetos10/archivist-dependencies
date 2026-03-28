@@ -44,7 +44,13 @@ public nonisolated struct ChannelStatsResponse: Decodable, Sendable, Equatable {
     public let subscribedTrue: Int?
     public let subscribedFalse: Int?
 
-    public init(docCount: Int?, activeTrue: Int?, activeFalse: Int?, subscribedTrue: Int?, subscribedFalse: Int?) {
+    public init(
+        docCount: Int?,
+        activeTrue: Int?,
+        activeFalse: Int?,
+        subscribedTrue: Int?,
+        subscribedFalse: Int?
+    ) {
         self.docCount = docCount
         self.activeTrue = activeTrue
         self.activeFalse = activeFalse
@@ -68,7 +74,13 @@ public nonisolated struct PlaylistStatsResponse: Decodable, Sendable, Equatable 
     public let subscribedTrue: Int?
     public let subscribedFalse: Int?
 
-    public init(docCount: Int?, activeTrue: Int?, activeFalse: Int?, subscribedTrue: Int?, subscribedFalse: Int?) {
+    public init(
+        docCount: Int?,
+        activeTrue: Int?,
+        activeFalse: Int?,
+        subscribedTrue: Int?,
+        subscribedFalse: Int?
+    ) {
         self.docCount = docCount
         self.activeTrue = activeTrue
         self.activeFalse = activeFalse
@@ -92,7 +104,13 @@ public nonisolated struct DownloadStatsResponse: Decodable, Sendable, Equatable 
     public let pendingShorts: Int?
     public let pendingStreams: Int?
 
-    public init(pending: Int?, ignore: Int?, pendingVideos: Int?, pendingShorts: Int?, pendingStreams: Int?) {
+    public init(
+        pending: Int?,
+        ignore: Int?,
+        pendingVideos: Int?,
+        pendingShorts: Int?,
+        pendingStreams: Int?
+    ) {
         self.pending = pending
         self.ignore = ignore
         self.pendingVideos = pendingVideos
@@ -114,7 +132,11 @@ public nonisolated struct WatchStatsResponse: Decodable, Sendable, Equatable {
     public let unwatched: Int?
     public let continueWatching: Int?
 
-    public init(watched: Int?, unwatched: Int?, continueWatching: Int?) {
+    public init(
+        watched: Int?,
+        unwatched: Int?,
+        continueWatching: Int?
+    ) {
         self.watched = watched
         self.unwatched = unwatched
         self.continueWatching = continueWatching
@@ -132,7 +154,11 @@ public nonisolated struct BiggestChannelResponse: Decodable, Sendable, Equatable
     public let name: String?
     public let docCount: Int?
 
-    public init(id: String?, name: String?, docCount: Int?) {
+    public init(
+        id: String?,
+        name: String?,
+        docCount: Int?
+    ) {
         self.id = id
         self.name = name
         self.docCount = docCount
@@ -149,7 +175,10 @@ public nonisolated struct DownloadHistResponse: Decodable, Sendable, Equatable {
     public let date: String?
     public let count: Int?
 
-    public init(date: String?, count: Int?) {
+    public init(
+        date: String?,
+        count: Int?
+    ) {
         self.date = date
         self.count = count
     }

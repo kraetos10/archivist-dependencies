@@ -9,7 +9,10 @@ public struct RegistrationDetails: Sendable {
 }
 
 extension RegistrationDetails: Equatable {
-    nonisolated public static func == (lhs: RegistrationDetails, rhs: RegistrationDetails) -> Bool {
+    nonisolated public static func == (
+        lhs: RegistrationDetails,
+        rhs: RegistrationDetails
+    ) -> Bool {
         lhs.serverAddress == rhs.serverAddress
             && lhs.port == rhs.port
             && lhs.useHTTP == rhs.useHTTP

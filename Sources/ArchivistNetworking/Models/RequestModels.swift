@@ -5,7 +5,11 @@ public nonisolated struct LoginRequest: Encodable, Sendable {
     public let password: String
     public let rememberMe: String?
 
-    public init(username: String, password: String, rememberMe: String?) {
+    public init(
+        username: String,
+        password: String,
+        rememberMe: String?
+    ) {
         self.username = username
         self.password = password
         self.rememberMe = rememberMe
@@ -30,7 +34,10 @@ public nonisolated struct AddDownloadItem: Encodable, Sendable {
     public let youtubeId: String
     public let status: String
 
-    public init(youtubeId: String, status: String) {
+    public init(
+        youtubeId: String,
+        status: String
+    ) {
         self.youtubeId = youtubeId
         self.status = status
     }
@@ -45,7 +52,10 @@ public nonisolated struct BulkDownloadUpdateRequest: Encodable, Sendable {
     public let videoIds: [String]
     public let status: String
 
-    public init(videoIds: [String], status: String) {
+    public init(
+        videoIds: [String],
+        status: String
+    ) {
         self.videoIds = videoIds
         self.status = status
     }
@@ -68,7 +78,10 @@ public nonisolated struct ChannelSubscribeItem: Encodable, Sendable {
     public let channelId: String
     public let channelSubscribed: Bool
 
-    public init(channelId: String, channelSubscribed: Bool) {
+    public init(
+        channelId: String,
+        channelSubscribed: Bool
+    ) {
         self.channelId = channelId
         self.channelSubscribed = channelSubscribed
     }
@@ -83,7 +96,10 @@ public nonisolated struct ChannelUpdateRequest: Encodable, Sendable {
     public let channelSubscribed: Bool?
     public let channelOverwrites: ChannelOverwritesRequest?
 
-    public init(channelSubscribed: Bool?, channelOverwrites: ChannelOverwritesRequest?) {
+    public init(
+        channelSubscribed: Bool?,
+        channelOverwrites: ChannelOverwritesRequest?
+    ) {
         self.channelSubscribed = channelSubscribed
         self.channelOverwrites = channelOverwrites
     }
@@ -100,7 +116,12 @@ public nonisolated struct ChannelOverwritesRequest: Encodable, Sendable {
     public let indexPlaylists: Bool?
     public let integrateSponsorblock: Bool?
 
-    public init(downloadFormat: String?, autodelete: Int?, indexPlaylists: Bool?, integrateSponsorblock: Bool?) {
+    public init(
+        downloadFormat: String?,
+        autodelete: Int?,
+        indexPlaylists: Bool?,
+        integrateSponsorblock: Bool?
+    ) {
         self.downloadFormat = downloadFormat
         self.autodelete = autodelete
         self.indexPlaylists = indexPlaylists
@@ -127,7 +148,10 @@ public nonisolated struct PlaylistSubscribeItem: Encodable, Sendable {
     public let playlistId: String
     public let playlistSubscribed: Bool
 
-    public init(playlistId: String, playlistSubscribed: Bool) {
+    public init(
+        playlistId: String,
+        playlistSubscribed: Bool
+    ) {
         self.playlistId = playlistId
         self.playlistSubscribed = playlistSubscribed
     }
@@ -143,7 +167,11 @@ public nonisolated struct CustomPlaylistRequest: Encodable, Sendable {
     public let videoId: String?
     public let position: Int?
 
-    public init(action: String, videoId: String?, position: Int? = nil) {
+    public init(
+        action: String,
+        videoId: String?,
+        position: Int? = nil
+    ) {
         self.action = action
         self.videoId = videoId
         self.position = position
@@ -172,7 +200,10 @@ public nonisolated struct WatchedRequest: Encodable, Sendable {
     public let id: String
     public let isWatched: Bool
 
-    public init(id: String, isWatched: Bool) {
+    public init(
+        id: String,
+        isWatched: Bool
+    ) {
         self.id = id
         self.isWatched = isWatched
     }
@@ -188,7 +219,11 @@ public nonisolated struct RefreshRequest: Encodable, Sendable {
     public let type: String?
     public let extractVideos: Bool?
 
-    public init(id: String?, type: String?, extractVideos: Bool?) {
+    public init(
+        id: String?,
+        type: String?,
+        extractVideos: Bool?
+    ) {
         self.id = id
         self.type = type
         self.extractVideos = extractVideos
@@ -213,7 +248,10 @@ public nonisolated struct TaskScheduleRequest: Encodable, Sendable {
     public let schedule: String?
     public let config: [String: String]?
 
-    public init(schedule: String?, config: [String: String]?) {
+    public init(
+        schedule: String?,
+        config: [String: String]?
+    ) {
         self.schedule = schedule
         self.config = config
     }

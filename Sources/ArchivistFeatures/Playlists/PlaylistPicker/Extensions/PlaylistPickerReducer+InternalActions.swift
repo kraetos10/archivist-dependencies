@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension PlaylistPickerReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .loadResult(.success(let (playlists, alreadyIn))):
             state.playlists = playlists

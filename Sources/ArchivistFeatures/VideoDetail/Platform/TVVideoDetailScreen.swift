@@ -35,6 +35,8 @@ public struct TVVideoDetailScreen: View {
                             .lineLimit(3)
 
                         HStack(spacing: 8) {
+                            ChannelThumbView(url: store.channelThumbURL, size: 40)
+
                             Text(store.video.channelName)
                                 .fontWeight(.semibold)
 
@@ -61,7 +63,11 @@ public struct TVVideoDetailScreen: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: store.video.watchProgress > 0 ? "play.circle.fill" : "play.fill")
-                                Text(store.video.watchProgress > 0 ? String.localised("video.resume", table: .videos) : String.localised("video.play", table: .videos))
+                                Text(
+                                    store.video.watchProgress > 0
+                                        ? String.localised("video.resume", table: .videos)
+                                        : String.localised("video.play", table: .videos)
+                                )
                             }
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -75,7 +81,11 @@ public struct TVVideoDetailScreen: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: store.isWatched ? "eye.fill" : "eye")
-                                Text(store.isWatched ? String.localised("video.watched", table: .videos) : String.localised("video.markAsWatched", table: .videos))
+                                Text(
+                                    store.isWatched
+                                        ? String.localised("video.markAsUnwatched", table: .videos)
+                                        : String.localised("video.markAsWatched", table: .videos)
+                                )
                             }
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -93,7 +103,11 @@ public struct TVVideoDetailScreen: View {
                             Button {
                                 send(.toggleDescription, animation: .default)
                             } label: {
-                                Text(store.isDescriptionExpanded ? String.localised("generic.showLess") : String.localised("generic.showMore"))
+                                Text(
+                                    store.isDescriptionExpanded
+                                        ? String.localised("generic.showLess", table: .generic)
+                                        : String.localised("generic.showMore", table: .generic)
+                                )
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                             }
@@ -105,7 +119,7 @@ public struct TVVideoDetailScreen: View {
                 .padding(.top, 32)
 
                 // Play Next
-                if store.showPlayNext && !playNextItems.isEmpty {
+                if !playNextItems.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(String.localised("video.playNext", table: .videos))
                             .font(.title3)
@@ -129,14 +143,14 @@ public struct TVVideoDetailScreen: View {
 
                 // Up Next
                 if !store.nextVideos.isEmpty {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 24) {
                         Text(String.localised("video.upNext", table: .videos))
                             .font(.title3)
                             .fontWeight(.bold)
                             .padding(.horizontal, 48)
 
                         ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 40) {
+                            LazyHStack(spacing: 32) {
                                 ForEach(store.nextVideos.prefix(10)) { video in
                                     TVVideoCardView(
                                         video: video,
@@ -144,9 +158,11 @@ public struct TVVideoDetailScreen: View {
                                     ) {
                                         send(.nextUpVideoTapped(video))
                                     }
+                                    .frame(width: 400)
                                 }
                             }
                             .padding(.horizontal, 48)
+                            .padding(.vertical, 24)
                         }
                     }
                     .padding(.bottom, 24)
@@ -163,10 +179,15 @@ public struct TVVideoDetailScreen: View {
             set: { if !$0 { send(.stopPlayback) } }
         )) {
             ZStack {
-                TVPlayerView {
-                    send(.stopPlayback)
+                if PlayerManager.shared.isUsingFallbackPlayer {
+                    TVVLCPlayerView()
+                        .ignoresSafeArea()
+                } else {
+                    TVPlayerView {
+                        send(.stopPlayback)
+                    }
+                    .ignoresSafeArea()
                 }
-                .ignoresSafeArea()
             }
             .onExitCommand {
                 send(.stopPlayback)

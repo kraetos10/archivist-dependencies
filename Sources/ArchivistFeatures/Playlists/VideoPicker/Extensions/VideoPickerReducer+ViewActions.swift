@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoPickerReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
@@ -91,19 +94,42 @@ extension VideoPickerReducer {
         let config = state.serverConfig
         let playlistId = state.playlistId
         let videoIds = Array(state.selectedVideoIds)
-        let playlistService = self.playlistService
-        return .run { send in
-            let result = await Result {
+        return .run { [playlistService] send in
+            let failures = await withTaskGroup(of: String?.self) { group in
                 for videoId in videoIds {
-                    try await playlistService.modifyCustomPlaylist(
-                        config: config,
-                        id: playlistId,
-                        action: "create",
-                        videoId: videoId
-                    )
+                    group.addTask {
+                        do {
+                            try await playlistService.modifyCustomPlaylist(
+                                config: config,
+                                id: playlistId,
+                                action: "create",
+                                videoId: videoId
+                            )
+                            return nil
+                        } catch {
+                            return videoId
+                        }
+                    }
                 }
+                var failed: [String] = []
+                for await result in group {
+                    if let failedId = result {
+                        failed.append(failedId)
+                    }
+                }
+                return failed
             }
-            await send(.addResult(result))
+
+            if failures.isEmpty {
+                await send(.addResult(.success(())))
+            } else {
+                let error = NSError(
+                    domain: "PlaylistAdd",
+                    code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to add \(failures.count) of \(videoIds.count) videos"]
+                )
+                await send(.addResult(.failure(error)))
+            }
         }
     }
 

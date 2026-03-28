@@ -13,6 +13,11 @@ public struct MiniPlayerView: View {
     public let onPlayPause: () -> Void
     public let onClose: () -> Void
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var playerWidth: CGFloat { sizeClass == .regular ? 300 : 200 }
+    private var playerHeight: CGFloat { sizeClass == .regular ? 169 : 113 }
+
     public init(
         title: String,
         channelName: String,
@@ -36,67 +41,74 @@ public struct MiniPlayerView: View {
     }
 
     public var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Show live video when PiP is not active, thumbnail otherwise.
-                // Creating a second AVPlayerViewController while PiP is active
-                // on the original VC would kill the PiP session.
-                if isInPiP {
-                    thumbnail
-                } else {
-                    AVPlayerViewControllerWrapper()
-                        .frame(width: 64, height: 36)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .allowsHitTesting(false)
-                }
+        ZStack {
+            livePlayer
+                .allowsHitTesting(false)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(Color.Text.primary)
-                        .lineLimit(1)
-
-                    Text(channelName)
-                        .font(.caption2)
-                        .foregroundStyle(Color.Brand.secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button(action: onPlayPause) {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color.Text.primary)
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Text.primary)
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.Surface.highlight)
-            .overlay(alignment: .top) {
-                GeometryReader { geo in
-                    let progress = PlayerManager.shared.duration > 0
-                        ? PlayerManager.shared.currentTime / PlayerManager.shared.duration
-                        : 0
-                    Rectangle()
-                        .fill(Color.Accent.dark)
-                        .frame(width: geo.size.width * progress, height: 2)
-                }
-                .frame(height: 2)
-            }
+            // Invisible tap layer that covers the player
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTap)
         }
-        .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(.black.opacity(0.6))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+        }
+        .overlay(alignment: .bottom) {
+            Text(title)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.7)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottom) {
+            GeometryReader { geo in
+                let progress = PlayerManager.shared.duration > 0
+                    ? PlayerManager.shared.currentTime / PlayerManager.shared.duration
+                    : 0
+                Rectangle()
+                    .fill(Color.Accent.dark)
+                    .frame(width: geo.size.width * progress, height: 3)
+            }
+            .frame(height: 3)
+            .allowsHitTesting(false)
+        }
+        .frame(width: playerWidth, height: playerHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+    }
+
+    @ViewBuilder
+    private var livePlayer: some View {
+        if PlayerManager.shared.backend is VLCPlayerBackend {
+            MiniVLCPlayerView()
+                .frame(width: playerWidth, height: playerHeight)
+        } else if PlayerManager.shared.player != nil {
+            MiniAVPlayerView()
+                .frame(width: playerWidth, height: playerHeight)
+        } else {
+            thumbnail
+        }
     }
 
     private var thumbnail: some View {
@@ -111,13 +123,11 @@ public struct MiniPlayerView: View {
                         Rectangle().fill(Color.Brand.secondary.opacity(0.3))
                     }
                 }
-                .frame(width: 64, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .frame(width: playerWidth, height: playerHeight)
             } else {
                 Rectangle()
                     .fill(Color.Brand.secondary.opacity(0.3))
-                    .frame(width: 64, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .frame(width: playerWidth, height: playerHeight)
             }
         }
     }

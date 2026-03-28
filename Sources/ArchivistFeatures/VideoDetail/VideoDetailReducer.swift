@@ -1,6 +1,8 @@
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
+internal import SQLiteData
+import StructuredQueries
 
 @Reducer
 public struct VideoDetailReducer {
@@ -16,6 +18,7 @@ public struct VideoDetailReducer {
         var similarVideos: [VideoResponse] = []
         var isLoadingSimilar = false
         var nextVideos: [VideoResponse] = []
+        var shouldAutoPlayNextVideo: Bool = true
         var showPlayNext: Bool = true
         var isDownloaded = false
         var isDownloading = false
@@ -23,17 +26,36 @@ public struct VideoDetailReducer {
         var downloadError: String?
         var isDeletingFromServer = false
         var isDescriptionExpanded = false
+        var showAllComments = false
+        var currentCommentIndex = 0
         var watchedOverride: Bool?
+        var localWatchProgress: Double?
+        @Shared(.appStorage("useVLCPlayer")) var useVLCPlayer = false
+        @FetchAll(PlayNextItem.all.order(by: \.id))
+        var playNextItems
         @Presents var playlistPicker: PlaylistPickerReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 
         var youtubeURL: URL { video.youtubeURL }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
+        var effectiveWatchProgress: Double { localWatchProgress ?? video.watchProgress }
+        var channelThumbURL: URL? {
+            guard let path = video.channel.channelThumbUrl else { return nil }
+            return serverConfig.fullURL(for: path)
+        }
 
-        public init(serverConfig: ServerConfig, video: VideoResponse, nextVideos: [VideoResponse] = [], showPlayNext: Bool = true, isPlaying: Bool = false) {
+        public init(
+            serverConfig: ServerConfig,
+            video: VideoResponse,
+            nextVideos: [VideoResponse] = [],
+            shouldAutoPlayNextVideo: Bool = true,
+            showPlayNext: Bool = true,
+            isPlaying: Bool = false
+        ) {
             self.serverConfig = serverConfig
             self.video = video
             self.nextVideos = nextVideos
+            self.shouldAutoPlayNextVideo = shouldAutoPlayNextVideo
             self.showPlayNext = showPlayNext
             self.isPlaying = isPlaying
         }
@@ -51,6 +73,8 @@ public struct VideoDetailReducer {
             downloadError = nil
             isDeletingFromServer = false
             isDescriptionExpanded = false
+            showAllComments = false
+            currentCommentIndex = 0
             watchedOverride = nil
             playlistPicker = nil
         }
@@ -58,11 +82,13 @@ public struct VideoDetailReducer {
 
     public enum AlertAction: Equatable, Sendable {
         case dismissed
+        case confirmDeleteFromServer
     }
 
-    public enum Action: ViewAction {
+    public enum Action: ViewAction, BindableAction {
         case view(View)
         case delegate(Delegate)
+        case binding(BindingAction<State>)
 
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case alert(PresentationAction<AlertAction>)
@@ -80,7 +106,7 @@ public struct VideoDetailReducer {
         case watchedToggleResult(Result<Void, Error>)
 
         public enum Delegate {
-            case didRequestMinimize(VideoResponse, [VideoResponse], ServerConfig, Bool)
+            case didRequestMinimize(VideoResponse, [VideoResponse], ServerConfig, Bool, Bool)
             case didDismiss(String)
         }
 
@@ -101,8 +127,11 @@ public struct VideoDetailReducer {
             case addToPlaylistTapped
             case addToPlayNextTapped
             case removeFromPlayNextTapped(Int)
+            case videoChanged
         }
     }
+
+    enum CancelID { case playback }
 
     @Dependency(\.dismiss) var dismiss
     @Dependency(\.videoService) var videoService
@@ -112,14 +141,19 @@ public struct VideoDetailReducer {
     @Dependency(\.playNextDatabase) var playNextDatabase
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding:
+                return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
             case .delegate:
                 return .none
             case .playlistPicker:
                 return .none
+            case .alert(.presented(.confirmDeleteFromServer)):
+                return handleConfirmedDeleteFromServer(state: &state)
             case .alert:
                 return .none
             default:

@@ -3,12 +3,13 @@ import Foundation
 public enum WatchFilter: String, CaseIterable, Sendable, Equatable {
     case all
     case unwatched
+    case continueWatching
     case watched
     case downloaded
 
     public var apiValue: String? {
         switch self {
-        case .all, .downloaded: nil
+        case .all, .downloaded, .continueWatching: nil
         case .unwatched: "unwatched"
         case .watched: "watched"
         }
@@ -16,10 +17,11 @@ public enum WatchFilter: String, CaseIterable, Sendable, Equatable {
 
     public var label: String {
         switch self {
-        case .all: "All"
-        case .unwatched: "Unwatched"
-        case .watched: "Watched"
-        case .downloaded: "Downloaded"
+        case .all: String(localized: "All")
+        case .unwatched: String(localized: "Unwatched")
+        case .continueWatching: String(localized: "Continue Watching")
+        case .watched: String(localized: "Watched")
+        case .downloaded: String(localized: "On Device")
         }
     }
 
@@ -27,8 +29,9 @@ public enum WatchFilter: String, CaseIterable, Sendable, Equatable {
         switch self {
         case .all: "line.3.horizontal.decrease.circle"
         case .unwatched: "eye.slash"
+        case .continueWatching: "play.circle"
         case .watched: "eye"
-        case .downloaded: "arrow.down.circle"
+        case .downloaded: "iphone"
         }
     }
 }

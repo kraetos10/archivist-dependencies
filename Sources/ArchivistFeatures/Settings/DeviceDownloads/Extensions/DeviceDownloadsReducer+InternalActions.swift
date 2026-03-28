@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension DeviceDownloadsReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .storageInfoLoaded(let downloadsSize, let available, let total):
             state.downloadsSize = downloadsSize

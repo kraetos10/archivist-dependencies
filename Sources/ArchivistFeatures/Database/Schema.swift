@@ -46,4 +46,3 @@ public struct ServerConnection: Identifiable, Equatable, Sendable {
     public var port: String = ""
     public var useHTTP: Bool = false
 }
-

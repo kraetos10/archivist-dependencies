@@ -12,29 +12,31 @@ public struct iPadChannelsScreen: View {
         self.store = store
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 200), spacing: 16)]
+    private let columns = [GridItem(.adaptive(minimum: 250), spacing: 16)]
 
     public var body: some View {
-        NavigationStack {
+        NavigationSplitView {
             channelListContent
-                .navigationTitle(String.localised("generic.channels"))
+                .navigationTitle(String.localised("generic.channels", table: .generic))
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(
                     text: $store.searchQuery,
-                    placement: .navigationBarDrawer(displayMode: .automatic),
+                    placement: .navigationBarDrawer(displayMode: .always),
                     prompt: String.localised("login.searchChannels", table: .login)
                 )
-                .toolbarBackground(Color.Brand.primary, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
                 .background(Color.Brand.primary)
                 .onAppear {
-                    store.useSplitView = true
+                    send(.splitViewEnabled)
                     send(.viewDidAppear)
                 }
                 .alert($store.scope(state: \.alert, action: \.alert))
-                .navigationDestination(item: $store.scope(state: \.selectedChannel, action: \.channelDetail)) { detailStore in
-                    ChannelDetailScreen(store: detailStore)
-                }
+            .navigationSplitViewColumnWidth(min: 300, ideal: 350, max: 450)
+        } detail: {
+            if let detailStore = store.scope(state: \.selectedChannel, action: \.channelDetail.presented) {
+                ChannelDetailScreen(store: detailStore)
+            } else {
+                emptyDetailView
+            }
         }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
@@ -43,14 +45,47 @@ public struct iPadChannelsScreen: View {
         }
     }
 
+    // MARK: - Empty Detail
+
+    private var emptyDetailView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.crop.rectangle.stack")
+                .font(.system(size: 48))
+                .foregroundStyle(Color.Brand.secondary)
+            Text(String(localized: "Select a channel"))
+                .font(.headline)
+                .foregroundStyle(Color.Brand.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.Brand.primary)
+    }
+
     // MARK: - List Content
 
     private var channelListContent: some View {
         ScrollView {
-            if store.hasLoaded && store.filteredChannels.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(icon: "person.2.rectangle.stack", title: String.localised("login.noChannels", table: .login), description: String.localised("login.subscribeChannelsDescription", table: .login))
+            newContentFilterRow
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+            if store.hasLoaded && store.filteredChannels.isEmpty && store.showNewOnly {
+                EmptyStateView(
+                    icon: "sparkles",
+                    title: String.localised("generic.noNewVideos", table: .generic),
+                    description: String.localised("generic.noNewVideosDescription", table: .generic)
+                )
+            } else if store.hasLoaded && store.filteredChannels.isEmpty && store.searchQuery.isEmpty {
+                EmptyStateView(
+                    icon: "person.2.rectangle.stack",
+                    title: String.localised("login.noChannels", table: .login),
+                    description: String.localised("login.subscribeChannelsDescription", table: .login)
+                )
             } else if store.hasLoaded && store.filteredChannels.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: String.localised("video.empty.noSearchResults", table: .videos),
+                    description: String.localised("video.empty.tryDifferentSearch", table: .videos)
+                )
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.filteredChannels.isEmpty {
@@ -63,15 +98,24 @@ public struct iPadChannelsScreen: View {
                         }
                     } else {
                         ForEach(store.filteredChannels) { channel in
+                            let isSelected = store.selectedChannel?.channel.channelId == channel.channelId
                             ChannelCardView(
                                 channel: channel,
-                                serverConfig: store.serverConfig
+                                serverConfig: store.serverConfig,
+                                hasNewContent: store.channelIdsWithNewContent.contains(channel.channelId)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.Accent.dark, lineWidth: isSelected ? 2.5 : 0)
                             )
                             .contextMenu {
                                 Button(role: .destructive) {
                                     send(.unsubscribeTapped(channel))
                                 } label: {
-                                    Label(String.localised("generic.unsubscribe"), systemImage: "xmark.circle")
+                                    Label(
+                                        String.localised("generic.unsubscribe", table: .generic),
+                                        systemImage: "xmark.circle"
+                                    )
                                 }
                             }
                             .pressable {
@@ -95,13 +139,63 @@ public struct iPadChannelsScreen: View {
             }
         }
         .background(Color.Brand.primary)
-        .refreshable { await send(.pullToRefreshTriggered).finish() }
+        .refreshable { send(.pullToRefreshTriggered) }
         .safeAreaInset(edge: .bottom) {
-            FloatingAddButton { send(.addChannelTapped) }
-                .popover(item: $store.scope(state: \.addChannel, action: \.addChannel)) { addChannelStore in
-                    AddChannelScreen(store: addChannelStore)
-                        .frame(width: 400)
-                }
+            HStack {
+                Spacer()
+                FloatingAddButton(action: { send(.addChannelTapped) })
+                    .button
+                    .popover(item: $store.scope(state: \.addChannel, action: \.addChannel)) { addChannelStore in
+                        AddChannelScreen(store: addChannelStore)
+                            .frame(width: 400)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private var newContentFilterRow: some View {
+        HStack(spacing: 8) {
+            filterPill(
+                label: String.localised("generic.all", table: .generic),
+                icon: "line.3.horizontal.decrease.circle",
+                isSelected: !store.showNewOnly,
+                showNewOnly: false
+            )
+
+            filterPill(
+                label: String.localised("generic.newVideos", table: .generic),
+                icon: "sparkles",
+                isSelected: store.showNewOnly,
+                showNewOnly: true
+            )
+
+            Spacer()
+        }
+    }
+
+    private func filterPill(
+        label: String,
+        icon: String,
+        isSelected: Bool,
+        showNewOnly: Bool
+    ) -> some View {
+        Button {
+            send(.newFilterToggled(showNewOnly), animation: .default)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(label)
+            }
+            .font(.subheadline)
+            .fontWeight(.medium)
+            .foregroundStyle(isSelected ? Color.Brand.primary : Color.Text.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.Text.primary : Color.Surface.highlight)
+            .clipShape(Capsule())
         }
     }
 }

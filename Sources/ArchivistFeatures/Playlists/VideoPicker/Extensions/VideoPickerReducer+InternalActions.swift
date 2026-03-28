@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoPickerReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .videosResult(.success(let response)):
             for video in response.data {
@@ -40,8 +43,13 @@ extension VideoPickerReducer {
             state.isAdding = false
             let dismiss = self.dismiss
             return .run { _ in await dismiss() }
-        case .addResult(.failure):
+        case .addResult(.failure(let error)):
             state.isAdding = false
+            state.alert = AlertState {
+                TextState(String(localized: "Failed to add videos"))
+            } message: {
+                TextState(error.localizedDescription)
+            }
             return .none
         default:
             return .none

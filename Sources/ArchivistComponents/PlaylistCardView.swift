@@ -5,7 +5,10 @@ public struct PlaylistCardView: View {
     public let playlist: PlaylistResponse
     public let serverConfig: ServerConfig
 
-    public init(playlist: PlaylistResponse, serverConfig: ServerConfig) {
+    public init(
+        playlist: PlaylistResponse,
+        serverConfig: ServerConfig
+    ) {
         self.playlist = playlist
         self.serverConfig = serverConfig
     }

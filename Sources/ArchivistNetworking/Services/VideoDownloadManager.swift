@@ -5,17 +5,23 @@ public nonisolated protocol VideoDownloadManagerType: Sendable {
     func download(
         url: URL,
         videoId: String,
+        expectedSize: Int64?,
         authHeaders: [String: String],
         onProgress: @escaping @Sendable (Double) -> Void
     ) async throws -> URL
 }
 
 public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
-    public init() {}
+    private let progress: Progress
+
+    public init(progress: Progress) {
+        self.progress = progress
+    }
 
     public func download(
         url: URL,
         videoId: String,
+        expectedSize: Int64?,
         authHeaders: [String: String],
         onProgress: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
@@ -25,11 +31,17 @@ public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
-        let delegate = DownloadDelegate(onProgress: onProgress)
+        let delegate = DownloadDelegate(progress: progress)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
 
-        let (tempURL, response) = try await session.download(for: request, delegate: delegate)
+        // Don't pass delegate to download(for:) — the session-level delegate
+        // handles didWriteData for progress. Passing it here as a task delegate
+        // would override the session delegate and skip progress callbacks.
+        let (tempURL, response) = try await session.download(
+            for: request,
+            delegate: delegate
+        )
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -40,34 +52,14 @@ public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
     }
 }
 
-private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let onProgress: @Sendable (Double) -> Void
+final class DownloadDelegate: NSObject, URLSessionTaskDelegate {
+    private let progress: Progress
 
-    init(onProgress: @escaping @Sendable (Double) -> Void) {
-        self.onProgress = onProgress
+    init(progress: Progress) {
+        self.progress = progress
     }
 
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didWriteData bytesWritten: Int64,
-        totalBytesWritten: Int64,
-        totalBytesExpectedToWrite: Int64
-    ) {
-        if totalBytesExpectedToWrite > 0 {
-            let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-            onProgress(progress)
-        } else {
-            // Content-Length unknown — report bytes written so UI can show activity
-            onProgress(-1)
-        }
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didFinishDownloadingTo location: URL
-    ) {
-        // Handled by the async download(for:delegate:) call
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        progress.addChild(task.progress, withPendingUnitCount: 100)
     }
 }

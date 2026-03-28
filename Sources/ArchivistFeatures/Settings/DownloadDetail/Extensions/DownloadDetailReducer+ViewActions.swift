@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension DownloadDetailReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return .none

@@ -22,6 +22,7 @@ public struct VideoPickerReducer {
         var isSearching = false
         var selectedVideoIds: Set<String> = []
         var isAdding = false
+        @Presents var alert: AlertState<AlertAction>?
 
         var isSearchActive: Bool { !searchQuery.isEmpty }
 
@@ -65,9 +66,12 @@ public struct VideoPickerReducer {
         }
     }
 
+    public enum AlertAction: Equatable, Sendable {}
+
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
+        case alert(PresentationAction<AlertAction>)
         case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
         case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case searchResult(Result<[VideoResponse], Error>)
@@ -103,9 +107,12 @@ public struct VideoPickerReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .alert:
+                return .none
             default:
                 return handleInternalAction(action, state: &state)
             }
         }
+        .ifLet(\.$alert, action: \.alert)
     }
 }

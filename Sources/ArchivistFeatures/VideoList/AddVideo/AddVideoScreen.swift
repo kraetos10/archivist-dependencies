@@ -22,6 +22,24 @@ public struct AddVideoScreen: View {
                     .playing(loopMode: .playOnce)
                     .frame(width: 200, height: 200)
 
+                Toggle(
+                    String.localised("video.fastAdd", table: .videos),
+                    isOn: $store.fastAdd
+                )
+                .tint(Color.Accent.dark)
+
+                Toggle(
+                    String.localised("video.reDownload", table: .videos),
+                    isOn: $store.reDownload
+                )
+                .tint(Color.Accent.dark)
+
+                Toggle(
+                    String.localised("video.autoDownload", table: .videos),
+                    isOn: $store.autoDownload
+                )
+                .tint(Color.Accent.dark)
+
                 TextField(
                     String.localised("video.videoUrl", table: .videos),
                     text: $store.videoInput,
@@ -74,7 +92,7 @@ public struct AddVideoScreen: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 }

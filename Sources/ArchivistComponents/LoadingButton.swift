@@ -1,11 +1,25 @@
 import SwiftUI
 
 public struct LoadingButton: View {
-    public let title: LocalizedStringResource
+    public let title: String
     public let isLoading: Bool
     public let action: () -> Void
 
-    public init(title: LocalizedStringResource, isLoading: Bool, action: @escaping () -> Void) {
+    public init(
+        title: LocalizedStringResource,
+        isLoading: Bool,
+        action: @escaping () -> Void
+    ) {
+        self.title = String(localized: title)
+        self.isLoading = isLoading
+        self.action = action
+    }
+
+    public init(
+        title: String,
+        isLoading: Bool,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.isLoading = isLoading
         self.action = action

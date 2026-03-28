@@ -3,10 +3,16 @@ import ComposableArchitecture
 import Foundation
 
 extension StatsReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
+        case .downloadHistoryToggleTapped:
+            state.isDownloadHistoryExpanded.toggle()
+            return .none
         }
     }
 
@@ -53,6 +59,12 @@ extension StatsReducer {
                     try await statsService.getBiggestChannels(config: config)
                 }
                 await send(.biggestChannelsResult(result))
+            },
+            .run { send in
+                let result = await Result {
+                    try await statsService.getDownloadHistory(config: config)
+                }
+                await send(.downloadHistoryResult(result))
             }
         )
     }

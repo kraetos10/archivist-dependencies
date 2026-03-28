@@ -29,8 +29,9 @@ public struct DownloadsScreen: View {
         ScrollView {
             queueContent
         }
+        .scrollPosition(id: $store.scrollPositionID, anchor: .center)
         .background(Color.Brand.primary.ignoresSafeArea())
-        .refreshable { await send(.pullToRefreshTriggered).finish() }
+        .refreshable { send(.pullToRefreshTriggered) }
         #if os(tvOS)
         .navigationTitle("")
         #else
@@ -45,6 +46,28 @@ public struct DownloadsScreen: View {
         )
         #endif
         .onAppear { send(.viewDidAppear) }
+        #if !os(tvOS)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(selection: Binding(
+                        get: { store.sortOrder },
+                        set: { send(.sortOrderChanged($0)) }
+                    )) {
+                        Text(String.localised("generic.recentlyAdded", table: .generic))
+                            .tag(DownloadSortOrder.newestFirst)
+                        Text(String.localised("generic.oldestAdded", table: .generic))
+                            .tag(DownloadSortOrder.oldestFirst)
+                    } label: {
+                        EmptyView()
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .foregroundStyle(Color.Accent.dark)
+                }
+            }
+        }
+        #endif
         .alert($store.scope(state: \.alert, action: \.alert))
     }
 
@@ -53,9 +76,17 @@ public struct DownloadsScreen: View {
     private var queueContent: some View {
         Group {
             if store.hasLoaded && store.filteredDownloads.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(icon: "arrow.down.circle", title: String.localised("video.empty.noDownloads", table: .videos), description: String.localised("video.empty.downloadsDescription", table: .videos))
+                EmptyStateView(
+                    icon: "arrow.down.circle",
+                    title: String.localised("video.empty.noDownloads", table: .videos),
+                    description: String.localised("video.empty.downloadsDescription", table: .videos)
+                )
             } else if store.hasLoaded && store.filteredDownloads.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(icon: "magnifyingglass", title: String.localised("video.empty.noSearchResults", table: .videos), description: String.localised("video.empty.tryDifferentSearch", table: .videos))
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: String.localised("video.empty.noSearchResults", table: .videos),
+                    description: String.localised("video.empty.tryDifferentSearch", table: .videos)
+                )
             } else {
                 LazyVGrid(columns: columns, spacing: 16) {
                     if store.isLoading && store.downloads.isEmpty {
@@ -103,6 +134,7 @@ public struct DownloadsScreen: View {
                         }
                     }
                 }
+                .animation(.default, value: store.filteredDownloads.map(\.id))
                 .padding()
 
                 if store.isLoadingMore {
@@ -139,12 +171,12 @@ private struct DownloadQueueCardWithPopover: View {
         }
         .contextMenu {
             ShareLink(item: download.youtubeURL) {
-                Label(String.localised("generic.share"), systemImage: "square.and.arrow.up")
+                Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
             }
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label(String.localised("generic.delete"), systemImage: "trash")
+                Label(String.localised("generic.delete", table: .generic), systemImage: "trash")
             }
         }
         .popover(isPresented: $showPopover) {

@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension PlaylistsReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .playlistsResult(.success(let response)):
             return handlePlaylistsLoaded(response, state: &state)
@@ -19,6 +22,31 @@ extension PlaylistsReducer {
         case .addPlaylist(.presented(.subscribeResult(.success))),
              .addPlaylist(.presented(.createCustomResult(.success))):
             return handleSubscribeSucceeded(state: &state)
+        case .playlistDetail(.presented(.unsubscribeResult(.success))):
+            if let playlistId = state.selectedPlaylist?.playlist.playlistId {
+                state.playlists.remove(id: playlistId)
+            }
+            state.selectedPlaylist = nil
+            return .none
+        case .path(.element(_, action: .playlistDetail(.unsubscribeResult(.success)))):
+            if let last = state.path.last,
+               case .playlistDetail(let detail) = last {
+                state.playlists.remove(id: detail.playlist.playlistId)
+            }
+            _ = state.path.popLast()
+            return .none
+        case .path(.element(_, action: .playlistDetail(.delegate(.showVideo(let video, let nextVideos))))),
+             .playlistDetail(.presented(.delegate(.showVideo(let video, let nextVideos)))):
+            @Shared(.appStorage("autoPlayPlaylist")) var autoPlayPlaylist = true
+            state.videoDetail = VideoDetailReducer.State(
+                serverConfig: state.serverConfig,
+                video: video,
+                nextVideos: nextVideos,
+                shouldAutoPlayNextVideo: autoPlayPlaylist
+            )
+            return .none
+        case .path, .addPlaylist, .playlistDetail:
+            return .none
         default:
             return .none
         }
@@ -26,7 +54,10 @@ extension PlaylistsReducer {
 
     // MARK: - Private Handlers
 
-    private func handlePlaylistsLoaded(_ response: PaginatedResponse<PlaylistResponse>, state: inout State) -> Effect<Action> {
+    private func handlePlaylistsLoaded(
+        _ response: PaginatedResponse<PlaylistResponse>,
+        state: inout State
+    ) -> Effect<Action> {
         if state.isLoading {
             state.playlists = IdentifiedArrayOf(uniqueElements: response.data)
         } else {

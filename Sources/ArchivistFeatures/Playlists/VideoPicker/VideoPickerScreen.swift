@@ -19,53 +19,42 @@ public struct VideoPickerScreen: View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVStack(spacing: 0) {
                         if store.isLoading && store.videos.isEmpty {
                             ForEach(VideoResponse.placeholders) { video in
-                                VideoCardView(
-                                    video: video,
-                                    serverConfig: store.serverConfig
+                                VideoRowView(
+                                    title: video.title,
+                                    subtitle: video.channelName,
+                                    thumbnailURL: video.vidThumbUrl.flatMap { store.serverConfig.fullURL(for: $0) },
+                                    badge: video.durationStr
                                 )
                                 .redacted(reason: .placeholder)
                             }
                         } else {
                             ForEach(store.displayedItems) { item in
                                 let isSelected = store.selectedVideoIds.contains(item.id)
-                                Group {
-                                    switch item {
-                                    case .video(let video):
-                                        VideoCardView(
-                                            video: video,
-                                            serverConfig: store.serverConfig
-                                        )
-                                    case .download(let download):
-                                        VideoCardView(
-                                            download: download,
-                                            serverConfig: store.serverConfig
-                                        )
+                                pickerRow(for: item)
+                                    .overlay(alignment: .trailing) {
+                                        if isSelected {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.title2)
+                                                .foregroundStyle(Color.Accent.dark)
+                                                .background(Circle().fill(.white))
+                                                .padding(.trailing, 16)
+                                        }
                                     }
-                                }
-                                .overlay(alignment: .topTrailing) {
-                                    if isSelected {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.title2)
-                                            .foregroundStyle(Color.Accent.dark)
-                                            .background(Circle().fill(.white))
-                                            .padding(8)
+                                    .background(isSelected ? Color.Accent.dark.opacity(0.08) : Color.clear)
+                                    .pressable {
+                                        send(.videoToggled(item))
                                     }
-                                }
-                                .pressable {
-                                    send(.videoToggled(item))
-                                }
-                                .onAppear {
-                                    if item.id == store.lastVideoId {
-                                        send(.lastItemAppeared)
+                                    .onAppear {
+                                        if item.id == store.lastVideoId {
+                                            send(.lastItemAppeared)
+                                        }
                                     }
-                                }
                             }
                         }
                     }
-                    .padding()
                     .padding(.bottom, 80)
 
                     if store.isLoadingMore {
@@ -118,6 +107,26 @@ public struct VideoPickerScreen: View {
                 }
             }
             .onAppear { send(.viewDidAppear) }
+            .alert($store.scope(state: \.alert, action: \.alert))
+        }
+    }
+
+    private func pickerRow(for item: VideoListItem) -> some View {
+        switch item {
+        case .video(let video):
+            VideoRowView(
+                title: video.title,
+                subtitle: "\(video.channelName) · \(video.publishedFormatted ?? "")",
+                thumbnailURL: video.vidThumbUrl.flatMap { store.serverConfig.fullURL(for: $0) },
+                badge: video.durationStr
+            )
+        case .download(let download):
+            VideoRowView(
+                title: download.title ?? "",
+                subtitle: download.channelName ?? "",
+                thumbnailURL: download.thumbURL(config: store.serverConfig),
+                badge: download.duration
+            )
         }
     }
 }

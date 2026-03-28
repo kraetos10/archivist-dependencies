@@ -52,7 +52,12 @@ public nonisolated struct TaskResult: Decodable, Sendable, Equatable {
     public let dateDone: String?
     public let name: String?
 
-    public init(status: String?, result: String?, dateDone: String?, name: String?) {
+    public init(
+        status: String?,
+        result: String?,
+        dateDone: String?,
+        name: String?
+    ) {
         self.status = status
         self.result = result
         self.dateDone = dateDone
@@ -73,7 +78,12 @@ public nonisolated struct TaskNotification: Decodable, Sendable, Equatable {
     public let group: String?
     public let url: String?
 
-    public init(taskId: String?, title: String?, group: String?, url: String?) {
+    public init(
+        taskId: String?,
+        title: String?,
+        group: String?,
+        url: String?
+    ) {
         self.taskId = taskId
         self.title = title
         self.group = group
@@ -115,7 +125,10 @@ public nonisolated struct TaskScheduleResponse: Decodable, Sendable, Equatable {
     public let schedule: String?
     public let config: [String: String]?
 
-    public init(schedule: String?, config: [String: String]?) {
+    public init(
+        schedule: String?,
+        config: [String: String]?
+    ) {
         self.schedule = schedule
         self.config = config
     }

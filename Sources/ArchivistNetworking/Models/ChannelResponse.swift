@@ -1,7 +1,7 @@
 import Foundation
 import IdentifiedCollections
 
-public nonisolated struct ChannelResponse: Decodable, Sendable, Equatable, Identifiable {
+public nonisolated struct ChannelResponse: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let channelId: String
     public let channelName: String
     public let channelDescription: String?
@@ -63,9 +63,9 @@ public nonisolated struct ChannelResponse: Decodable, Sendable, Equatable, Ident
 
     public static let placeholders: IdentifiedArrayOf<ChannelResponse> = {
         var items = IdentifiedArrayOf<ChannelResponse>()
-        for i in 0..<8 {
+        for index in 0..<8 {
             let channel = ChannelResponse(
-                channelId: "placeholder-\(i)",
+                channelId: "placeholder-\(index)",
                 channelName: placeholder.channelName,
                 channelDescription: nil,
                 channelSubs: placeholder.channelSubs,
@@ -131,7 +131,7 @@ public nonisolated struct ChannelResponse: Decodable, Sendable, Equatable, Ident
     }
 }
 
-public nonisolated struct ChannelOverwrites: Decodable, Sendable, Equatable {
+public nonisolated struct ChannelOverwrites: Decodable, Sendable, Equatable, Hashable {
     public let downloadFormat: String?
     public let autodelete: Int?
     public let indexPlaylists: Bool?
@@ -162,7 +162,11 @@ public nonisolated struct ChannelAggsResponse: Decodable, Sendable, Equatable {
     public let totalDuration: Int?
     public let totalSize: Int?
 
-    public init(totalItems: Int?, totalDuration: Int?, totalSize: Int?) {
+    public init(
+        totalItems: Int?,
+        totalDuration: Int?,
+        totalSize: Int?
+    ) {
         self.totalItems = totalItems
         self.totalDuration = totalDuration
         self.totalSize = totalSize
@@ -187,7 +191,10 @@ public nonisolated struct ChannelNavItem: Decodable, Sendable, Equatable {
     public let channelId: String?
     public let channelName: String?
 
-    public init(channelId: String?, channelName: String?) {
+    public init(
+        channelId: String?,
+        channelName: String?
+    ) {
         self.channelId = channelId
         self.channelName = channelName
     }

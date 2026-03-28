@@ -2,6 +2,30 @@
 
 Swift packages powering the iArchivist iOS and tvOS client for [TubeArchivist](https://www.tubearchivist.com) — a self-hosted YouTube media server.
 
+## Screenshots
+
+### iPhone
+
+| Home | Channels | Channel Detail | Video Detail |
+|------|----------|----------------|--------------|
+| ![Home Light](screenshots/iPhone/home-light.webp) | ![Channels Light](screenshots/iPhone/channels-light.webp) | ![Channel Detail Light](screenshots/iPhone/channel-detail-light.webp) | ![Video Detail Light](screenshots/iPhone/video-detail-light.webp) |
+| ![Home Dark](screenshots/iPhone/home-dark.webp) | ![Channels Dark](screenshots/iPhone/channels-dark.webp) | ![Channel Detail Dark](screenshots/iPhone/channel-detail-dark.webp) | ![Video Detail Dark](screenshots/iPhone/video-detail-dark.webp) |
+
+### iPad
+
+| Home | Channels | Channel Detail | Video Detail |
+|------|----------|----------------|--------------|
+| ![Home Light](screenshots/iPad/home-light.webp) | ![Channels Light](screenshots/iPad/channels-light.webp) | ![Channel Detail Light](screenshots/iPad/channel-detail-light.webp) | ![Video Detail Light](screenshots/iPad/video-detail-light.webp) |
+| ![Home Dark](screenshots/iPad/home-dark.webp) | ![Channels Dark](screenshots/iPad/channels-dark.webp) | ![Channel Detail Dark](screenshots/iPad/channel-detail-dark.webp) | ![Video Detail Dark](screenshots/iPad/video-detail-dark.webp) |
+
+### Apple TV
+
+| Home | Channels |
+|------|----------|
+| ![Home](screenshots/TV/home.webp) | ![Channels](screenshots/TV/channels.webp) |
+
+[Apple TV Demo Video](screenshots/TV/atv-demo.mov)
+
 ## Packages
 
 ### ArchivistNetworking

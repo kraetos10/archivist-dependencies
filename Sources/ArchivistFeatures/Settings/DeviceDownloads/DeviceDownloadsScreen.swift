@@ -8,7 +8,7 @@ import SwiftUI
 
 @ViewAction(for: DeviceDownloadsReducer.self)
 public struct DeviceDownloadsScreen: View {
-    public let store: StoreOf<DeviceDownloadsReducer>
+    @Bindable public var store: StoreOf<DeviceDownloadsReducer>
 
     public init(store: StoreOf<DeviceDownloadsReducer>) {
         self.store = store
@@ -17,23 +17,73 @@ public struct DeviceDownloadsScreen: View {
     @FetchAll(DeviceDownload.order { $0.createdAt.desc() }) var downloads
     @Environment(\.horizontalSizeClass) private var sizeClass
 
+    private let iPhoneColumns = [GridItem(.flexible())]
+    private let iPadColumns = [GridItem(.adaptive(minimum: 300), spacing: 16)]
+
     public var body: some View {
         ScrollView {
             if downloads.isEmpty {
                 emptyStateView
-            } else if sizeClass == .regular {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16)], spacing: 16) {
-                    ForEach(downloads) { download in
-                        downloadCard(download)
-                    }
-                }
-                .padding()
             } else {
-                LazyVStack(spacing: 0) {
+                LazyVGrid(
+                    columns: sizeClass == .regular ? iPadColumns : iPhoneColumns,
+                    spacing: 16
+                ) {
                     ForEach(downloads) { download in
-                        downloadRow(download)
+                        VideoCardView(
+                            data: cardData(for: download),
+                            serverConfig: store.serverConfig
+                        )
+                        .overlay(alignment: .bottom) {
+                            if download.status == .downloading {
+                                ProgressView(value: min(max(download.progress, 0), 1.0))
+                                    .tint(Color.Accent.dark)
+                                    .scaleEffect(y: 2)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 4)
+                                    .animation(.easeInOut(duration: 0.3), value: download.progress)
+                            }
+                        }
+                        .padding(.bottom, download.status == .downloading ? 12 : 0)
+                        .contextMenu {
+                            if let url = URL(string: "https://www.youtube.com/watch?v=\(download.id)") {
+                                ShareLink(item: url) {
+                                    Label(
+                                        String.localised("generic.share", table: .generic),
+                                        systemImage: "square.and.arrow.up"
+                                    )
+                                }
+                            }
+
+                            if download.status == .completed {
+                                Button {
+                                    send(.addToPlaylistTapped(download))
+                                } label: {
+                                    Label(
+                                        String.localised("video.addToPlaylist", table: .videos),
+                                        systemImage: "text.badge.plus"
+                                    )
+                                }
+                            }
+
+                            Button(role: .destructive) {
+                                send(.deleteTapped(download.id))
+                            } label: {
+                                Label(
+                                    String.localised("video.deleteDownload", table: .videos),
+                                    systemImage: "trash"
+                                )
+                            }
+                        }
+                        .pressable { send(.downloadTapped(download)) }
+                        .transition(.asymmetric(
+                            insertion: .identity,
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
                     }
                 }
+                .animation(.default, value: downloads.map(\.id))
+                .padding()
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -41,144 +91,51 @@ public struct DeviceDownloadsScreen: View {
         }
         .background(Color.Brand.primary)
         .onAppear { send(.viewDidAppear) }
-        #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
         .navigationTitle(String.localised("video.deviceDownloads", table: .videos))
-    }
-
-    private func downloadRow(_ download: DeviceDownload) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            thumbnailView(download)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(download.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.Text.primary)
-                    .lineLimit(2)
-
-                HStack(spacing: 0) {
-                    Text(download.channelName)
-                        .font(.caption)
-                        .foregroundStyle(Color.Brand.secondary)
-
-                    Spacer()
-
-                    statusView(download)
-                }
-
-                if download.status == .downloading {
-                    ProgressView(value: min(download.progress, 1.0))
-                        .tint(Color.Accent.dark)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-        .contextMenu {
-            if download.status == .completed {
-                Button(role: .destructive) {
-                    send(.deleteTapped(download.id))
-                } label: {
-                    Label(String.localised("video.deleteDownload", table: .videos), systemImage: "trash")
-                }
-            }
-        }
-        .pressable { send(.downloadTapped(download)) }
-    }
-
-    private func downloadCard(_ download: DeviceDownload) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            thumbnailView(download)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(download.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.Text.primary)
-                    .lineLimit(2)
-
-                Text(download.channelName)
-                    .font(.caption)
-                    .foregroundStyle(Color.Brand.secondary)
-
-                statusView(download)
-
-                if download.status == .downloading {
-                    ProgressView(value: min(download.progress, 1.0))
-                        .tint(Color.Accent.dark)
-                }
-            }
-            .padding(.horizontal, 4)
-        }
-        .contextMenu {
-            if download.status == .completed {
-                Button(role: .destructive) {
-                    send(.deleteTapped(download.id))
-                } label: {
-                    Label(String.localised("video.deleteDownload", table: .videos), systemImage: "trash")
-                }
-            }
-        }
-        .pressable { send(.downloadTapped(download)) }
-    }
-
-    @ViewBuilder
-    private func thumbnailView(_ download: DeviceDownload) -> some View {
-        if let thumbPath = download.thumbUrl,
-           let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
-            AsyncImage(url: thumbURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(16 / 9, contentMode: .fill)
-                default:
-                    Rectangle()
-                        .fill(Color.Brand.secondary.opacity(0.3))
-                        .aspectRatio(16 / 9, contentMode: .fill)
-                }
-            }
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipped()
-        } else {
-            Rectangle()
-                .fill(Color.Brand.secondary.opacity(0.3))
-                .aspectRatio(16 / 9, contentMode: .fit)
+        .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
+            PlaylistPickerScreen(store: pickerStore)
         }
     }
 
-    @ViewBuilder
-    private func statusView(_ download: DeviceDownload) -> some View {
-        switch download.status {
-        case .downloading:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Color.Accent.dark)
-                Text(download.progress > 0
-                     ? "\(Int(download.progress * 100))%"
-                     : String.localised("video.downloading", table: .videos))
-                    .font(.caption)
-                    .foregroundStyle(Color.Accent.dark)
+    private func cardData(for download: DeviceDownload) -> CardData {
+        let fileSizeStr: String? = {
+            guard let bytes = download.fileSize else { return nil }
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .file
+            return formatter.string(fromByteCount: Int64(bytes))
+        }()
+
+        let statusText: String? = {
+            switch download.status {
+            case .downloading:
+                return download.progress > 0
+                    ? "\(Int(download.progress * 100))%"
+                    : String.localised("video.downloading", table: .videos)
+            case .failed:
+                return String.localised("generic.tapToRetry", table: .generic)
+            case .completed, .none:
+                return nil
             }
-        case .completed:
-            Label(String.localised("video.downloaded", table: .videos), systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(Color.Accent.dark)
-        case .failed:
-            Label(String.localised("generic.tapToRetry"), systemImage: "arrow.clockwise.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.red)
-        case .none:
-            EmptyView()
-        }
+        }()
+
+        return CardData(
+            title: download.title,
+            channelName: download.channelName,
+            thumbPath: download.thumbUrl,
+            duration: nil,
+            publishedRelative: statusText,
+            isWatched: false,
+            isPartiallyWatched: false,
+            watchProgress: 0,
+            isPending: false,
+            isDownloaded: download.status == .completed,
+            fileSize: fileSizeStr
+        )
     }
 
     private var storageOverlay: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 10) {
             if store.totalStorage > 0 {
                 let usedFraction = Double(store.totalStorage - store.availableStorage) / Double(store.totalStorage)
                 let downloadsFraction = Double(store.downloadsSize) / Double(store.totalStorage)
@@ -194,26 +151,26 @@ public struct DeviceDownloadsScreen: View {
                             .frame(width: geo.size.width * downloadsFraction)
                     }
                 }
-                .frame(height: 6)
+                .frame(height: 10)
             }
 
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(Color.Accent.dark)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
                 Text("Downloads: \(formattedBytes(store.downloadsSize))")
-                    .font(.caption)
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.Text.primary)
 
                 Spacer()
 
-                Text("\(formattedBytes(store.availableStorage)) available of \(formattedBytes(store.totalStorage))")
-                    .font(.caption)
+                Text("\(formattedBytes(store.availableStorage)) available")
+                    .font(.subheadline)
                     .foregroundStyle(Color.Brand.secondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .background(.ultraThinMaterial)
     }
 

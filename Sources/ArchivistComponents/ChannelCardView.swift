@@ -4,10 +4,22 @@ import SwiftUI
 public struct ChannelCardView: View {
     public let channel: ChannelResponse
     public let serverConfig: ServerConfig
+    public let hasNewContent: Bool
 
-    public init(channel: ChannelResponse, serverConfig: ServerConfig) {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    public init(
+        channel: ChannelResponse,
+        serverConfig: ServerConfig,
+        hasNewContent: Bool = false
+    ) {
         self.channel = channel
         self.serverConfig = serverConfig
+        self.hasNewContent = hasNewContent
+    }
+
+    private var avatarSize: CGFloat {
+        sizeClass == .regular ? 100 : 80
     }
 
     public var body: some View {
@@ -15,7 +27,7 @@ public struct ChannelCardView: View {
             thumbnailView
             infoView
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, sizeClass == .regular ? 20 : 16)
         .frame(maxWidth: .infinity)
         .background(Color.Surface.highlight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -23,38 +35,25 @@ public struct ChannelCardView: View {
     }
 
     private var thumbnailView: some View {
-        Group {
-            if let thumbURL = thumbnailURL {
-                AsyncImage(url: thumbURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                    case .failure:
-                        thumbnailPlaceholder
-                    case .empty:
-                        thumbnailPlaceholder
-                            .overlay {
-                                ProgressView()
-                                    .tint(Color.Progress.tint)
-                            }
-                    @unknown default:
-                        thumbnailPlaceholder
-                    }
+        ChannelThumbView(url: thumbnailURL, size: avatarSize)
+            .overlay(alignment: .topTrailing) {
+                if hasNewContent {
+                    Circle()
+                        .fill(Color.Accent.dark)
+                        .frame(width: 14, height: 14)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.Surface.highlight, lineWidth: 2)
+                        )
+                        .offset(x: 2, y: -2)
                 }
-            } else {
-                thumbnailPlaceholder
             }
-        }
-        .frame(width: 80, height: 80)
-        .clipShape(Circle())
     }
 
     private var infoView: some View {
         VStack(spacing: 4) {
             Text(channel.channelName)
-                .font(.subheadline)
+                .font(sizeClass == .regular ? .body : .subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(Color.Text.primary)
                 .lineLimit(1)
@@ -62,17 +61,11 @@ public struct ChannelCardView: View {
 
             if let subs = channel.formattedSubs {
                 Text(String.localised("\(subs) subscribers"))
-                    .font(.caption)
+                    .font(sizeClass == .regular ? .subheadline : .caption)
                     .foregroundStyle(Color.Brand.secondary)
             }
         }
         .padding(.horizontal, 12)
-    }
-
-    private var thumbnailPlaceholder: some View {
-        Circle()
-            .fill(Color.Brand.secondary.opacity(0.3))
-            .frame(width: 80, height: 80)
     }
 
     private var thumbnailURL: URL? {

@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension AddPlaylistReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .subscribeResult(.success):
             state.isSubscribing = false

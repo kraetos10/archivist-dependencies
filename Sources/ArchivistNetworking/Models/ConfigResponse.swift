@@ -5,7 +5,11 @@ public nonisolated struct AppConfigResponse: Decodable, Sendable, Equatable {
     public let downloads: DownloadsConfig?
     public let application: ApplicationConfig?
 
-    public init(subscriptions: SubscriptionsConfig?, downloads: DownloadsConfig?, application: ApplicationConfig?) {
+    public init(
+        subscriptions: SubscriptionsConfig?,
+        downloads: DownloadsConfig?,
+        application: ApplicationConfig?
+    ) {
         self.subscriptions = subscriptions
         self.downloads = downloads
         self.application = application
@@ -17,7 +21,11 @@ public nonisolated struct SubscriptionsConfig: Decodable, Sendable, Equatable {
     public let autoStart: Bool?
     public let pageSize: Int?
 
-    public init(channelSize: Int?, autoStart: Bool?, pageSize: Int?) {
+    public init(
+        channelSize: Int?,
+        autoStart: Bool?,
+        pageSize: Int?
+    ) {
         self.channelSize = channelSize
         self.autoStart = autoStart
         self.pageSize = pageSize
@@ -84,7 +92,10 @@ public nonisolated struct ApplicationConfig: Decodable, Sendable, Equatable {
     public let enableSnapshot: Bool?
     public let enableCast: Bool?
 
-    public init(enableSnapshot: Bool?, enableCast: Bool?) {
+    public init(
+        enableSnapshot: Bool?,
+        enableCast: Bool?
+    ) {
         self.enableSnapshot = enableSnapshot
         self.enableCast = enableCast
     }
@@ -108,7 +119,11 @@ public nonisolated struct PingResponse: Decodable, Sendable, Equatable {
     public let user: Int?
     public let version: String?
 
-    public init(response: String?, user: Int?, version: String?) {
+    public init(
+        response: String?,
+        user: Int?,
+        version: String?
+    ) {
         self.response = response
         self.user = user
         self.version = version
@@ -119,7 +134,10 @@ public nonisolated struct RefreshResponse: Decodable, Sendable, Equatable {
     public let state: String?
     public let totalQueued: Int?
 
-    public init(state: String?, totalQueued: Int?) {
+    public init(
+        state: String?,
+        totalQueued: Int?
+    ) {
         self.state = state
         self.totalQueued = totalQueued
     }
@@ -136,7 +154,12 @@ public nonisolated struct AsyncTaskResponse: Decodable, Sendable, Equatable {
     public let message: String?
     public let filename: String?
 
-    public init(taskId: String?, status: String?, message: String?, filename: String?) {
+    public init(
+        taskId: String?,
+        status: String?,
+        message: String?,
+        filename: String?
+    ) {
         self.taskId = taskId
         self.status = status
         self.message = message
@@ -157,7 +180,12 @@ public nonisolated struct BackupResponse: Decodable, Sendable, Equatable {
     public let timestamp: String?
     public let reason: String?
 
-    public init(filename: String?, fileSize: Int?, timestamp: String?, reason: String?) {
+    public init(
+        filename: String?,
+        fileSize: Int?,
+        timestamp: String?,
+        reason: String?
+    ) {
         self.filename = filename
         self.fileSize = fileSize
         self.timestamp = timestamp
@@ -179,7 +207,13 @@ public nonisolated struct SnapshotResponse: Decodable, Sendable, Equatable {
     public let startTime: String?
     public let endTime: String?
 
-    public init(id: String?, state: String?, esVersion: String?, startTime: String?, endTime: String?) {
+    public init(
+        id: String?,
+        state: String?,
+        esVersion: String?,
+        startTime: String?,
+        endTime: String?
+    ) {
         self.id = id
         self.state = state
         self.esVersion = esVersion

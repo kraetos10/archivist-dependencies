@@ -11,6 +11,7 @@ public extension String {
 
 public enum LocalisationTable: String {
     case `default` = "Localizable"
+    case generic = "Generic"
     case settings = "Settings"
     case videos = "Videos"
     case login = "Login"

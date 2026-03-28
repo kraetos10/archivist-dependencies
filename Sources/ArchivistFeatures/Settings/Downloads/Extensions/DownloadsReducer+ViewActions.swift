@@ -4,7 +4,10 @@ import ComposableArchitecture
 import Foundation
 
 extension DownloadsReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleOnAppear(state: &state)
@@ -16,6 +19,8 @@ extension DownloadsReducer {
             return handleDownloadTapped(download, state: &state)
         case .deleteTapped(let download):
             return handleDeleteTapped(download, state: &state)
+        case .sortOrderChanged(let order):
+            return handleSortOrderChanged(order, state: &state)
         }
     }
 
@@ -31,17 +36,41 @@ extension DownloadsReducer {
         guard !state.isLoading else { return .none }
         state.isLoading = true
         state.currentPage = 1
+        state.lastPage = 1
         return fetchDownloads(config: state.serverConfig, page: 1)
     }
 
     private func handleLoadNextPage(state: inout State) -> Effect<Action> {
-        guard state.currentPage < state.lastPage, !state.isLoadingMore else { return .none }
-        state.isLoadingMore = true
-        let nextPage = state.currentPage + 1
-        return fetchDownloads(config: state.serverConfig, page: nextPage)
+        switch state.sortOrder {
+        case .newestFirst:
+            guard state.currentPage > 1, !state.isLoadingMore else { return .none }
+            state.isLoadingMore = true
+            return fetchDownloads(config: state.serverConfig, page: state.currentPage - 1)
+        case .oldestFirst:
+            guard state.currentPage < state.lastPage, !state.isLoadingMore else { return .none }
+            state.isLoadingMore = true
+            return fetchDownloads(config: state.serverConfig, page: state.currentPage + 1)
+        }
     }
 
-    private func handleDownloadTapped(_ download: DownloadResponse, state: inout State) -> Effect<Action> {
+    private func handleSortOrderChanged(
+        _ order: DownloadSortOrder,
+        state: inout State
+    ) -> Effect<Action> {
+        guard order != state.sortOrder else { return .none }
+        state.sortOrder = order
+        state.downloads = []
+        state.currentPage = 1
+        state.lastPage = 1
+        state.isLoading = true
+        state.hasLoaded = false
+        return fetchDownloads(config: state.serverConfig, page: 1)
+    }
+
+    private func handleDownloadTapped(
+        _ download: DownloadResponse,
+        state: inout State
+    ) -> Effect<Action> {
         #if os(tvOS)
         state.alert = AlertState {
             TextState(download.title ?? download.youtubeId)
@@ -50,7 +79,7 @@ extension DownloadsReducer {
                 TextState(String.localised("video.downloadNow", table: .videos))
             }
             ButtonState(role: .cancel) {
-                TextState(String.localised("generic.cancel"))
+                TextState(String.localised("generic.cancel", table: .generic))
             }
         } message: {
             TextState(String.localised("video.confirmDownload", table: .videos))
@@ -64,7 +93,10 @@ extension DownloadsReducer {
         return .none
     }
 
-    private func handleDeleteTapped(_ download: DownloadResponse, state: inout State) -> Effect<Action> {
+    private func handleDeleteTapped(
+        _ download: DownloadResponse,
+        state: inout State
+    ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = download.youtubeId
         let downloadService = self.downloadService
@@ -76,7 +108,10 @@ extension DownloadsReducer {
         }
     }
 
-    func fetchDownloads(config: ServerConfig, page: Int) -> Effect<Action> {
+    func fetchDownloads(
+        config: ServerConfig,
+        page: Int
+    ) -> Effect<Action> {
         let downloadService = self.downloadService
         return .run { send in
             let result = await Result {

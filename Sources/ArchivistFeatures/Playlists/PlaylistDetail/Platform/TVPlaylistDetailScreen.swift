@@ -21,7 +21,7 @@ public struct TVPlaylistDetailScreen: View {
                 Section {
                     entriesContent
                 } header: {
-                    PinnedSectionHeader(title: String.localised("generic.videos"))
+                    PinnedSectionHeader(title: String.localised("generic.videos", table: .generic))
                 }
                 .focusSection()
             }
@@ -107,10 +107,15 @@ public struct TVPlaylistDetailScreen: View {
                     .padding(.top, 48)
             } else {
                 ForEach(Array(store.entries.enumerated()), id: \.element.id) { index, entry in
+                    let isAvailable = entry.youtubeId.map { store.availableVideoIDs.contains($0) } ?? false
                     Button {
-                        send(.entryTapped(entry))
+                        if isAvailable {
+                            send(.entryTapped(entry))
+                        } else {
+                            send(.queueServerDownloadTapped(entry))
+                        }
                     } label: {
-                        entryRow(entry, index: index)
+                        entryRow(entry, index: index, isAvailable: isAvailable)
                     }
                     .buttonStyle(.plain)
                 }
@@ -119,7 +124,11 @@ public struct TVPlaylistDetailScreen: View {
         .padding(.bottom, 48)
     }
 
-    private func entryRow(_ entry: PlaylistEntry, index: Int) -> some View {
+    private func entryRow(
+        _ entry: PlaylistEntry,
+        index: Int,
+        isAvailable: Bool = true
+    ) -> some View {
         HStack(spacing: 24) {
             if let thumbURL = entry.thumbURL(config: store.serverConfig) {
                 AsyncImage(url: thumbURL) { phase in
@@ -156,7 +165,14 @@ public struct TVPlaylistDetailScreen: View {
             }
 
             Spacer()
+
+            if !isAvailable {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title3)
+                    .foregroundStyle(Color.Accent.dark)
+            }
         }
+        .opacity(isAvailable ? 1 : 0.6)
         .padding(.horizontal, 48)
         .padding(.vertical, 12)
     }

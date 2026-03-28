@@ -18,7 +18,11 @@ public struct ActiveTaskView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .tint(Color.Accent.dark)
-                        Text(active.currentStep.isEmpty ? String.localised("video.downloading", table: .videos) : active.currentStep)
+                        Text(
+                            active.currentStep.isEmpty
+                                ? String.localised("video.downloading", table: .videos)
+                                : active.currentStep
+                        )
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Accent.dark)
@@ -48,7 +52,9 @@ public struct ActiveTaskView: View {
                     }
                 }
                 .padding(.vertical, 4)
-
+            } header: {
+                Text(String.localised("settings.activeTasks", table: .settings))
+            } footer: {
                 Button {
                     send(.cancelTaskTapped)
                 } label: {
@@ -56,21 +62,15 @@ public struct ActiveTaskView: View {
                         ProgressView()
                             .tint(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
                     } else {
                         Text(String.localised("settings.cancelTask", table: .settings))
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
                 .disabled(store.isCancelling)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            } header: {
-                Text(String.localised("settings.activeTasks", table: .settings))
             }
         }
     }

@@ -154,20 +154,6 @@ private enum LocalVideoStorageKey: DependencyKey {
     static var testValue: LocalVideoStorageType { LocalVideoStorage() }
 }
 
-// MARK: - Video Download Manager
-
-extension DependencyValues {
-    public var videoDownloadManager: VideoDownloadManagerType {
-        get { self[VideoDownloadManagerKey.self] }
-        set { self[VideoDownloadManagerKey.self] = newValue }
-    }
-}
-
-private enum VideoDownloadManagerKey: DependencyKey {
-    static var liveValue: VideoDownloadManagerType { VideoDownloadManager() }
-    static var testValue: VideoDownloadManagerType { VideoDownloadManager() }
-}
-
 // MARK: - Health Service
 
 extension DependencyValues {

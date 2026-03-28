@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension StatsReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .videoStatsResult(.success(let video)):
             state.videoStats = video
@@ -47,6 +50,13 @@ extension StatsReducer {
         case .biggestChannelsResult(.failure):
             state.loadedSections.insert(.biggestChannels)
             return checkAllLoaded(state: &state)
+        case .downloadHistoryResult(.success(let history)):
+            state.downloadHistory = history
+            state.loadedSections.insert(.downloadHistory)
+            return checkAllLoaded(state: &state)
+        case .downloadHistoryResult(.failure):
+            state.loadedSections.insert(.downloadHistory)
+            return checkAllLoaded(state: &state)
         default:
             return .none
         }
@@ -55,7 +65,7 @@ extension StatsReducer {
     // MARK: - Private Helpers
 
     private func checkAllLoaded(state: inout State) -> Effect<Action> {
-        let allSections: Set<StatsSection> = [.video, .channel, .playlist, .download, .watch, .biggestChannels]
+        let allSections: Set<StatsSection> = Set(StatsSection.allCases)
         if state.loadedSections == allSections {
             state.isLoading = false
         }

@@ -3,34 +3,26 @@ import ComposableArchitecture
 import Foundation
 
 extension SettingsReducer {
-    public func handleInternalAction(_ action: Action, state: inout State) -> Effect<Action> {
+    public func handleInternalAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .activeTask(.downloadCompleted):
-            return .send(.downloads(.view(.pullToRefreshTriggered)))
+            // If the Downloads screen is currently on the stack, trigger a refresh
+            // on the topmost entry that is a downloads screen.
+            for (id, element) in zip(state.path.ids, state.path) {
+                if case .downloads = element {
+                    return .send(.path(.element(id: id, action: .downloads(.view(.pullToRefreshTriggered)))))
+                }
+            }
+            return .none
         case .rescanSubscriptionsResult(.success):
             state.isRescanningSubscriptions = false
             return .send(.activeTask(.view(.startPolling)))
         case .rescanSubscriptionsResult(.failure):
             state.isRescanningSubscriptions = false
             return .none
-        case .history(.delegate(.videoSelected(let video))):
-            state.videoDetail = VideoDetailReducer.State(
-                serverConfig: state.serverConfig,
-                video: video,
-                nextVideos: []
-            )
-            return .none
-        #if !os(tvOS)
-        case .deviceDownloads(.delegate(.playVideo(let video))):
-            state.videoDetail = VideoDetailReducer.State(
-                serverConfig: state.serverConfig,
-                video: video,
-                nextVideos: []
-            )
-            return .none
-        case .deviceDownloads:
-            return .none
-        #endif
         case .videoDetail:
             return .none
         case .reAuthResult(.success(let token)):
@@ -41,11 +33,16 @@ extension SettingsReducer {
                 apiToken: token,
                 useHTTP: state.serverConfig.useHTTP
             )
-            return .none
-        case .reAuthResult(.failure):
+            return .send(.didRefreshToken(token))
+        case .reAuthResult(.failure(let error)):
             state.isReAuthenticating = false
+            state.alert = AlertState {
+                TextState(String.localised("generic.error", table: .generic))
+            } message: {
+                TextState(error.localizedDescription)
+            }
             return .none
-        case .didRequestLogout, .downloads, .stats, .activeTask, .history:
+        case .didRequestLogout, .activeTask:
             return .none
         default:
             return .none

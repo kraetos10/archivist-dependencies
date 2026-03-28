@@ -3,7 +3,10 @@ import ComposableArchitecture
 import Foundation
 
 extension ActiveTaskReducer {
-    public func handleViewAction(_ action: Action.View, state: inout State) -> Effect<Action> {
+    public func handleViewAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
         switch action {
         case .startPolling:
             guard !state.isPolling else { return .none }

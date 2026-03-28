@@ -10,10 +10,12 @@ public struct ChannelsScreen: View {
         self.store = store
     }
 
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     public var body: some View {
-        if sizeClass == .regular {
+        if isIPad {
             iPadChannelsScreen(store: store)
         } else {
             iPhoneChannelsScreen(store: store)

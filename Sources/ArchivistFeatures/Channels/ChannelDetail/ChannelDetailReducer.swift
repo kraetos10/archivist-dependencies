@@ -2,6 +2,11 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
+public enum ChannelVideoFilter: Sendable, Equatable {
+    case all
+    case unwatched
+}
+
 @Reducer
 public struct ChannelDetailReducer: Sendable {
     public init() {}
@@ -18,7 +23,20 @@ public struct ChannelDetailReducer: Sendable {
         var pendingDownloads: IdentifiedArrayOf<DownloadResponse> = []
         var isLoadingDownloads = false
         var hasLoadedDownloads = false
+        var showNewestDownloadsFirst = true
         var isDescriptionExpanded = false
+        var videoFilter: ChannelVideoFilter = .unwatched
+        var videoSortOrder: VideoSortOrder = .published
+        var newContentSince: Date?
+
+        var filteredVideos: IdentifiedArrayOf<VideoResponse> {
+            switch videoFilter {
+            case .all:
+                return videos
+            case .unwatched:
+                return videos.filter { !$0.isWatched }
+            }
+        }
 
         @Presents var alert: AlertState<AlertAction>?
 
@@ -48,6 +66,7 @@ public struct ChannelDetailReducer: Sendable {
         case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
         case unsubscribeResult(Result<Void, Error>)
+        case deleteVideoResult(Result<String, Error>)
 
         @CasePathable
         public enum Delegate: Equatable, Sendable {
@@ -62,12 +81,22 @@ public struct ChannelDetailReducer: Sendable {
             case downloadCardTapped(DownloadResponse)
             case unsubscribeTapped
             case descriptionToggleTapped
+            case videoFilterChanged(ChannelVideoFilter)
+            case downloadToDeviceTapped(VideoResponse)
+            case deleteFromDeviceTapped(VideoResponse)
+            case markAsWatchedTapped(VideoResponse)
+            case deleteFromServerTapped(VideoResponse)
+            case downloadSortToggled
+            case videoSortOrderChanged(VideoSortOrder)
         }
     }
 
     @Dependency(\.videoService) var videoService
     @Dependency(\.downloadService) var downloadService
     @Dependency(\.channelService) var channelService
+    @Dependency(\.persistentDownloadManager) var persistentDownloadManager
+    @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
+    @Dependency(\.localVideoStorage) var localVideoStorage
 
     public var body: some Reducer<State, Action> {
         Reduce { state, action in

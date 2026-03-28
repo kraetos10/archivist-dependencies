@@ -166,6 +166,17 @@
         }
       }
     },
+    "video.markAsUnwatched": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark as Unwatched"
+          }
+        }
+      }
+    },
     "video.addToPlaylist": {
       "extractionState": "manual",
       "localizations": {
@@ -474,6 +485,28 @@
         }
       }
     },
+    "video.empty.noContinueWatching": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Videos to Continue"
+          }
+        }
+      }
+    },
+    "video.empty.continueWatchingDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videos you've started watching will appear here."
+          }
+        }
+      }
+    },
     "video.downloadsPending": {
       "extractionState": "manual",
       "localizations": {
@@ -491,7 +524,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pending Downloads"
+            "value": "Available Videos"
           }
         }
       }
@@ -584,6 +617,182 @@
         }
       }
     },
+    "video.autoplayPlaylist": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoplay Playlist"
+          }
+        }
+      }
+    },
+    "video.useVLCPlayer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use VLC Video Player"
+          }
+        }
+      }
+    },
+    "video.useVLCPlayerSubtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable if your videos don't play. Supports non-H.264 formats like HEVC, AV1, and VP9."
+          }
+        }
+      }
+    },
+    "video.vlcPrebuffer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prebuffer for instant seek"
+          }
+        }
+      }
+    },
+    "video.vlcPrebufferSubtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads the video in the background while playing so seeks are instant. Uses extra data."
+          }
+        }
+      }
+    },
+    "video.prebuffer.header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback"
+          }
+        }
+      }
+    },
+    "video.prebuffer.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, each played video is downloaded in the background so you can seek instantly once the download finishes. Cached files are kept for 24 hours."
+          }
+        }
+      }
+    },
+    "video.prebuffer.wifiOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi Only"
+          }
+        }
+      }
+    },
+    "video.prebuffer.wifiOnlySubtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only prebuffer when connected to Wi-Fi to save mobile data."
+          }
+        }
+      }
+    },
+    "video.cache.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback Cache"
+          }
+        }
+      }
+    },
+    "video.cache.header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage"
+          }
+        }
+      }
+    },
+    "video.cache.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cached videos are kept for 24 hours so re-watching is instant. Files older than that are removed automatically."
+          }
+        }
+      }
+    },
+    "video.cache.totalSize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total size"
+          }
+        }
+      }
+    },
+    "video.cache.videos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videos"
+          }
+        }
+      }
+    },
+    "video.cache.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Cache"
+          }
+        }
+      }
+    },
+    "video.cache.row": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback Cache"
+          }
+        }
+      }
+    },
     "video.playback": {
       "extractionState": "manual",
       "localizations": {
@@ -613,6 +822,61 @@
           "stringUnit": {
             "state": "translated",
             "value": "Try a different search term."
+          }
+        }
+      }
+    },
+    "video.fastAdd": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast Add"
+          }
+        }
+      }
+    },
+    "video.reDownload": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-Download"
+          }
+        }
+      }
+    },
+    "video.autoDownload": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto Download"
+          }
+        }
+      }
+    },
+    "video.confirmDeleteFromServer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This will permanently delete this video from your server."
+          }
+        }
+      }
+    },
+    "video.confirmDeleteFromServerWithLocal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This will permanently delete this video from your server and remove the downloaded copy from this device."
           }
         }
       }
