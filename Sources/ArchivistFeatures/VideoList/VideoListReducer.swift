@@ -183,6 +183,9 @@ public struct VideoListReducer {
             case .selectedVideoDetail(.delegate(.didRequestMinimize)):
                 state.selectedVideo = nil
                 return .none
+            case .selectedVideoDetail(.delegate(.didDismiss(let videoId))):
+                state.selectedVideo = nil
+                return refreshVideo(videoId: videoId, config: state.serverConfig)
             case .selectedVideoDetail(.serverDeleteResult(.success)):
                 state.selectedVideo = nil
                 return .send(.view(.pullToRefreshTriggered))
@@ -191,11 +194,17 @@ public struct VideoListReducer {
             case .presentedVideo(.presented(.delegate(.didRequestMinimize))):
                 state.presentedVideo = nil
                 return .none
+            case .presentedVideo(.presented(.delegate(.didDismiss(let videoId)))):
+                state.presentedVideo = nil
+                return refreshVideo(videoId: videoId, config: state.serverConfig)
             case .presentedVideo(.presented(.serverDeleteResult(.success))):
                 state.presentedVideo = nil
                 return .send(.view(.pullToRefreshTriggered))
             case .presentedVideo:
                 return .none
+            case .path(.element(_, action: .videoDetail(.delegate(.didDismiss(let videoId))))):
+                _ = state.path.popLast()
+                return refreshVideo(videoId: videoId, config: state.serverConfig)
             case .path(.element(_, action: .videoDetail(.serverDeleteResult(.success)))):
                 _ = state.path.popLast()
                 return .send(.view(.pullToRefreshTriggered))
@@ -213,6 +222,9 @@ public struct VideoListReducer {
             case .videoDetail(.presented(.delegate(.didRequestMinimize))):
                 state.videoDetail = nil
                 return .none
+            case .videoDetail(.presented(.delegate(.didDismiss(let videoId)))):
+                state.videoDetail = nil
+                return refreshVideo(videoId: videoId, config: state.serverConfig)
             case .videoDetail(.presented(.serverDeleteResult(.success))):
                 state.videoDetail = nil
                 return .send(.view(.pullToRefreshTriggered))
@@ -220,6 +232,14 @@ public struct VideoListReducer {
                 return .none
             default:
                 return handleInternalAction(action, state: &state)
+            }
+        }
+    }
+
+    private func refreshVideo(videoId: String, config: ServerConfig) -> Effect<Action> {
+        .run { [videoService] send in
+            if let video = try? await videoService.getVideo(config: config, id: videoId) {
+                await send(.videoRefreshed(video))
             }
         }
     }

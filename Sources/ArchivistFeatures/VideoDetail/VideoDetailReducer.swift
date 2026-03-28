@@ -81,6 +81,7 @@ public struct VideoDetailReducer {
 
         public enum Delegate {
             case didRequestMinimize(VideoResponse, [VideoResponse], ServerConfig, Bool)
+            case didDismiss(String)
         }
 
         @CasePathable
