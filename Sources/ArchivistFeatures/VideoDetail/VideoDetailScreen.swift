@@ -195,9 +195,8 @@ public struct VideoDetailScreen: View {
                 duration: store.video.durationStr
             )
 
-            if let description = store.video.description,
-               !description.isEmpty {
-                Text(description)
+            if let linkedDescription = store.video.linkedDescription {
+                Text(linkedDescription)
                     .font(descriptionFont)
                     .foregroundStyle(Color.Text.primary)
                     .lineLimit(store.isDescriptionExpanded ? nil : 5)

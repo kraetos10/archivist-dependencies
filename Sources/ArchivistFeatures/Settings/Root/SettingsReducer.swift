@@ -16,6 +16,7 @@ public struct SettingsReducer {
         @Shared(.appStorage("autoPlayEnabled")) public var autoPlayEnabled = true
         @Shared(.appStorage("autoPlayPlaylist")) public var autoPlayPlaylist = true
         @Shared(.appStorage("useVLCPlayer")) public var useVLCPlayer = false
+        var showVLCInfo = false
         @Shared(.appStorage("checkForChannelUpdates")) public var checkForChannelUpdates = true
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?

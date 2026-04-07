@@ -194,8 +194,9 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
             startPlaybackWithSignedURL(signedURL)
             scheduleRenewal(expiresAt: response.expires)
         } catch {
-            isBuffering = false
-            onStateChange?()
+            // Server may not support signed URLs (older version or static
+            // auth disabled) — fall back to the raw media URL.
+            startPlaybackWithSignedURL(baseURL)
         }
     }
 

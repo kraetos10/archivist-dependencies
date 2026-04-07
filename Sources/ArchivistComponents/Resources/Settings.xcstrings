@@ -1,6 +1,28 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "vlcInfo.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VLC Player"
+          }
+        }
+      }
+    },
+    "vlcInfo.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VLC player requires your TubeArchivist server to be running an unreleased version that supports a new authentication method for accessing media resources. This feature is currently being tested and will be available in a future server update.\n\nAlternatively, you can add DISABLE_STATIC_AUTH=false to your TubeArchivist server configuration. This allows the app to access your videos without authentication on static resources."
+          }
+        }
+      }
+    },
     "settings.logout": {
       "extractionState": "manual",
       "localizations": {

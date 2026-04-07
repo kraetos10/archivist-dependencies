@@ -90,8 +90,8 @@ public struct WatchServerQueueView: View {
             .refreshable {
                 await viewModel.refresh()
             }
-            .task {
-                await viewModel.viewDidAppear()
+            .onAppear {
+                Task { await viewModel.viewDidAppear() }
             }
             .confirmationDialog(
                 selectedDownload?.title ?? "",

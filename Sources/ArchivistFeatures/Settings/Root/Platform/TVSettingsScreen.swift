@@ -28,6 +28,9 @@ public struct TVSettingsScreen: View {
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
+        .sheet(isPresented: $store.showVLCInfo) {
+            VLCInfoView()
+        }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
                 TVVideoDetailScreen(store: detailStore)
@@ -129,18 +132,25 @@ public struct TVSettingsScreen: View {
             Section {
                 Toggle(String.localised("video.autoplay", table: .videos), isOn: $store.autoPlayEnabled)
                 Toggle(String.localised("video.autoplayPlaylist", table: .videos), isOn: $store.autoPlayPlaylist)
-                Toggle(isOn: $store.useVLCPlayer) {
-                    Text(String.localised("video.useVLCPlayer", table: .videos))
-                    Text(String.localised("video.useVLCPlayerSubtitle", table: .videos))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Button { send(.playbackCacheTapped) } label: {
-                    HStack {
-                        Image(systemName: "externaldrive.badge.timemachine")
-                            .foregroundStyle(Color.Accent.dark)
-                        Text(String.localised("video.cache.row", table: .videos))
+            } header: {
+                Text(String.localised("video.autoplaySection", table: .videos))
+            }
+
+            Section {
+                HStack {
+                    Toggle(isOn: $store.useVLCPlayer) {
+                        Text(String.localised("video.useVLCPlayer", table: .videos))
+                        Text(String.localised("video.useVLCPlayerSubtitle", table: .videos))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
+                    Button {
+                        store.showVLCInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(Color.Accent.dark)
+                    }
+                    .buttonStyle(.plain)
                 }
                 Toggle(
                     String.localised("settings.checkForChannelUpdates", table: .settings),

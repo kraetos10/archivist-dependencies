@@ -55,8 +55,8 @@ public struct WatchVideoListView: View {
             .refreshable {
                 await viewModel.refresh()
             }
-            .task {
-                await viewModel.viewDidAppear()
+            .onAppear {
+                Task { await viewModel.viewDidAppear() }
             }
         }
     }

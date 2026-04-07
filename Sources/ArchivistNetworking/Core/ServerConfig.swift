@@ -23,18 +23,10 @@ public nonisolated struct ServerConfig: Sendable, Codable, Equatable {
     }
 
     public var hostname: String {
-        var host = baseURL
-        if let parsedURL = URL(string: baseURL) {
-            host = parsedURL.host ?? baseURL
-        } else if host.hasPrefix("https://") {
-            host = String(host.dropFirst(8))
-        } else if host.hasPrefix("http://") {
-            host = String(host.dropFirst(7))
+        if let components = URLComponents(string: baseURL), let host = components.host {
+            return host
         }
-        if host.hasSuffix("/") {
-            host = String(host.dropLast())
-        }
-        return host
+        return baseURL
     }
 
     public var authHeaders: [String: String] {

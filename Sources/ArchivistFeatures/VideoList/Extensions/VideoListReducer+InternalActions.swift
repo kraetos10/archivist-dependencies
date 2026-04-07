@@ -67,11 +67,11 @@ extension VideoListReducer {
         state.hasLoaded = true
         // downloadedVideoIDs is reactive via @FetchAll
 
-        // Pre-cache thumbnails for Top Shelf
+        // Cache video data + thumbnails for Top Shelf
         let unwatched = state.videos.filter { !$0.isWatched }
         let config = state.serverConfig
-        TopShelfCache.cacheVideoThumbnails(
-            videos: unwatched.map { (id: $0.videoId, thumbPath: $0.vidThumbUrl) },
+        TopShelfCache.cacheTopShelfContent(
+            videos: Array(unwatched),
             serverConfig: config
         )
 
