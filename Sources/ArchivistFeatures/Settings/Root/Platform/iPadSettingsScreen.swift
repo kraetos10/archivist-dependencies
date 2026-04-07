@@ -30,6 +30,9 @@ public struct iPadSettingsScreen: View {
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
+        .sheet(isPresented: $store.showVLCInfo) {
+            VLCInfoView()
+        }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
                 VideoDetailScreen(store: detailStore)
@@ -128,11 +131,25 @@ public struct iPadSettingsScreen: View {
             Section {
                 Toggle(String.localised("video.autoplay", table: .videos), isOn: $store.autoPlayEnabled)
                 Toggle(String.localised("video.autoplayPlaylist", table: .videos), isOn: $store.autoPlayPlaylist)
-                Toggle(isOn: $store.useVLCPlayer) {
-                    Text(String.localised("video.useVLCPlayer", table: .videos))
-                    Text(String.localised("video.useVLCPlayerSubtitle", table: .videos))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            } header: {
+                Text(String.localised("video.autoplaySection", table: .videos))
+            }
+
+            Section {
+                HStack {
+                    Toggle(isOn: $store.useVLCPlayer) {
+                        Text(String.localised("video.useVLCPlayer", table: .videos))
+                        Text(String.localised("video.useVLCPlayerSubtitle", table: .videos))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button {
+                        store.showVLCInfo = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(Color.Accent.dark)
+                    }
+                    .buttonStyle(.plain)
                 }
                 Button { send(.playbackCacheTapped) } label: {
                     settingsRow(

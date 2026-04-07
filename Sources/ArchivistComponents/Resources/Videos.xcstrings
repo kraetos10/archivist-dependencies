@@ -612,7 +612,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autoplay"
+            "value": "All Videos"
           }
         }
       }
@@ -623,7 +623,18 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autoplay Playlist"
+            "value": "Playlists"
+          }
+        }
+      }
+    },
+    "video.autoplaySection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoplay"
           }
         }
       }

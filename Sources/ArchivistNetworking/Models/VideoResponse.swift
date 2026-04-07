@@ -133,6 +133,40 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         return codec.uppercased()
     }
 
+    public var linkedDescription: AttributedString? {
+        guard let description, !description.isEmpty else { return nil }
+        var result = AttributedString(description)
+        guard let detector = try? NSDataDetector(
+            types: NSTextCheckingResult.CheckingType.link.rawValue
+        ) else { return result }
+        let nsString = description as NSString
+        let matches = detector.matches(
+            in: description,
+            range: NSRange(location: 0, length: nsString.length)
+        )
+        for match in matches {
+            guard let url = match.url,
+                  let range = Range(match.range, in: description)
+            else { continue }
+            let start = result.index(
+                result.startIndex,
+                offsetByCharacters: description.distance(
+                    from: description.startIndex,
+                    to: range.lowerBound
+                )
+            )
+            let end = result.index(
+                start,
+                offsetByCharacters: description.distance(
+                    from: range.lowerBound,
+                    to: range.upperBound
+                )
+            )
+            result[start..<end].link = url
+        }
+        return result
+    }
+
     public var isoFormatter: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]

@@ -106,9 +106,21 @@ public struct TVHomeScreen: View {
                 .padding(.vertical, 48)
             }
             .onAppear {
-                store.send(.videoList(.view(.viewDidAppear)))
-                store.send(.channels(.view(.viewDidAppear)))
-                store.send(.playlists(.view(.viewDidAppear)))
+                if store.videoList.videos.isEmpty {
+                    store.send(.videoList(.view(.viewDidAppear)))
+                } else {
+                    store.send(.videoList(.view(.pullToRefreshTriggered)))
+                }
+                if store.channels.channels.isEmpty {
+                    store.send(.channels(.view(.viewDidAppear)))
+                } else {
+                    store.send(.channels(.view(.pullToRefreshTriggered)))
+                }
+                if store.playlists.playlists.isEmpty {
+                    store.send(.playlists(.view(.viewDidAppear)))
+                } else {
+                    store.send(.playlists(.view(.pullToRefreshTriggered)))
+                }
             }
         } destination: { store in
             switch store.case {

@@ -94,8 +94,8 @@ public struct TVVideoDetailScreen: View {
                         }
                         .buttonStyle(.bordered)
 
-                        if let description = store.video.description, !description.isEmpty {
-                            Text(description)
+                        if let linkedDescription = store.video.linkedDescription {
+                            Text(linkedDescription)
                                 .font(.body)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(store.isDescriptionExpanded ? nil : 4)
