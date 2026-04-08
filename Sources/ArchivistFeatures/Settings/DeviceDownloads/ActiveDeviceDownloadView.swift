@@ -18,7 +18,7 @@ public struct ActiveDeviceDownloadView: View {
         if !activeDownloads.isEmpty {
             Section {
                 ForEach(activeDownloads) { download in
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
                             ProgressView()
                                 .tint(Color.Accent.dark)
@@ -40,7 +40,6 @@ public struct ActiveDeviceDownloadView: View {
                         ProgressView(value: min(download.progress, 1.0))
                             .tint(Color.Accent.dark)
                     }
-                    .padding(.vertical, 4)
                 }
             } header: {
                 Text(String.localised("video.deviceDownloads", table: .videos))

@@ -39,8 +39,7 @@ public struct DeviceDownloadsScreen: View {
                                 ProgressView(value: min(max(download.progress, 0), 1.0))
                                     .tint(Color.Accent.dark)
                                     .scaleEffect(y: 2)
-                                    .padding(.horizontal, 12)
-                                    .padding(.bottom, 4)
+                                    .padding([.horizontal, .bottom], 12)
                                     .animation(.easeInOut(duration: 0.3), value: download.progress)
                             }
                         }
