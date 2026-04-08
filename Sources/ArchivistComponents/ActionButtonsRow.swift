@@ -125,7 +125,7 @@ public struct ActionButtonsRow: View {
     let isWatched: Bool
     let showPlayNext: Bool
     let isInPlayNext: Bool
-    let youtubeURL: URL
+    let youtubeURL: URL?
     let isDownloading: Bool
     let isDownloaded: Bool
     let downloadProgress: CGFloat
@@ -142,7 +142,7 @@ public struct ActionButtonsRow: View {
         isWatched: Bool,
         showPlayNext: Bool,
         isInPlayNext: Bool,
-        youtubeURL: URL,
+        youtubeURL: URL?,
         isDownloading: Bool,
         isDownloaded: Bool,
         downloadProgress: CGFloat,
@@ -219,11 +219,13 @@ public struct ActionButtonsRow: View {
                 }
 
                 #if !os(tvOS)
-                ShareLink(item: youtubeURL) {
-                    ActionPillLabel(
-                        systemImage: "arrowshape.turn.up.right",
-                        label: String.localised("generic.share", table: .generic)
-                    )
+                if let youtubeURL {
+                    ShareLink(item: youtubeURL) {
+                        ActionPillLabel(
+                            systemImage: "arrowshape.turn.up.right",
+                            label: String.localised("generic.share", table: .generic)
+                        )
+                    }
                 }
                 #endif
 

@@ -72,8 +72,10 @@ public struct ChannelDetailScreen: View {
             #if !os(tvOS)
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    ShareLink(item: store.channel.youtubeURL) {
-                        Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+                    if let url = store.channel.youtubeURL {
+                        ShareLink(item: url) {
+                            Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+                        }
                     }
 
                     Button(role: .destructive) {

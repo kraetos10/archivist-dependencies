@@ -3,7 +3,7 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct VideoContextMenu: View {
-    public let youtubeURL: URL
+    public let youtubeURL: URL?
     public let isDownloaded: Bool
     public let onPlayNext: (() -> Void)?
     public let onAddToPlaylist: () -> Void
@@ -13,7 +13,7 @@ public struct VideoContextMenu: View {
     public let onDeleteFromServer: () -> Void
 
     public init(
-        youtubeURL: URL,
+        youtubeURL: URL?,
         isDownloaded: Bool = false,
         onPlayNext: (() -> Void)? = nil,
         onAddToPlaylist: @escaping () -> Void,
@@ -44,8 +44,10 @@ public struct VideoContextMenu: View {
                 )
             }
         }
-        ShareLink(item: youtubeURL) {
-            Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+        if let youtubeURL {
+            ShareLink(item: youtubeURL) {
+                Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+            }
         }
         Button {
             HapticFeedback.selection.play()

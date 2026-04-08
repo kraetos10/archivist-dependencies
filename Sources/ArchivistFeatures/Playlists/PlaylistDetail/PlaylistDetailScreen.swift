@@ -38,8 +38,8 @@ public struct PlaylistDetailScreen: View {
             #if !os(tvOS)
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    if !store.isCustomPlaylist {
-                        ShareLink(item: store.playlist.youtubeURL) {
+                    if !store.isCustomPlaylist, let youtubeURL = store.playlist.youtubeURL {
+                        ShareLink(item: youtubeURL) {
                             Label(
                                 String.localised("generic.share", table: .generic),
                                 systemImage: "square.and.arrow.up"
