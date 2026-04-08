@@ -336,15 +336,9 @@ public final class PlayerManager {
 
     private nonisolated static func isConnectedToWifi() -> Bool {
         let monitor = NWPathMonitor()
-        var result = false
-        let semaphore = DispatchSemaphore(value: 0)
-        monitor.pathUpdateHandler = { path in
-            result = path.usesInterfaceType(.wifi)
-            semaphore.signal()
-        }
         let queue = DispatchQueue(label: "wifi-check")
         monitor.start(queue: queue)
-        semaphore.wait()
+        let result = monitor.currentPath.usesInterfaceType(.wifi)
         monitor.cancel()
         return result
     }
