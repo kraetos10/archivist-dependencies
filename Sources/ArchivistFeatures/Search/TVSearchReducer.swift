@@ -35,7 +35,6 @@ public struct TVSearchReducer {
             case playlistTapped(PlaylistResponse)
         }
 
-        @CasePathable
         public enum Delegate: Equatable, Sendable {
             case showChannel(ChannelResponse)
             case showPlaylist(PlaylistResponse)

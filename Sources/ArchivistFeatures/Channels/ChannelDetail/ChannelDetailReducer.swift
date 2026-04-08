@@ -68,7 +68,6 @@ public struct ChannelDetailReducer: Sendable {
         case unsubscribeResult(Result<Void, Error>)
         case deleteVideoResult(Result<String, Error>)
 
-        @CasePathable
         public enum Delegate: Equatable, Sendable {
             case videoSelected(VideoResponse, nextVideos: [VideoResponse])
         }

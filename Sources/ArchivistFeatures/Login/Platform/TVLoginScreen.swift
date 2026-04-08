@@ -19,7 +19,7 @@ public struct TVLoginScreen: View {
                 .playing(loopMode: .playOnce)
                 .frame(width: 250, height: 250)
 
-            Text("Sign In")
+            Text(String.localised("login.signIn", table: .login))
                 .font(.title)
                 .fontWeight(.bold)
 

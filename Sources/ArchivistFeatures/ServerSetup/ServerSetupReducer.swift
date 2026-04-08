@@ -93,8 +93,6 @@ public struct ServerSetupReducer {
             try keychainService.save(token: token)
             try keychainService.saveCredentials(username: username, password: password)
             await send(.loginCompleted)
-        } catch: { error, _ in
-            print("[ServerSetup] login save failed: \(error)")
         }
     }
 }

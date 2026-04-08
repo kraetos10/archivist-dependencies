@@ -27,8 +27,8 @@ public nonisolated struct DownloadResponse: Decodable, Sendable, Equatable, Iden
         return relative.localizedString(for: date, relativeTo: Date())
     }
 
-    public var youtubeURL: URL {
-        URL(string: "https://www.youtube.com/watch?v=\(youtubeId)")!
+    public var youtubeURL: URL? {
+        URL(string: "https://www.youtube.com/watch?v=\(youtubeId)")
     }
 
     public func thumbURL(config: ServerConfig) -> URL? {

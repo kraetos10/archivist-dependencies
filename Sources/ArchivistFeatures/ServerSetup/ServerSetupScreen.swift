@@ -45,22 +45,22 @@ private struct ServerSetupContentView: View {
                 .frame(width: 200, height: 200)
 
             VStack(spacing: 16) {
-                Text("TubeArchivist")
+                Text(String.localised("login.title", table: .login))
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(Color.Text.primary)
 
-                Text("Connect to your server")
+                Text(String.localised("login.subtitle", table: .login))
                     .font(.headline)
                     .foregroundStyle(Color.Brand.secondary)
             }
 
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Server URL")
+                    Text(String.localised("login.serverUrl", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
-                    TextField("Server URL", text: $store.registrationDetails.serverAddress)
+                    TextField(String.localised("login.serverUrl", table: .login), text: $store.registrationDetails.serverAddress)
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -68,22 +68,22 @@ private struct ServerSetupContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Port")
+                    Text(String.localised("login.port", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
-                    TextField("Port", text: $store.registrationDetails.port)
+                    TextField(String.localised("login.port", table: .login), text: $store.registrationDetails.port)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
                 }
 
-                Toggle("Use HTTP", isOn: $store.registrationDetails.useHTTP)
+                Toggle(String.localised("login.useHttp", table: .login), isOn: $store.registrationDetails.useHTTP)
                     .foregroundStyle(Color.Text.primary)
                     .tint(Color.Accent.dark)
             }
 
             Spacer()
 
-            LoadingButton(title: "Next", isLoading: store.isLoading) {
+            LoadingButton(title: String.localised("generic.next", table: .generic), isLoading: store.isLoading) {
                 send(.nextButtonTapped)
             }
             .disabled(store.registrationDetails.serverAddress.isEmpty || store.isLoading)

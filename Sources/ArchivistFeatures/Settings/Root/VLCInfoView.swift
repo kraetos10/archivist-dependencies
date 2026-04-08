@@ -16,7 +16,7 @@ struct VLCInfoView: View {
             }
             .navigationTitle(String.localised("vlcInfo.title", table: .settings))
             #if !os(tvOS)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String.localised("generic.done", table: .generic)) {

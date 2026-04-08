@@ -28,8 +28,8 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         hasher.combine(videoId)
     }
 
-    public var youtubeURL: URL {
-        URL(string: "https://www.youtube.com/watch?v=\(videoId)")!
+    public var youtubeURL: URL? {
+        URL(string: "https://www.youtube.com/watch?v=\(videoId)")
     }
 
     public var channelName: String { channel.channelName }
