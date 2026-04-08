@@ -18,8 +18,8 @@ public nonisolated struct ChannelResponse: Decodable, Sendable, Equatable, Ident
 
     public var id: String { channelId }
 
-    public var youtubeURL: URL {
-        URL(string: "https://www.youtube.com/channel/\(channelId)")!
+    public var youtubeURL: URL? {
+        URL(string: "https://www.youtube.com/channel/\(channelId)")
     }
 
     public var formattedSubs: String? {

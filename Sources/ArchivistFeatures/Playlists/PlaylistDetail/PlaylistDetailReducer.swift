@@ -76,7 +76,6 @@ public struct PlaylistDetailReducer {
             case markAsWatchedTapped(PlaylistEntry)
         }
 
-        @CasePathable
         public enum Delegate: Equatable, Sendable {
             case showVideo(VideoResponse, nextVideos: [VideoResponse])
         }

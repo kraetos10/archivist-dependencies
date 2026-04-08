@@ -17,8 +17,8 @@ public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Iden
 
     public var id: String { playlistId }
 
-    public var youtubeURL: URL {
-        URL(string: "https://www.youtube.com/playlist?list=\(playlistId)")!
+    public var youtubeURL: URL? {
+        URL(string: "https://www.youtube.com/playlist?list=\(playlistId)")
     }
 
     public var entryCount: Int {

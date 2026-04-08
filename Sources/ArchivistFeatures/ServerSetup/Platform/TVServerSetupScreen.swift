@@ -36,11 +36,11 @@ private struct TVServerSetupContentView: View {
                 .frame(width: 250, height: 250)
 
             VStack(spacing: 16) {
-                Text("TubeArchivist")
+                Text(String.localised("login.title", table: .login))
                     .font(.title)
                     .fontWeight(.bold)
 
-                Text("Connect to your server")
+                Text(String.localised("login.subtitle", table: .login))
                     .font(.headline)
                     .foregroundStyle(.secondary)
             }

@@ -273,7 +273,6 @@ extension VideoDetailReducer {
                 }
             }
         } catch: { error, send in
-            print("[DeviceDownload] insert failed: \(error)")
             await send(.downloadFailed(error.localizedDescription))
         }
     }

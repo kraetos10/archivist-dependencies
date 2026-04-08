@@ -19,36 +19,36 @@ public struct LoginScreen: View {
                 .playing(loopMode: .playOnce)
                 .frame(width: 200, height: 200)
 
-            Text("Sign In")
+            Text(String.localised("login.signIn", table: .login))
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Text.primary)
 
             VStack(spacing: 24) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Username")
+                    Text(String.localised("login.username", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
 
-                    TextField("Username", text: $store.username)
+                    TextField(String.localised("login.username", table: .login), text: $store.username)
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Password")
+                    Text(String.localised("login.password", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
 
-                    SecureField("Password", text: $store.password)
+                    SecureField(String.localised("login.password", table: .login), text: $store.password)
                         .textFieldStyle(.roundedBorder)
                 }
             }
 
             Spacer()
 
-            LoadingButton(title: "Login", isLoading: store.isLoading) {
+            LoadingButton(title: String.localised("login.login", table: .login), isLoading: store.isLoading) {
                 send(.loginButtonTapped)
             }
             .disabled(store.username.isEmpty || store.password.isEmpty || store.isLoading)
