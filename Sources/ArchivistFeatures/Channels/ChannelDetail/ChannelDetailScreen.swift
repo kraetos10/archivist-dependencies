@@ -285,13 +285,19 @@ public struct ChannelDetailScreen: View {
                 .contentMargins(.horizontal, 16)
                 .scrollTargetBehavior(.viewAligned)
             } else if store.filteredVideos.isEmpty && store.hasLoadedVideos {
-                Text(store.videoFilter == .unwatched
-                     ? String(localized: "No unwatched videos")
-                     : String.localised("video.empty.noVideos", table: .videos))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.Brand.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 24)
+                VideoCardView(
+                    video: .placeholder,
+                    serverConfig: store.serverConfig
+                )
+                .frame(width: videoCardWidth)
+                .hidden()
+                .overlay {
+                    Text(store.videoFilter == .unwatched
+                         ? String(localized: "No unwatched videos")
+                         : String.localised("video.empty.noVideos", table: .videos))
+                        .font(.subheadline)
+                        .foregroundStyle(Color.Brand.secondary)
+                }
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
