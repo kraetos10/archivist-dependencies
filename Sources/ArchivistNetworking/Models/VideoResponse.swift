@@ -259,7 +259,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
 
     public static let placeholders: IdentifiedArrayOf<VideoResponse> = {
         var items = IdentifiedArrayOf<VideoResponse>()
-        for index in 0..<8 {
+        for index in 0..<20 {
             let video = VideoResponse(
                 videoId: "placeholder-\(index)",
                 title: placeholder.title,
