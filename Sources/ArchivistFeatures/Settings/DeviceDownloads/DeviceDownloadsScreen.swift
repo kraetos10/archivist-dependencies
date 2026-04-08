@@ -44,7 +44,7 @@ public struct DeviceDownloadsScreen: View {
                                     .animation(.easeInOut(duration: 0.3), value: download.progress)
                             }
                         }
-                        .padding(.bottom, download.status == .downloading ? 12 : 0)
+                        .padding(.bottom, download.status == .downloading ? 20 : 0)
                         .contextMenu {
                             if let url = URL(string: "https://www.youtube.com/watch?v=\(download.id)") {
                                 ShareLink(item: url) {
