@@ -47,10 +47,12 @@ public struct DownloadDetailScreen: View {
                     Spacer()
 
                     #if !os(tvOS)
-                    ShareLink(item: store.youtubeURL) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.title3)
-                            .foregroundStyle(Color.Text.primary)
+                    if let youtubeURL = store.youtubeURL {
+                        ShareLink(item: youtubeURL) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.title3)
+                                .foregroundStyle(Color.Text.primary)
+                        }
                     }
                     #endif
                 }

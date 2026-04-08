@@ -17,7 +17,7 @@ public struct DownloadDetailReducer {
             download.thumbURL(config: serverConfig)
         }
 
-        var youtubeURL: URL {
+        var youtubeURL: URL? {
             download.youtubeURL
         }
     }

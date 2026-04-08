@@ -36,7 +36,7 @@ public struct VideoDetailReducer {
         @Presents var playlistPicker: PlaylistPickerReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 
-        var youtubeURL: URL { video.youtubeURL }
+        var youtubeURL: URL? { video.youtubeURL }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
         var effectiveWatchProgress: Double { localWatchProgress ?? video.watchProgress }
         var channelThumbURL: URL? {

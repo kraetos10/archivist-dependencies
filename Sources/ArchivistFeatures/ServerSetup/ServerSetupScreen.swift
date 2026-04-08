@@ -60,7 +60,10 @@ private struct ServerSetupContentView: View {
                     Text(String.localised("login.serverUrl", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
-                    TextField(String.localised("login.serverUrl", table: .login), text: $store.registrationDetails.serverAddress)
+                    TextField(String.localised(
+                        "login.serverUrl",
+                        table: .login
+                    ), text: $store.registrationDetails.serverAddress)
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

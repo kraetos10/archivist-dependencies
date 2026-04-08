@@ -170,9 +170,12 @@ private struct DownloadQueueCardWithPopover: View {
             }
         }
         .contextMenu {
-            ShareLink(item: download.youtubeURL) {
-                Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+            if let url = download.youtubeURL {
+                ShareLink(item: url) {
+                    Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+                }
             }
+
             Button(role: .destructive) {
                 onDelete()
             } label: {
