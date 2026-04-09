@@ -1,16 +1,42 @@
 #if os(iOS)
 import SwiftUI
 import UIKit
+import VLCKit
 
 public struct VLCPlayerView: View {
     @State private var controlsVisible = true
     @State private var hideControlsTask: Task<Void, Never>?
+    @State private var isFullscreen = false
 
     private let playerManager = PlayerManager.shared
 
     public init() {}
 
     public var body: some View {
+        ZStack {
+            playerContent
+        }
+        .clipped()
+        .onAppear {
+            scheduleHideControls()
+        }
+        .fullScreenCover(isPresented: $isFullscreen) {
+            playerContent
+                .ignoresSafeArea()
+                .background(Color.black)
+                .statusBarHidden()
+                .persistentSystemOverlays(.hidden)
+                .onAppear {
+                    OrientationLock.shared.unlock()
+                    scheduleHideControls()
+                }
+                .onDisappear {
+                    OrientationLock.shared.lockPortrait()
+                }
+        }
+    }
+
+    private var playerContent: some View {
         ZStack {
             VLCVideoRenderView()
                 .allowsHitTesting(false)
@@ -37,26 +63,30 @@ public struct VLCPlayerView: View {
                     }
             }
         }
-        .clipped()
-        .onAppear {
-            scheduleHideControls()
-        }
     }
 
     private var controlsOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.3)
-                .allowsHitTesting(false)
-
-            VStack {
-                Spacer()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            controlsVisible = false
-                        }
-                    }
-
+        Color.black.opacity(0.3)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    controlsVisible = false
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    isFullscreen.toggle()
+                    scheduleHideControls()
+                } label: {
+                    Image(systemName: isFullscreen
+                          ? "arrow.down.right.and.arrow.up.left"
+                          : "arrow.up.left.and.arrow.down.right")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .padding(16)
+                }
+            }
+            .overlay {
                 HStack(spacing: 40) {
                     Button {
                         playerManager.skipBackward(10)
@@ -89,8 +119,8 @@ public struct VLCPlayerView: View {
                             .foregroundStyle(.white)
                     }
                 }
-                .padding(.bottom, 24)
-
+            }
+            .overlay(alignment: .bottom) {
                 VStack(spacing: 4) {
                     SeekBar(
                         progress: playerManager.duration > 0
@@ -116,10 +146,9 @@ public struct VLCPlayerView: View {
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-        }
     }
 
     private func scheduleHideControls() {
@@ -134,7 +163,7 @@ public struct VLCPlayerView: View {
     }
 
     private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        guard seconds.isFinite, seconds >= 0 else { return "-" }
         let total = Int(seconds)
         let hours = total / 3600
         let minutes = (total % 3600) / 60
@@ -148,29 +177,146 @@ public struct VLCPlayerView: View {
 
 // MARK: - VLC Video Render View
 
-private struct VLCVideoRenderView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .black
-        return view
+/// Hosts the persistent `VLCPiPDrawableView` owned by `PlayerManager` for a
+/// specific role. Only the host whose role matches
+/// `PlayerManager.activePlayerSurfaceRole` adopts the drawable; the other
+/// shows nothing. Same anti-race pattern as `AVPlayerViewControllerWrapper`.
+public struct VLCVideoRenderView: View {
+    public var role: PlayerSurfaceRole
+
+    public init(role: PlayerSurfaceRole = .fullDetail) {
+        self.role = role
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        if let vlcBackend = PlayerManager.shared.backend as? VLCPlayerBackend {
-            if vlcBackend.mediaPlayer.drawable as? UIView !== uiView {
-                vlcBackend.attachDrawable(uiView)
+    public var body: some View {
+        let manager = PlayerManager.shared
+        _ = manager.activePlayerSurfaceRole
+        _ = manager.persistentVLCDrawable
+        return VLCDrawableHostRepresentable(
+            shouldAdopt: manager.activePlayerSurfaceRole == role
+        )
+    }
+}
+
+private struct VLCDrawableHostRepresentable: UIViewRepresentable {
+    var shouldAdopt: Bool
+
+    func makeUIView(context: Context) -> VLCDrawableHostView {
+        let host = VLCDrawableHostView()
+        host.backgroundColor = .black
+        return host
+    }
+
+    func updateUIView(_ host: VLCDrawableHostView, context: Context) {
+        if shouldAdopt {
+            host.adoptPersistentDrawable()
+        } else {
+            host.detachPersistentDrawable()
+        }
+    }
+
+    static func dismantleUIView(_ host: VLCDrawableHostView, coordinator: ()) {
+        host.detachPersistentDrawable()
+    }
+}
+
+/// Container UIView that adopts the persistent `VLCPiPDrawableView` from
+/// `PlayerManager` as a pinned subview. Reparenting the drawable between
+/// hosts is what makes the mini player ↔ full transition seamless for VLC.
+public final class VLCDrawableHostView: UIView {
+    func adoptPersistentDrawable() {
+        guard let drawable = PlayerManager.shared.persistentVLCDrawable else { return }
+
+        if drawable.superview === self { return }
+
+        // Pull it off any previous host and pin it into this one.
+        drawable.removeFromSuperview()
+        drawable.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(drawable)
+        NSLayoutConstraint.activate([
+            drawable.topAnchor.constraint(equalTo: topAnchor),
+            drawable.bottomAnchor.constraint(equalTo: bottomAnchor),
+            drawable.leadingAnchor.constraint(equalTo: leadingAnchor),
+            drawable.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+    }
+
+    func detachPersistentDrawable() {
+        guard let drawable = PlayerManager.shared.persistentVLCDrawable,
+              drawable.superview === self else { return }
+        drawable.removeFromSuperview()
+    }
+}
+
+// MARK: - VLC PiP Drawable View
+
+public class VLCPiPDrawableView: UIView, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling {
+    nonisolated(unsafe) weak var mediaPlayer: VLCMediaPlayer?
+    nonisolated(unsafe) weak var backend: VLCPlayerBackend?
+    nonisolated(unsafe) private weak var pipController: VLCPictureInPictureWindowControlling?
+
+    // MARK: - VLCPictureInPictureDrawable
+
+    nonisolated public func mediaController() -> (any VLCPictureInPictureMediaControlling)? {
+        self
+    }
+
+    nonisolated public func pictureInPictureReady() -> ((any VLCPictureInPictureWindowControlling)?) -> Void {
+        { [weak self] controller in
+            guard let self else { return }
+            self.pipController = controller
+
+            controller?.stateChangeEventHandler = { [weak self] isStarted in
+                guard let self, let backend = self.backend else { return }
+                Task { @MainActor in
+                    if isStarted {
+                        backend.onPiPStarted?()
+                        PlayerManager.shared.isInPiP = true
+                    } else {
+                        PlayerManager.shared.isInPiP = false
+                        backend.pipDrawableRetain = nil
+                        backend.onPiPStopped?()
+                    }
+                }
+            }
+
+            if let controller {
+                nonisolated(unsafe) let sendableController = controller
+                Task { @MainActor in
+                    self.backend?.pipController = sendableController
+                }
             }
         }
     }
 
-    static func dismantleUIView(_ uiView: UIView, coordinator: ()) {
-        // Release the drawable so VLC doesn't hold a reference to a dead view.
-        // The backend keeps playing; a new VLCVideoRenderView will re-attach
-        // its own UIView via attachDrawable() on the next presentation.
-        if let vlcBackend = PlayerManager.shared.backend as? VLCPlayerBackend,
-           vlcBackend.mediaPlayer.drawable as? UIView === uiView {
-            vlcBackend.mediaPlayer.drawable = nil
-        }
+    // MARK: - VLCPictureInPictureMediaControlling
+
+    nonisolated public func play() {
+        mediaPlayer?.play()
+    }
+
+    nonisolated public func pause() {
+        mediaPlayer?.pause()
+    }
+
+    nonisolated public func seek(by offset: Int64, completion: (() -> Void)!) {
+        mediaPlayer?.jump(withOffset: Int32(offset), completion: completion)
+    }
+
+    nonisolated public func mediaLength() -> Int64 {
+        mediaPlayer?.media?.length.value?.int64Value ?? 0
+    }
+
+    nonisolated public func mediaTime() -> Int64 {
+        mediaPlayer?.time.value?.int64Value ?? 0
+    }
+
+    nonisolated public func isMediaSeekable() -> Bool {
+        mediaPlayer?.isSeekable == true
+    }
+
+    nonisolated public func isMediaPlaying() -> Bool {
+        mediaPlayer?.isPlaying == true
     }
 }
 

@@ -74,7 +74,10 @@ public struct ChannelDetailScreen: View {
                 Menu {
                     if let url = store.channel.youtubeURL {
                         ShareLink(item: url) {
-                            Label(String.localised("generic.share", table: .generic), systemImage: "square.and.arrow.up")
+                            Label(
+                                String.localised("generic.share", table: .generic),
+                                systemImage: "square.and.arrow.up"
+                            )
                         }
                     }
 

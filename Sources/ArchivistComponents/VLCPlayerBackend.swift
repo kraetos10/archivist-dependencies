@@ -26,6 +26,15 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     private var loadedMedia: VLCMedia?
     private var drawableView: UIView?
 
+    // PiP
+    weak var pipController: VLCPictureInPictureWindowControlling?
+    /// Strong reference to keep the drawable alive during PiP
+    /// (SwiftUI will dismantle the UIViewRepresentable's view on dismiss).
+    var pipDrawableRetain: UIView?
+    public var onPiPStarted: (() -> Void)?
+    public var onPiPStopped: (() -> Void)?
+    public var onPiPRestoreRequested: (() -> Void)?
+
     // Signed URL auth
     private var baseURL: URL?
     private var videoId: String?
@@ -87,25 +96,39 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
 
     public func attachDrawable(_ view: UIView) {
         let wasPlaying = mediaPlayer.isPlaying
-        let currentTime = mediaPlayer.time
+        let resumeTime = mediaPlayer.time
         drawableView = view
         mediaPlayer.drawable = view
 
-        if let media = loadedMedia, !mediaPlayer.isPlaying {
-            mediaPlayer.media = media
+        // VLC needs a nudge to render onto a new drawable. A quick
+        // pause/play cycle forces the video output pipeline to
+        // reinitialize without the heavyweight stop/reload/seek.
+        if wasPlaying {
+            mediaPlayer.pause()
             mediaPlayer.play()
-            isPlaying = true
-        } else if wasPlaying {
-            // VLC needs a kick to start rendering onto the new drawable.
-            // Stop + reload media + seek + play forces a fresh output pipeline.
-            if let media = loadedMedia {
-                mediaPlayer.stop()
-                mediaPlayer.media = media
-                mediaPlayer.play()
-                mediaPlayer.time = currentTime
-                isPlaying = true
-            }
+            mediaPlayer.time = resumeTime
+        } else if loadedMedia != nil {
+            mediaPlayer.play()
+            mediaPlayer.time = resumeTime
+            mediaPlayer.pause()
         }
+    }
+
+    // MARK: - PiP
+
+    public func startPiP() {
+        // Retain the drawable so it survives SwiftUI view dismissal
+        pipDrawableRetain = drawableView
+        pipController?.startPictureInPicture()
+    }
+
+    public func stopPiP() {
+        pipController?.stopPictureInPicture()
+        pipDrawableRetain = nil
+    }
+
+    public func updatePiPState() {
+        pipController?.invalidatePlaybackState()
     }
 
     public func play() {
@@ -139,6 +162,8 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         mediaPlayer.media = nil
         loadedMedia = nil
         drawableView = nil
+        pipDrawableRetain = nil
+        pipController = nil
 
         isPlaying = false
         isBuffering = false
@@ -184,6 +209,7 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         do {
             let response = try await service.getStreamToken(config: config, videoId: videoId)
             currentSig = response.sig
+            print("[VLC] Base URL: \(baseURL)")
 
             guard let signedURL = buildSignedURL(base: baseURL, response: response) else {
                 isBuffering = false
@@ -191,6 +217,7 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
                 return
             }
 
+            print("[VLC] Signed URL: \(signedURL)")
             startPlaybackWithSignedURL(signedURL)
             scheduleRenewal(expiresAt: response.expires)
         } catch {
@@ -223,6 +250,12 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
 
         Self.applyStreamingOptions(to: media)
         loadedMedia = media
+
+        // Hide the drawable during the initial seek to avoid a flash
+        // of the video start before seeking to the resume position.
+        if pendingStartPosition != nil, pendingStartPosition! > 0 {
+            drawableView?.isHidden = true
+        }
 
         if let view = drawableView {
             mediaPlayer.drawable = view
@@ -266,15 +299,15 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         }
     }
 
-    /// Applies the VLC media options we want on every streaming/local playback.
-    /// - `:network-caching=60000` — 60s forward buffer so in-buffer seeks are instant.
-    /// - `:http-reconnect` — resilience while filling the longer forward buffer.
-    /// - `:prefetch-seek-threshold=1024` + `:input-fast-seek` — make Range seeks snappy.
-    /// Harmless for `file://` URLs (network options are simply ignored).
+    /// Applies VLC media options for playback.
+    /// - `:network-caching=1500` — 1.5s buffer for fast startup while keeping smooth playback.
+    /// - `:http-reconnect` — resilience for dropped connections.
+    /// - `:file-caching=300` — minimal cache for local files (seeks are instant on disk).
+    /// - `:input-fast-seek` — use keyframe-based seeking for snappier response.
     private static func applyStreamingOptions(to media: VLCMedia) {
-        media.addOption(":network-caching=60000")
+        media.addOption(":network-caching=1500")
+        media.addOption(":file-caching=300")
         media.addOption(":http-reconnect")
-        media.addOption(":prefetch-seek-threshold=1024")
         media.addOption(":input-fast-seek")
     }
 
@@ -431,6 +464,9 @@ extension VLCPlayerBackend: VLCMediaPlayerDelegate {
         seekTargetTime = startPosition
         currentTime = startPosition
         onTimeUpdate?(currentTime)
+
+        // Reveal the drawable now that we've seeked
+        drawableView?.isHidden = false
     }
 }
 #endif

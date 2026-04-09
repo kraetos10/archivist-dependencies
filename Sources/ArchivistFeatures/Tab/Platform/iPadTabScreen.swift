@@ -44,25 +44,16 @@ public struct iPadTabScreen: View {
             .badge(store.activeDownload != nil ? 1 : 0)
         }
         .tabViewStyle(.sidebarAdaptable)
-        .overlay(alignment: .bottomLeading) {
-            if let mini = store.miniPlayer {
-                MiniPlayerView(
-                    title: mini.video.title,
-                    channelName: mini.video.channelName,
-                    thumbUrl: mini.video.vidThumbUrl,
-                    serverConfig: mini.serverConfig,
-                    isPlaying: PlayerManager.shared.isPlaying,
-                    isInPiP: PlayerManager.shared.isInPiP,
-                    onTap: { store.send(.miniPlayerTapped) },
-                    onPlayPause: { store.send(.miniPlayerPlayPauseTapped) },
-                    onClose: { store.send(.miniPlayerCloseTapped) }
-                )
-                .padding(.leading, 16)
-                .padding(.bottom, 16)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+        .overlay {
+            ExpandedMiniPlayerOverlay(store: store)
         }
-        .animation(.default, value: store.miniPlayer != nil)
+        .overlay {
+            MiniPlayerHostOverlay(
+                store: store,
+                miniSize: CGSize(width: 300, height: 300 * 9 / 16),
+                bottomInset: 60
+            )
+        }
         .tint(Color.Accent.dark)
         .onAppear { store.send(.appeared) }
         .onChange(of: scenePhase) {

@@ -73,6 +73,7 @@ public final class PlaybackCache {
         guard !videoId.isEmpty else { return }
         guard activeDownloads[videoId] == nil else { return }
         if cachedFileURL(for: videoId) != nil {
+            print("[PlaybackCache] Already cached: \(videoId)")
             onCompleted(Self.fileURL(for: videoId))
             return
         }
@@ -88,31 +89,33 @@ public final class PlaybackCache {
             request.setValue(value, forHTTPHeaderField: header)
         }
 
-        let task = Task { [weak self] in
-            let session = URLSession(configuration: .default)
-            defer { session.finishTasksAndInvalidate() }
+        print("[PlaybackCache] Starting download: \(videoId)")
 
-            do {
-                let (tempURL, response) = try await session.download(for: request)
-                try Task.checkCancellation()
-                guard let http = response as? HTTPURLResponse,
-                      (200...299).contains(http.statusCode) else {
-                    try? FileManager.default.removeItem(at: tempURL)
-                    return
-                }
-                try? FileManager.default.removeItem(at: destination)
-                try FileManager.default.moveItem(at: tempURL, to: destination)
-                await MainActor.run {
-                    self?.activeDownloads[videoId] = nil
-                    onCompleted(destination)
-                }
-            } catch {
-                await MainActor.run {
-                    self?.activeDownloads[videoId] = nil
-                }
+        let delegate = DownloadProgressDelegate(
+            videoId: videoId,
+            destination: destination,
+            onCompleted: { [weak self] in
+                self?.activeDownloads[videoId] = nil
+                onCompleted(destination)
+            },
+            onFailed: { [weak self] in
+                self?.activeDownloads[videoId] = nil
             }
+        )
+
+        let session = URLSession(
+            configuration: .default,
+            delegate: delegate,
+            delegateQueue: nil
+        )
+        let downloadTask = session.downloadTask(with: request)
+        let wrapper = Task { @MainActor in
+            // Hold strong references so delegate + session stay alive
+            withExtendedLifetime((session, delegate)) {}
         }
-        activeDownloads[videoId] = task
+        activeDownloads[videoId] = wrapper
+        delegate.session = session
+        downloadTask.resume()
     }
 
     public func cancelDownload(videoId: String) {
@@ -204,6 +207,89 @@ public final class PlaybackCache {
 
     static func fileURL(for videoId: String) -> URL {
         cacheDirectory().appendingPathComponent("\(videoId).mp4")
+    }
+}
+
+// MARK: - Download Progress Delegate
+
+private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    let videoId: String
+    let destination: URL
+    let onCompleted: @MainActor () -> Void
+    let onFailed: @MainActor () -> Void
+    var session: URLSession?
+    private var lastLoggedPercent: Int = -1
+
+    init(
+        videoId: String,
+        destination: URL,
+        onCompleted: @escaping @MainActor () -> Void,
+        onFailed: @escaping @MainActor () -> Void
+    ) {
+        self.videoId = videoId
+        self.destination = destination
+        self.onCompleted = onCompleted
+        self.onFailed = onFailed
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let percent = Int(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) * 100)
+        // Log every 10%
+        let bucket = percent / 10 * 10
+        if bucket > lastLoggedPercent {
+            lastLoggedPercent = bucket
+            let megabytes = Double(totalBytesWritten) / 1_000_000
+            let totalMegabytes = Double(totalBytesExpectedToWrite) / 1_000_000
+            let current = String(format: "%.1f", megabytes)
+            let total = String(format: "%.1f", totalMegabytes)
+            print("[PlaybackCache] \(videoId): \(percent)% (\(current)/\(total) MB)")
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let http = downloadTask.response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            let code = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[PlaybackCache] \(videoId): failed with status \(code)")
+            try? FileManager.default.removeItem(at: location)
+            session.finishTasksAndInvalidate()
+            Task { @MainActor in onFailed() }
+            return
+        }
+
+        do {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: location, to: destination)
+            print("[PlaybackCache] \(videoId): complete")
+            session.finishTasksAndInvalidate()
+            Task { @MainActor in onCompleted() }
+        } catch {
+            print("[PlaybackCache] \(videoId): move failed - \(error.localizedDescription)")
+            session.finishTasksAndInvalidate()
+            Task { @MainActor in onFailed() }
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: (any Error)?
+    ) {
+        guard let error else { return }
+        print("[PlaybackCache] \(videoId): error - \(error.localizedDescription)")
+        session.finishTasksAndInvalidate()
+        Task { @MainActor in onFailed() }
     }
 }
 #endif

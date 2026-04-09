@@ -20,6 +20,10 @@ public final class AVPlayerBackend: PlayerBackend {
     private var statusObservation: NSKeyValueObservation?
     private var playbackEndContinuation: AsyncStream<Void>.Continuation?
 
+    #if !os(tvOS)
+    public var onPiPStopped: (() -> Void)?
+    #endif
+
     public init() {}
 
     public func load(
@@ -97,6 +101,7 @@ public final class AVPlayerBackend: PlayerBackend {
         player.play()
         avPlayer = player
         isPlaying = true
+
     }
 
     public func play() {

@@ -7,6 +7,18 @@ extension TabReducer {
     func handleAppeared(state: inout State) -> Effect<Action> {
         let config = state.serverConfig
         let shouldSync = state.settings.checkForChannelUpdates
+        // Wire PlayerManager callbacks to TCA services so the player layer
+        // can request minimize / restore without holding TCA dependencies.
+        let restoreService = pipRestoreService
+        let minimizeService = pipMinimizeService
+        Task { @MainActor in
+            PlayerManager.shared.onPiPRestore = {
+                Task { await restoreService.request() }
+            }
+            PlayerManager.shared.onPiPStartRequested = {
+                Task { await minimizeService.request() }
+            }
+        }
         var effects: [Effect<Action>] = [
             .send(.settings(.activeTask(.view(.startPolling)))),
             .run { [pipRestoreService] send in
@@ -14,6 +26,13 @@ extension TabReducer {
                     guard requested else { continue }
                     await pipRestoreService.consume()
                     await send(.miniPlayerTapped)
+                }
+            },
+            .run { [pipMinimizeService] send in
+                for await requested in await pipMinimizeService.subscribe() {
+                    guard requested else { continue }
+                    await pipMinimizeService.consume()
+                    await send(.pipStartedMinimizeRequested)
                 }
             }
         ]
@@ -37,122 +56,88 @@ extension TabReducer {
         }
     }
 
-    func handleShowMiniPlayer(
-        _ video: VideoResponse,
-        _ nextVideos: [VideoResponse],
-        _ config: ServerConfig,
-        _ showPlayNext: Bool,
-        _ shouldAutoPlay: Bool,
+    // MARK: - Mini Player
+
+    func handleMinimizeVideoDetail(
+        detail: VideoDetailReducer.State,
         state: inout State
     ) -> Effect<Action> {
-        state.miniPlayer = MiniPlayerState(
-            video: video,
-            serverConfig: config,
-            nextVideos: nextVideos,
-            showPlayNext: showPlayNext,
-            shouldAutoPlayNextVideo: shouldAutoPlay
-        )
-        return .none
+        state.miniPlayerDetail = detail
+        state.isMiniPlayerMinimized = true
+        return .run { _ in
+            await MainActor.run {
+                PlayerManager.shared.activePlayerSurfaceRole = .mini
+            }
+        }
     }
 
     func handleMiniPlayerTapped(state: inout State) -> Effect<Action> {
-        #if os(tvOS)
-        guard let mini = state.miniPlayer else { return .none }
-        state.miniPlayer = nil
-        return .send(.restoreFromMiniPlayer(mini))
-        #else
-        // Restore from mini player
-        if let mini = state.miniPlayer {
-            state.miniPlayer = nil
-            return .run { [clock] send in
-                await MainActor.run {
-                    PlayerManager.shared.stopPiP()
-                }
-                try? await clock.sleep(for: .milliseconds(150))
-                await send(.restoreFromMiniPlayer(mini))
-            }
-        }
-
-        // PiP restore without mini player — video detail is still presented.
-        // Stop PiP but keep the player attached so the inline VC takes over.
-        guard state.hasVideoDetailPresented else { return .none }
+        guard state.miniPlayerDetail != nil else { return .none }
+        state.miniPlayerDetail?.isPlaying = true
+        state.isMiniPlayerMinimized = false
         return .run { _ in
             await MainActor.run {
-                PlayerManager.shared.stopPiP(keepPlayer: true)
-            }
-        }
-        #endif
-    }
-
-    func handleRestoreFromMiniPlayer(
-        _ mini: MiniPlayerState,
-        state: inout State
-    ) -> Effect<Action> {
-        let detailState = VideoDetailReducer.State(
-            serverConfig: mini.serverConfig,
-            video: mini.video,
-            nextVideos: mini.nextVideos,
-            shouldAutoPlayNextVideo: mini.shouldAutoPlayNextVideo,
-            showPlayNext: mini.showPlayNext,
-            isPlaying: true
-        )
-
-        // Present on whichever tab the user is currently viewing
-        switch state.selectedTab {
-        case .channels:
-            state.channels.videoDetail = detailState
-        case .playlists:
-            state.playlists.videoDetail = detailState
-        case .settings:
-            state.settings.videoDetail = detailState
-        default:
-            state.videoList.videoDetail = detailState
-        }
-        return .run { [clock] _ in
-            // Wait for the fullScreenCover presentation to complete
-            // and AVPlayerViewControllerWrapper to be created
-            try? await clock.sleep(for: .milliseconds(300))
-            await MainActor.run {
-                #if !os(tvOS)
-                // Re-assign the player to the new VC in case it wasn't picked up
-                PlayerManager.shared.activePlayerViewController?.player = PlayerManager.shared.player
-                #endif
-                let currentTime = PlayerManager.shared.currentTime
-                PlayerManager.shared.seekTo(currentTime)
-                PlayerManager.shared.resume()
+                PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
             }
         }
     }
 
-    func handleMiniPlayerPlayPauseTapped(state: inout State) -> Effect<Action> {
-        .run { _ in
-            await MainActor.run {
-                PlayerManager.shared.togglePlayPause()
-            }
+    /// Called when PiP starts (from any backend). Finds whichever video detail
+    /// is currently presented across the tabs and minimizes it so a mini
+    /// player exists in state — that gives the persistent player surface
+    /// somewhere to be reparented when the user taps PiP restore.
+    func handlePiPStartedMinimizeRequested(state: inout State) -> Effect<Action> {
+        // Already minimized → nothing to do.
+        if state.miniPlayerDetail != nil { return .none }
+
+        if let detail = state.videoList.videoDetail {
+            state.videoList.videoDetail = nil
+            return handleMinimizeVideoDetail(detail: detail, state: &state)
         }
+        if let detail = state.videoList.presentedVideo {
+            state.videoList.presentedVideo = nil
+            return handleMinimizeVideoDetail(detail: detail, state: &state)
+        }
+        if let detail = state.videoList.selectedVideo {
+            state.videoList.selectedVideo = nil
+            return handleMinimizeVideoDetail(detail: detail, state: &state)
+        }
+        if let detail = state.channels.videoDetail {
+            state.channels.videoDetail = nil
+            return handleMinimizeVideoDetail(detail: detail, state: &state)
+        }
+        if let detail = state.playlists.videoDetail {
+            state.playlists.videoDetail = nil
+            return handleMinimizeVideoDetail(detail: detail, state: &state)
+        }
+        if let detail = state.settings.videoDetail {
+            state.settings.videoDetail = nil
+            return handleMinimizeVideoDetail(detail: detail, state: &state)
+        }
+        return .none
     }
 
     func handleMiniPlayerCloseTapped(state: inout State) -> Effect<Action> {
-        let mini = state.miniPlayer
-        state.miniPlayer = nil
+        let detail = state.miniPlayerDetail
+        state.miniPlayerDetail = nil
+        state.isMiniPlayerMinimized = false
         return .merge(
-            // Stop playback immediately
             .run { _ in
                 await MainActor.run {
                     PlayerManager.shared.stop()
                 }
             },
-            // Save progress in the background
-            .run { _ in
-                guard let mini else { return }
+            .run { [videoService] _ in
+                guard let detail else { return }
                 let position = await Int(PlayerManager.shared.currentTime)
                 guard position > 0 else { return }
-                try? await VideoService().setProgress(
-                    config: mini.serverConfig,
-                    videoId: mini.video.videoId,
+                try? await videoService.setProgress(
+                    config: detail.serverConfig,
+                    videoId: detail.video.videoId,
                     position: position
                 )
             }
         )
     }
+
 }

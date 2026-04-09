@@ -172,10 +172,6 @@ extension VideoDetailReducer {
     private func handleDismissTapped(state: inout State) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = state.video.videoId
-        let video = state.video
-        let nextVideos = state.nextVideos
-        let showPlayNext = state.showPlayNext
-        let shouldAutoPlay = state.shouldAutoPlayNextVideo
 
         // Save progress in the background — don't block the dismiss
         let saveEffect: Effect<Action> = .run { [videoService] _ in
@@ -188,17 +184,8 @@ extension VideoDetailReducer {
             let isPlaying = await MainActor.run { PlayerManager.shared.isPlaying }
             let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
 
-            // Minimize to mini player only if actively playing or in PiP
             if isPlaying || isInPiP {
-                await send(.delegate(
-                    .didRequestMinimize(
-                        video,
-                        nextVideos,
-                        config,
-                        showPlayNext,
-                        shouldAutoPlay
-                    )
-                ))
+                await send(.delegate(.didRequestMinimize))
                 return
             }
 

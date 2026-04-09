@@ -2,17 +2,29 @@ import ArchivistNetworking
 import AVFoundation
 import AVKit
 import Network
+import SystemConfiguration
 #if !os(tvOS) && !os(watchOS)
 import UIKit
 #endif
 #if canImport(Sharing)
 import Sharing
 #endif
+#if canImport(VLCKit) && !os(tvOS) && !os(watchOS)
+import VLCKit
+#endif
+
+/// Identifies which on-screen container should host the persistent player
+/// surface. Used to prevent the mini and expanded video detail from racing
+/// to reparent the same surface during transitions.
+public enum PlayerSurfaceRole: Sendable, Equatable {
+    case fullDetail
+    case mini
+}
 
 #if !os(watchOS)
 @Observable
 @MainActor
-public final class PlayerManager {
+public final class PlayerManager: NSObject {
     public static let shared = PlayerManager()
 
     public struct NowPlayingMetadata: Sendable {
@@ -51,9 +63,11 @@ public final class PlayerManager {
     public var currentVideoID: String?
     public var isInPiP = false
     public var activePiPDelegate: AnyObject?
+    /// Called when VLC PiP is dismissed by the user — triggers restore flow
+    public var onPiPRestore: (() -> Void)?
 
     public var supportsPiP: Bool {
-        backend is AVPlayerBackend
+        backend is AVPlayerBackend || backend is VLCPlayerBackend
     }
 
     public var isUsingFallbackPlayer: Bool {
@@ -68,6 +82,25 @@ public final class PlayerManager {
     public weak var activePlayerViewController: AVPlayerViewController?
     @ObservationIgnored private let nowPlayingService = NowPlayingService()
     #endif
+
+    #if canImport(VLCKit) && !os(tvOS) && !os(watchOS)
+    /// Persistent VLC drawable view. Created in `load()` for the VLC backend
+    /// and reused across containers. Reparenting it never causes a drawable
+    /// swap, which is what was making VLC video disappear during transitions.
+    public private(set) var persistentVLCDrawable: VLCPiPDrawableView?
+    #endif
+
+    /// Called when PiP starts (from any backend) so the host (TabReducer)
+    /// can auto-minimize the currently presented video detail. Without this
+    /// the original AVPlayerVC may be torn down by SwiftUI while PiP is
+    /// active, and the player has nowhere to render on restore.
+    public var onPiPStartRequested: (() -> Void)?
+
+    /// Identifies which container is currently allowed to host the persistent
+    /// player surface. Without this, two wrapper instances briefly co-exist
+    /// during a mini ↔ full transition and they'd fight over reparenting the
+    /// surface, leaving the wrong container with the player.
+    public var activePlayerSurfaceRole: PlayerSurfaceRole = .fullDetail
 
     #if !os(tvOS)
     private var interruptionObserver: NSObjectProtocol?
@@ -103,7 +136,8 @@ public final class PlayerManager {
         }
     }
 
-    private init() {
+    private override init() {
+        super.init()
         #if !os(tvOS)
         setupBackgroundPlayback()
         #endif
@@ -214,9 +248,21 @@ public final class PlayerManager {
                     config: ctx.config
                 )
             }
+            vlcBackend.onPiPStopped = { [weak self] in
+                self?.onPiPRestore?()
+            }
+            vlcBackend.onPiPStarted = { [weak self] in
+                self?.onPiPStartRequested?()
+            }
             newBackend = vlcBackend
         } else {
-            newBackend = AVPlayerBackend()
+            let avBackend = AVPlayerBackend()
+            #if !os(tvOS)
+            avBackend.onPiPStopped = { [weak self] in
+                self?.onPiPRestore?()
+            }
+            #endif
+            newBackend = avBackend
         }
         pendingAuthContext = nil
         setupBackendCallbacks(newBackend)
@@ -228,6 +274,12 @@ public final class PlayerManager {
         backend = newBackend
         isPlaying = true
         isBuffering = true
+        // New playback always begins in the full detail container.
+        activePlayerSurfaceRole = .fullDetail
+
+        #if !os(tvOS)
+        installPersistentSurface(for: newBackend)
+        #endif
 
         // Parallel download + swap: if the user opted in and we're not already
         // playing from cache or from an offline downloaded file, fetch the
@@ -267,6 +319,7 @@ public final class PlayerManager {
         isInPiP = false
         activePiPDelegate = nil
         #if !os(tvOS)
+        teardownPersistentSurface()
         nowPlayingService.teardown()
         #endif
     }
@@ -319,8 +372,18 @@ public final class PlayerManager {
     }
 
     #if !os(tvOS)
+    public func startPiP() {
+        if let vlcBackend = backend as? VLCPlayerBackend {
+            vlcBackend.startPiP()
+            isInPiP = true
+        }
+    }
+
     public func stopPiP(keepPlayer: Bool = false) {
         guard isInPiP else { return }
+        if let vlcBackend = backend as? VLCPlayerBackend {
+            vlcBackend.stopPiP()
+        }
         if !keepPlayer {
             activePlayerViewController?.player = nil
         }
@@ -332,15 +395,45 @@ public final class PlayerManager {
     }
     #endif
 
+    // MARK: - Persistent Player Surface
+
+    #if !os(tvOS)
+    private func installPersistentSurface(for backend: any PlayerBackend) {
+        // Wipe any leftovers from a previous video.
+        teardownPersistentSurface()
+
+        #if canImport(VLCKit)
+        if let vlcBackend = backend as? VLCPlayerBackend {
+            let drawable = VLCPiPDrawableView()
+            drawable.backgroundColor = .black
+            drawable.translatesAutoresizingMaskIntoConstraints = false
+            drawable.mediaPlayer = vlcBackend.mediaPlayer
+            drawable.backend = vlcBackend
+            vlcBackend.attachDrawable(drawable)
+            persistentVLCDrawable = drawable
+        }
+        #endif
+    }
+
+    private func teardownPersistentSurface() {
+        #if canImport(VLCKit)
+        persistentVLCDrawable?.removeFromSuperview()
+        persistentVLCDrawable = nil
+        #endif
+    }
+    #endif
+
     // MARK: - Network
 
     private nonisolated static func isConnectedToWifi() -> Bool {
-        let monitor = NWPathMonitor()
-        let queue = DispatchQueue(label: "wifi-check")
-        monitor.start(queue: queue)
-        let result = monitor.currentPath.usesInterfaceType(.wifi)
-        monitor.cancel()
-        return result
+        var flags: SCNetworkReachabilityFlags = []
+        guard let reachability = SCNetworkReachabilityCreateWithName(nil, "apple.com"),
+              SCNetworkReachabilityGetFlags(reachability, &flags) else {
+            return false
+        }
+        let isReachable = flags.contains(.reachable)
+        let isWWAN = flags.contains(.isWWAN)
+        return isReachable && !isWWAN
     }
 
     // MARK: - Private
@@ -378,3 +471,4 @@ public final class PlayerManager {
     }
 }
 #endif
+
