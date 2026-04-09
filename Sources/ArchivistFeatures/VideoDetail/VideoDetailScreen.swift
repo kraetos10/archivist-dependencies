@@ -35,10 +35,85 @@ public struct VideoDetailScreen: View {
 
     public var body: some View {
         GeometryReader { geo in
-            if isCompact {
-                compactLayout(geo: geo)
-            } else {
-                regularLayout(geo: geo)
+            // Single structural position for `playerOrThumbnail` across size
+            // class flips. When iPad multitasking changes the horizontal size
+            // class, previously the body switched between two separate layout
+            // subtrees, each with its own player view. SwiftUI tore one down
+            // and recreated the other, which reparented the persistent
+            // `AVPlayerViewController` and dropped its `AVPlayerLayer`
+            // display. Keeping the player at index 0 of a stable outer
+            // HStack/VStack keeps the host controller alive across the flip.
+            let leftColumnWidth = isCompact ? geo.size.width : geo.size.width * 0.65
+            let playerHeight = leftColumnWidth * 9 / 16
+            let useCompactSidebar = geo.size.width < geo.size.height
+
+            HStack(alignment: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    playerOrThumbnail(height: playerHeight)
+                        .padding(.bottom, isCompact ? 0 : 8)
+
+                    if !isCompact {
+                        Divider()
+                            .padding(.bottom, 8)
+                    }
+
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 0) {
+                                contentView(descriptionFont: isCompact ? .subheadline : .body)
+                                    .padding(.top, 8)
+
+                                if !store.comments.isEmpty || store.isLoadingComments {
+                                    commentsSection
+                                        .padding(.vertical, isCompact ? 8 : 0)
+                                }
+
+                                if isCompact {
+                                    compactPlayNextSection
+                                        .padding(.vertical, 8)
+
+                                    if !store.nextVideos.isEmpty {
+                                        compactNextUpSection
+                                            .padding(.vertical, 8)
+                                    }
+
+                                    compactSimilarSection
+                                        .padding(.vertical, 16)
+                                }
+                            }
+                            .id("scrollTop")
+                        }
+                        .onChange(of: store.video.videoId) {
+                            send(.videoChanged)
+                            scrollProxy.scrollTo("scrollTop", anchor: .top)
+                        }
+                    }
+                }
+                .frame(width: isCompact ? nil : leftColumnWidth)
+                .padding(.trailing, isCompact ? 0 : 8)
+
+                if !isCompact {
+                    Divider()
+                        .padding(.horizontal, 4)
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            if !store.playNextItems.isEmpty {
+                                sidebarPlayNextSection(
+                                    compact: useCompactSidebar
+                                )
+                            }
+                            if !store.nextVideos.isEmpty {
+                                sidebarNextUpSection(
+                                    compact: useCompactSidebar
+                                )
+                            }
+                            sidebarSimilarSection(
+                                compact: useCompactSidebar
+                            )
+                        }
+                    }
+                }
             }
         }
         .background(Color.Brand.primary)
@@ -70,105 +145,6 @@ public struct VideoDetailScreen: View {
             store: store,
             isCompact: isCompact
         ))
-    }
-
-    // MARK: - Compact Layout (iPhone / narrow)
-
-    private func compactLayout(geo: GeometryProxy) -> some View {
-        let thumbnailHeight = geo.size.width * 9 / 16
-        return VStack(spacing: 0) {
-            playerOrThumbnail(height: thumbnailHeight)
-
-            ScrollViewReader { scrollProxy in
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        contentView(descriptionFont: .subheadline)
-                            .padding(.top, 8)
-
-                        if !store.comments.isEmpty || store.isLoadingComments {
-                            commentsSection
-                                .padding(.vertical, 8)
-                        }
-
-                        compactPlayNextSection
-                            .padding(.vertical, 8)
-
-                        if !store.nextVideos.isEmpty {
-                            compactNextUpSection
-                                .padding(.vertical, 8)
-                        }
-
-                        compactSimilarSection
-                            .padding(.vertical, 16)
-                    }
-                    .id("scrollTop")
-                }
-                .onChange(of: store.video.videoId) {
-                    send(.videoChanged)
-                    scrollProxy.scrollTo("scrollTop", anchor: .top)
-                }
-            }
-        }
-    }
-
-    // MARK: - Regular Layout (iPad / wide)
-
-    private func regularLayout(geo: GeometryProxy) -> some View {
-        let leftWidth = geo.size.width * 0.65
-        let playerHeight = leftWidth * 9 / 16
-        let useCompactSidebar = geo.size.width < geo.size.height
-
-        return HStack(alignment: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                playerOrThumbnail(height: playerHeight)
-                    .padding(.bottom, 8)
-
-                Divider()
-                    .padding(.bottom, 8)
-
-                ScrollViewReader { scrollProxy in
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            contentView(descriptionFont: .body)
-                                .padding(.top, 8)
-
-                            if !store.comments.isEmpty
-                                || store.isLoadingComments {
-                                commentsSection
-                            }
-                        }
-                        .id("top")
-                    }
-                    .onChange(of: store.video.videoId) {
-                        send(.videoChanged)
-                        scrollProxy.scrollTo("top", anchor: .top)
-                    }
-                }
-            }
-            .frame(width: leftWidth)
-            .padding(.trailing, 8)
-
-            Divider()
-                .padding(.horizontal, 4)
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    if !store.playNextItems.isEmpty {
-                        sidebarPlayNextSection(
-                            compact: useCompactSidebar
-                        )
-                    }
-                    if !store.nextVideos.isEmpty {
-                        sidebarNextUpSection(
-                            compact: useCompactSidebar
-                        )
-                    }
-                    sidebarSimilarSection(
-                        compact: useCompactSidebar
-                    )
-                }
-            }
-        }
     }
 
     // MARK: - Shared Content

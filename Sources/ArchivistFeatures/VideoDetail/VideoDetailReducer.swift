@@ -106,7 +106,7 @@ public struct VideoDetailReducer {
         case watchedToggleResult(Result<Void, Error>)
 
         public enum Delegate {
-            case didRequestMinimize(VideoResponse, [VideoResponse], ServerConfig, Bool, Bool)
+            case didRequestMinimize
             case didDismiss(String)
         }
 

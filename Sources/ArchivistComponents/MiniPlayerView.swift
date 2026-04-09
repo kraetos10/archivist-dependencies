@@ -1,54 +1,62 @@
-#if !os(tvOS)
-import ArchivistNetworking
+#if os(iOS)
 import SwiftUI
 
+// MARK: - Mini Player View
+
+/// Small floating mini player that hosts ONLY the persistent player surface
+/// (AVPlayerViewController or VLC drawable) — never the surrounding video
+/// detail screen. Reparenting the persistent surface from the full container
+/// into this view leaves playback uninterrupted.
 public struct MiniPlayerView: View {
     public let title: String
-    public let channelName: String
-    public let thumbUrl: String?
-    public let serverConfig: ServerConfig
-    public let isPlaying: Bool
-    public let isInPiP: Bool
+    public let useVLC: Bool
     public let onTap: () -> Void
-    public let onPlayPause: () -> Void
     public let onClose: () -> Void
-
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
-    private var playerWidth: CGFloat { sizeClass == .regular ? 300 : 200 }
-    private var playerHeight: CGFloat { sizeClass == .regular ? 169 : 113 }
 
     public init(
         title: String,
-        channelName: String,
-        thumbUrl: String?,
-        serverConfig: ServerConfig,
-        isPlaying: Bool,
-        isInPiP: Bool,
+        useVLC: Bool,
         onTap: @escaping () -> Void,
-        onPlayPause: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
         self.title = title
-        self.channelName = channelName
-        self.thumbUrl = thumbUrl
-        self.serverConfig = serverConfig
-        self.isPlaying = isPlaying
-        self.isInPiP = isInPiP
+        self.useVLC = useVLC
         self.onTap = onTap
-        self.onPlayPause = onPlayPause
         self.onClose = onClose
     }
 
     public var body: some View {
         ZStack {
-            livePlayer
+            Color.black
+
+            playerSurface
                 .allowsHitTesting(false)
 
-            // Invisible tap layer that covers the player
+            // Tap-to-expand layer covers the whole mini player; the close
+            // button sits on top of it via overlay.
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onTap)
+
+            VStack {
+                Spacer()
+                Text(title)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.7)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .allowsHitTesting(false)
+            }
         }
         .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
@@ -63,73 +71,129 @@ public struct MiniPlayerView: View {
             .buttonStyle(.plain)
             .padding(6)
         }
-        .overlay(alignment: .bottom) {
-            Text(title)
-                .font(.caption2)
-                .fontWeight(.medium)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.7)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .allowsHitTesting(false)
-        }
-        .overlay(alignment: .bottom) {
-            GeometryReader { geo in
-                let progress = PlayerManager.shared.duration > 0
-                    ? PlayerManager.shared.currentTime / PlayerManager.shared.duration
-                    : 0
-                Rectangle()
-                    .fill(Color.Accent.dark)
-                    .frame(width: geo.size.width * progress, height: 3)
-            }
-            .frame(height: 3)
-            .allowsHitTesting(false)
-        }
-        .frame(width: playerWidth, height: playerHeight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
     }
 
     @ViewBuilder
-    private var livePlayer: some View {
-        if PlayerManager.shared.backend is VLCPlayerBackend {
-            MiniVLCPlayerView()
-                .frame(width: playerWidth, height: playerHeight)
-        } else if PlayerManager.shared.player != nil {
-            MiniAVPlayerView()
-                .frame(width: playerWidth, height: playerHeight)
+    private var playerSurface: some View {
+        if useVLC {
+            VLCVideoRenderView(role: .mini)
         } else {
-            thumbnail
+            AVPlayerViewControllerWrapper(role: .mini, showsPlaybackControls: false)
+        }
+    }
+}
+
+// MARK: - Mini Player Corner
+
+public enum MiniPlayerCorner: Sendable {
+    case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    func origin(
+        in container: CGSize,
+        miniSize: CGSize,
+        padding: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGPoint {
+        let leftX = padding
+        let rightX = container.width - miniSize.width - padding
+        let topY = topInset + padding
+        let bottomY = container.height - miniSize.height - bottomInset - padding
+
+        switch self {
+        case .topLeading:     return CGPoint(x: leftX,  y: topY)
+        case .topTrailing:    return CGPoint(x: rightX, y: topY)
+        case .bottomLeading:  return CGPoint(x: leftX,  y: bottomY)
+        case .bottomTrailing: return CGPoint(x: rightX, y: bottomY)
         }
     }
 
-    private var thumbnail: some View {
-        Group {
-            if let thumbPath = thumbUrl,
-               let thumbURL = serverConfig.fullURL(for: thumbPath) {
-                AsyncImage(url: thumbURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        Rectangle().fill(Color.Brand.secondary.opacity(0.3))
-                    }
-                }
-                .frame(width: playerWidth, height: playerHeight)
-            } else {
-                Rectangle()
-                    .fill(Color.Brand.secondary.opacity(0.3))
-                    .frame(width: playerWidth, height: playerHeight)
-            }
+    static func nearest(
+        to point: CGPoint,
+        in container: CGSize
+    ) -> MiniPlayerCorner {
+        let isLeft = point.x + 0.5 < container.width / 2
+        let isTop = point.y + 0.5 < container.height / 2
+        switch (isTop, isLeft) {
+        case (true,  true):  return .topLeading
+        case (true,  false): return .topTrailing
+        case (false, true):  return .bottomLeading
+        case (false, false): return .bottomTrailing
         }
+    }
+}
+
+// MARK: - Draggable Mini Player Overlay
+
+/// Positions a `MiniPlayerView` at one of the four corners and lets the user
+/// drag it to a different corner. Drag uses `.offset` (cheap, no relayout)
+/// and snaps to the nearest corner on release.
+public struct DraggableMiniPlayerOverlay<Content: View>: View {
+    public let miniSize: CGSize
+    public let bottomInset: CGFloat
+    public let content: Content
+
+    @State private var corner: MiniPlayerCorner = .bottomTrailing
+    @State private var dragTranslation: CGSize = .zero
+
+    public init(
+        miniSize: CGSize,
+        bottomInset: CGFloat = 60,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.miniSize = miniSize
+        self.bottomInset = bottomInset
+        self.content = content()
+    }
+
+    public var body: some View {
+        GeometryReader { geo in
+            let origin = corner.origin(
+                in: geo.size,
+                miniSize: miniSize,
+                padding: 12,
+                topInset: geo.safeAreaInsets.top,
+                bottomInset: bottomInset
+            )
+            content
+                .frame(width: miniSize.width, height: miniSize.height)
+                .offset(
+                    x: origin.x + dragTranslation.width,
+                    y: origin.y + dragTranslation.height
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 4)
+                        .onChanged { value in
+                            dragTranslation = value.translation
+                        }
+                        .onEnded { value in
+                            let endOrigin = CGPoint(
+                                x: origin.x + value.translation.width,
+                                y: origin.y + value.translation.height
+                            )
+                            let center = CGPoint(
+                                x: endOrigin.x + miniSize.width / 2,
+                                y: endOrigin.y + miniSize.height / 2
+                            )
+                            let snapped = MiniPlayerCorner.nearest(
+                                to: center,
+                                in: geo.size
+                            )
+                            withAnimation(.spring(duration: 0.3)) {
+                                corner = snapped
+                                dragTranslation = .zero
+                            }
+                        }
+                )
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .topLeading
+                )
+        }
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
 #endif

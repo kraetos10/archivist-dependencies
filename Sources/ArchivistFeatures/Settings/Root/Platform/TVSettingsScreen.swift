@@ -117,7 +117,7 @@ public struct TVSettingsScreen: View {
                 }
                 if let port = store.serverConfig.port {
                     LabeledContent(String.localised("settings.port", table: .settings)) {
-                        Text("\(port)")
+                        Text(String(port))
                             .foregroundStyle(.secondary)
                     }
                 }
