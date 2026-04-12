@@ -21,8 +21,8 @@ extension ChannelsReducer {
             return handleAddChannelTapped(state: &state)
         case .unsubscribeTapped(let channel):
             return handleUnsubscribeTapped(channel, state: &state)
-        case .newFilterToggled(let showNewOnly):
-            state.showNewOnly = showNewOnly
+        case .filterChanged(let filter):
+            state.filter = filter
             return .none
         case .splitViewEnabled:
             state.useSplitView = true
@@ -39,8 +39,11 @@ extension ChannelsReducer {
             await send(.newContentIdsLoaded(ids))
         }
 
+        state.isLoadingUnwatchedIds = true
+        let refreshUnwatched = fetchUnwatchedChannelIdsEffect(config: state.serverConfig)
+
         guard state.channels.isEmpty, !state.isLoading else {
-            return refreshBadges
+            return .merge(refreshBadges, refreshUnwatched)
         }
 
         state.isLoading = true
@@ -48,6 +51,7 @@ extension ChannelsReducer {
         let channelService = self.channelService
         return .merge(
             refreshBadges,
+            refreshUnwatched,
             .run { send in
                 let result = await Result {
                     try await channelService.getChannels(
@@ -66,20 +70,61 @@ extension ChannelsReducer {
     private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
         state.isLoading = true
         state.currentPage = 1
+        state.isLoadingUnwatchedIds = true
         let config = state.serverConfig
         let channelService = self.channelService
-        return .run { send in
-            let result = await Result {
-                try await channelService.getChannels(
-                    config: config,
-                    page: 1,
-                    filter: nil,
-                    query: nil
-                )
+        return .merge(
+            fetchUnwatchedChannelIdsEffect(config: config),
+            .run { send in
+                let result = await Result {
+                    try await channelService.getChannels(
+                        config: config,
+                        page: 1,
+                        filter: nil,
+                        query: nil
+                    )
+                }
+                await send(.channelsResult(result))
             }
-            await send(.channelsResult(result))
+            .cancellable(id: CancelID.loadChannels, cancelInFlight: true)
+        )
+    }
+
+    /// Paginate the global unwatched video list and collect the distinct
+    /// channel ids. Capped at a sensible page budget to avoid pathological
+    /// fetches on libraries with huge unwatched backlogs — this is a
+    /// best-effort filter, not an authoritative set.
+    private func fetchUnwatchedChannelIdsEffect(
+        config: ServerConfig
+    ) -> Effect<Action> {
+        let videoService = self.videoService
+        return .run { send in
+            var ids: Set<String> = []
+            let maxPages = 10
+            var page = 1
+            while page <= maxPages {
+                do {
+                    let response = try await videoService.getVideos(
+                        config: config,
+                        page: page,
+                        sort: nil,
+                        order: nil,
+                        type: nil,
+                        watch: "unwatched",
+                        channel: nil,
+                        playlist: nil
+                    )
+                    for video in response.data {
+                        ids.insert(video.channelId)
+                    }
+                    if page >= response.paginate.lastPage { break }
+                    page += 1
+                } catch {
+                    break
+                }
+            }
+            await send(.unwatchedChannelIdsLoaded(ids))
         }
-        .cancellable(id: CancelID.loadChannels, cancelInFlight: true)
     }
 
     private func handleLoadNextPage(state: inout State) -> Effect<Action> {

@@ -342,6 +342,17 @@
         }
       }
     },
+    "generic.unwatched" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unwatched"
+          }
+        }
+      }
+    },
     "generic.videos" : {
       "extractionState" : "manual",
       "localizations" : {
