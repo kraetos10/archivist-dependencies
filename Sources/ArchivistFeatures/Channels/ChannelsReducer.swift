@@ -2,6 +2,12 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
+public enum ChannelListFilter: Sendable, Equatable {
+    case all
+    case withNew
+    case withUnwatched
+}
+
 @Reducer
 public struct ChannelsReducer {
     public init() {}
@@ -19,7 +25,9 @@ public struct ChannelsReducer {
         var isSearching = false
         var useSplitView = false
         var channelIdsWithNewContent: Set<String> = []
-        var showNewOnly = false
+        var channelIdsWithUnwatchedVideos: Set<String> = []
+        var isLoadingUnwatchedIds = false
+        var filter: ChannelListFilter = .all
 
         @Presents var alert: AlertState<AlertAction>?
         @Presents var addChannel: AddChannelReducer.State?
@@ -47,8 +55,14 @@ public struct ChannelsReducer {
             } else {
                 base = channels
             }
-            guard showNewOnly else { return base }
-            return base.filter { channelIdsWithNewContent.contains($0.channelId) }
+            switch filter {
+            case .all:
+                return base
+            case .withNew:
+                return base.filter { channelIdsWithNewContent.contains($0.channelId) }
+            case .withUnwatched:
+                return base.filter { channelIdsWithUnwatchedVideos.contains($0.channelId) }
+            }
         }
     }
 
@@ -71,6 +85,7 @@ public struct ChannelsReducer {
         case searchResult(Result<[ChannelResponse], Error>)
         case unsubscribeResult(Result<String, Error>)
         case newContentIdsLoaded(Set<String>)
+        case unwatchedChannelIdsLoaded(Set<String>)
 
         @CasePathable
         public enum View {
@@ -80,7 +95,7 @@ public struct ChannelsReducer {
             case channelTapped(ChannelResponse)
             case addChannelTapped
             case unsubscribeTapped(ChannelResponse)
-            case newFilterToggled(Bool)
+            case filterChanged(ChannelListFilter)
             case splitViewEnabled
         }
     }
@@ -92,6 +107,7 @@ public struct ChannelsReducer {
 
     @Dependency(\.channelService) var channelService
     @Dependency(\.searchService) var searchService
+    @Dependency(\.videoService) var videoService
     @Dependency(\.continuousClock) var clock
     @Dependency(\.newContentSyncManager) var newContentSyncManager
 

@@ -29,6 +29,10 @@ extension ChannelsReducer {
         case .newContentIdsLoaded(let ids):
             state.channelIdsWithNewContent = ids
             return .none
+        case .unwatchedChannelIdsLoaded(let ids):
+            state.channelIdsWithUnwatchedVideos = ids
+            state.isLoadingUnwatchedIds = false
+            return .none
         default:
             return .none
         }

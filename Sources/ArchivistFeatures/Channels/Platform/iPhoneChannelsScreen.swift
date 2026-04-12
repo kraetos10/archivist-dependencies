@@ -44,14 +44,20 @@ public struct iPhoneChannelsScreen: View {
 
     private var channelListContent: some View {
         ScrollView {
-            newContentFilterRow
+            filterRow
                 .padding(.horizontal)
                 .padding(.top, 8)
 
-            if store.hasLoaded && store.filteredChannels.isEmpty && store.showNewOnly {
+            if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withNew {
                 EmptyStateView(
                     icon: "sparkles",
                     title: String.localised("generic.noNewVideos", table: .generic),
+                    description: String.localised("generic.noNewVideosDescription", table: .generic)
+                )
+            } else if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
+                EmptyStateView(
+                    icon: "eye.slash",
+                    title: String.localised("video.empty.noUnwatched", table: .videos),
                     description: String.localised("generic.noNewVideosDescription", table: .generic)
                 )
             } else if store.hasLoaded && store.filteredChannels.isEmpty && store.searchQuery.isEmpty {
@@ -123,20 +129,24 @@ public struct iPhoneChannelsScreen: View {
                 .presentationDetents([.medium])
         }
     }
-    private var newContentFilterRow: some View {
+    private var filterRow: some View {
         HStack(spacing: 8) {
             filterPill(
                 label: String.localised("generic.all", table: .generic),
                 icon: "line.3.horizontal.decrease.circle",
-                isSelected: !store.showNewOnly,
-                showNewOnly: false
+                filter: .all
             )
 
             filterPill(
                 label: String.localised("generic.newVideos", table: .generic),
                 icon: "sparkles",
-                isSelected: store.showNewOnly,
-                showNewOnly: true
+                filter: .withNew
+            )
+
+            filterPill(
+                label: String.localised("generic.unwatched", table: .generic),
+                icon: "eye.slash",
+                filter: .withUnwatched
             )
 
             Spacer()
@@ -146,11 +156,11 @@ public struct iPhoneChannelsScreen: View {
     private func filterPill(
         label: String,
         icon: String,
-        isSelected: Bool,
-        showNewOnly: Bool
+        filter: ChannelListFilter
     ) -> some View {
-        Button {
-            send(.newFilterToggled(showNewOnly), animation: .default)
+        let isSelected = store.filter == filter
+        return Button {
+            send(.filterChanged(filter), animation: .default)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: icon)
