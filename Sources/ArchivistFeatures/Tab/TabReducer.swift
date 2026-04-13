@@ -8,6 +8,7 @@ public enum AppTab: Hashable, Sendable {
     case home
     case channels
     case playlists
+    case queue
     case settings
 }
 
@@ -21,6 +22,7 @@ public struct TabReducer {
         public var videoList: VideoListReducer.State
         public var channels: ChannelsReducer.State
         public var playlists: PlaylistsReducer.State
+        public var queue: DownloadsReducer.State
         public var settings: SettingsReducer.State
         public var miniPlayerDetail: VideoDetailReducer.State?
         public var isMiniPlayerMinimized = false
@@ -51,6 +53,7 @@ public struct TabReducer {
             self.videoList = VideoListReducer.State(serverConfig: serverConfig)
             self.channels = ChannelsReducer.State(serverConfig: serverConfig)
             self.playlists = PlaylistsReducer.State(serverConfig: serverConfig)
+            self.queue = DownloadsReducer.State(serverConfig: serverConfig)
             self.settings = SettingsReducer.State(serverConfig: serverConfig, supportURL: supportURL)
             #if os(tvOS)
             self.search = TVSearchReducer.State(serverConfig: serverConfig)
@@ -71,6 +74,7 @@ public struct TabReducer {
         case videoList(VideoListReducer.Action)
         case channels(ChannelsReducer.Action)
         case playlists(PlaylistsReducer.Action)
+        case queue(DownloadsReducer.Action)
         case settings(SettingsReducer.Action)
         #if os(tvOS)
         case search(TVSearchReducer.Action)
@@ -123,6 +127,7 @@ public struct TabReducer {
                     _,
                     action: .downloads(.downloadDetail(.presented(.downloadResult(.success))))
                  ))),
+                 .queue(.downloadDetail(.presented(.downloadResult(.success)))),
                  .channels(.channelDetail(.presented(.downloadDetail(.presented(.downloadResult(.success)))))),
                  .channels(.path(.element(
                     _,
@@ -168,7 +173,7 @@ public struct TabReducer {
             case .miniPlayerDetail:
                 return .none
 
-            case .videoList, .channels, .playlists, .settings:
+            case .videoList, .channels, .playlists, .queue, .settings:
                 return .none
             #if os(tvOS)
             case .search(.delegate(.showChannel(let channel))):
@@ -188,6 +193,9 @@ public struct TabReducer {
         }
         Scope(state: \.playlists, action: \.playlists) {
             PlaylistsReducer()
+        }
+        Scope(state: \.queue, action: \.queue) {
+            DownloadsReducer()
         }
         Scope(state: \.settings, action: \.settings) {
             SettingsReducer()

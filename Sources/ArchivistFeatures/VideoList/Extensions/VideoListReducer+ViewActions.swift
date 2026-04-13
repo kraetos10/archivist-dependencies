@@ -187,6 +187,7 @@ extension VideoListReducer {
         let thumbUrl = video.vidThumbUrl
         let authHeaders = state.serverConfig.authHeaders
         let expectedSize = video.mediaSize.map { Int64($0) }
+        let expectedSizeInt = video.mediaSize
         return .run { [deviceDownloadDatabase, persistentDownloadManager] _ in
             let download = DeviceDownload(
                 id: videoId,
@@ -195,6 +196,7 @@ extension VideoListReducer {
                 thumbUrl: thumbUrl,
                 status: .downloading,
                 progress: 0,
+                fileSize: expectedSizeInt,
                 createdAt: Date().timeIntervalSince1970
             )
             try? deviceDownloadDatabase.insertDownload(download)

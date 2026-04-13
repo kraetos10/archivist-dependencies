@@ -104,6 +104,7 @@ extension DeviceDownloadsReducer {
                     thumbUrl: video.vidThumbUrl,
                     status: .downloading,
                     progress: 0,
+                    fileSize: video.mediaSize,
                     createdAt: Date().timeIntervalSince1970
                 )
                 try? deviceDownloadDatabase.insertDownload(retryDownload)

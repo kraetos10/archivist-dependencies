@@ -30,20 +30,21 @@ public struct DeviceDownloadsScreen: View {
                     spacing: 16
                 ) {
                     ForEach(downloads) { download in
-                        VideoCardView(
-                            data: cardData(for: download),
-                            serverConfig: store.serverConfig
-                        )
-                        .overlay(alignment: .bottom) {
+                        VStack(spacing: 8) {
+                            VideoCardView(
+                                data: cardData(for: download),
+                                serverConfig: store.serverConfig
+                            )
+
                             if download.status == .downloading {
                                 ProgressView(value: min(max(download.progress, 0), 1.0))
                                     .tint(Color.Accent.dark)
                                     .scaleEffect(y: 2)
-                                    .padding([.horizontal, .bottom], 12)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 8)
                                     .animation(.easeInOut(duration: 0.3), value: download.progress)
                             }
                         }
-                        .padding(.bottom, download.status == .downloading ? 20 : 0)
                         .contextMenu {
                             if let url = URL(string: "https://www.youtube.com/watch?v=\(download.id)") {
                                 ShareLink(item: url) {

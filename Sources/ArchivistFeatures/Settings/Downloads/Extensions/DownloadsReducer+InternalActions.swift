@@ -70,6 +70,22 @@ extension DownloadsReducer {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
+
+        // In newest-first mode we land on the final API page first. If that
+        // page is only partially filled, the list is too short to scroll and
+        // `lastItemAppeared` never fires — so pre-fetch the previous page to
+        // give the user a usable list out of the gate.
+        if state.sortOrder == .newestFirst,
+           response.paginate.currentPage == discoveredLastPage,
+           response.paginate.currentPage > 1,
+           response.data.count < 20 {
+            state.isLoadingMore = true
+            return fetchDownloads(
+                config: state.serverConfig,
+                page: response.paginate.currentPage - 1
+            )
+        }
+
         return .none
     }
 
