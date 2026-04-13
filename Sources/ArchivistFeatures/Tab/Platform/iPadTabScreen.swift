@@ -35,6 +35,16 @@ public struct iPadTabScreen: View {
             }
 
             Tab(
+                String.localised("settings.queue", table: .settings),
+                systemImage: "arrow.down.circle",
+                value: AppTab.queue
+            ) {
+                NavigationStack {
+                    DownloadsScreen(store: store.scope(state: \.queue, action: \.queue))
+                }
+            }
+
+            Tab(
                 String.localised("generic.settings", table: .generic),
                 systemImage: "gearshape",
                 value: AppTab.settings

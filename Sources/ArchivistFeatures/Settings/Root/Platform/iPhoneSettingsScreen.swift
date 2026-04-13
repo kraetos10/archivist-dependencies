@@ -49,15 +49,6 @@ public struct iPhoneSettingsScreen: View {
 
             Section {
                 Button {
-                    send(.downloadsTapped)
-                } label: {
-                    settingsRow(
-                        icon: "arrow.down.circle",
-                        title: String.localised("settings.queue", table: .settings)
-                    )
-                }
-
-                Button {
                     send(.statsTapped)
                 } label: {
                     settingsRow(

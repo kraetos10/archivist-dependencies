@@ -47,6 +47,14 @@ public struct TabScreen: View {
                 }
                 .tag(AppTab.playlists)
 
+            NavigationStack {
+                DownloadsScreen(store: store.scope(state: \.queue, action: \.queue))
+            }
+            .tabItem {
+                Label(String.localised("settings.queue", table: .settings), systemImage: "arrow.down.circle")
+            }
+            .tag(AppTab.queue)
+
             SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
                 .tabItem {
                     Label(String.localised("generic.settings", table: .generic), systemImage: "gearshape")
