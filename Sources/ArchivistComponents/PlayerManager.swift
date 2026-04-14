@@ -2,6 +2,7 @@ import ArchivistNetworking
 import AVFoundation
 import AVKit
 import Network
+import SwiftUI
 import SystemConfiguration
 #if !os(tvOS) && !os(watchOS)
 import UIKit
@@ -62,6 +63,7 @@ public final class PlayerManager: NSObject {
     public private(set) var duration: Double = 0
     public var currentVideoID: String?
     public var isInPiP = false
+    public var isVLCFullscreen = false
     public var activePiPDelegate: AnyObject?
     /// Called when VLC PiP is dismissed by the user — triggers restore flow
     public var onPiPRestore: (() -> Void)?
@@ -370,6 +372,70 @@ public final class PlayerManager: NSObject {
     public func togglePlayPause() {
         if isPlaying { pause() } else { resume() }
     }
+
+    public var currentTimeDisplay: String {
+        Self.formatTime(currentTime)
+    }
+
+    public var durationDisplay: String {
+        Self.formatTime(duration)
+    }
+
+    private static func formatTime(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "-" }
+        let total = Int(seconds)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let remainder = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, remainder)
+        }
+        return String(format: "%d:%02d", minutes, remainder)
+    }
+
+    #if !os(tvOS) && !os(watchOS)
+    public var vlcControlsVisible: Bool = true
+    @ObservationIgnored private var vlcHideControlsTask: Task<Void, Never>?
+
+    public func scheduleHideVLCControls() {
+        vlcHideControlsTask?.cancel()
+        vlcHideControlsTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                self.vlcControlsVisible = false
+            }
+        }
+    }
+
+    public func showVLCControls() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            vlcControlsVisible = true
+        }
+        scheduleHideVLCControls()
+    }
+
+    public func hideVLCControls() {
+        vlcHideControlsTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            vlcControlsVisible = false
+        }
+    }
+
+    public func cancelVLCHideControls() {
+        vlcHideControlsTask?.cancel()
+    }
+
+    public func toggleVLCFullscreen() {
+        isVLCFullscreen.toggle()
+        if isVLCFullscreen {
+            OrientationLock.shared.unlock()
+        } else {
+            OrientationLock.shared.lockPortrait()
+        }
+        scheduleHideVLCControls()
+    }
+    #endif
 
     #if !os(tvOS)
     public func startPiP() {
