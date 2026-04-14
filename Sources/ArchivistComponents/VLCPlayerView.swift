@@ -4,11 +4,7 @@ import UIKit
 import VLCKit
 
 public struct VLCPlayerView: View {
-    @State private var controlsVisible = true
-    @State private var hideControlsTask: Task<Void, Never>?
-    @State private var isFullscreen = false
-
-    private let playerManager = PlayerManager.shared
+    @Bindable private var playerManager = PlayerManager.shared
 
     public init() {}
 
@@ -18,20 +14,16 @@ public struct VLCPlayerView: View {
         }
         .clipped()
         .onAppear {
-            scheduleHideControls()
+            playerManager.scheduleHideVLCControls()
         }
-        .fullScreenCover(isPresented: $isFullscreen) {
+        .fullScreenCover(isPresented: $playerManager.isVLCFullscreen) {
             playerContent
                 .ignoresSafeArea()
                 .background(Color.black)
                 .statusBarHidden()
                 .persistentSystemOverlays(.hidden)
                 .onAppear {
-                    OrientationLock.shared.unlock()
-                    scheduleHideControls()
-                }
-                .onDisappear {
-                    OrientationLock.shared.lockPortrait()
+                    playerManager.scheduleHideVLCControls()
                 }
         }
     }
@@ -50,16 +42,13 @@ public struct VLCPlayerView: View {
                     .allowsHitTesting(false)
             }
 
-            if controlsVisible {
+            if playerManager.vlcControlsVisible {
                 controlsOverlay
             } else {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            controlsVisible = true
-                        }
-                        scheduleHideControls()
+                        playerManager.showVLCControls()
                     }
             }
         }
@@ -69,16 +58,13 @@ public struct VLCPlayerView: View {
         Color.black.opacity(0.3)
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    controlsVisible = false
-                }
+                playerManager.hideVLCControls()
             }
             .overlay(alignment: .topTrailing) {
                 Button {
-                    isFullscreen.toggle()
-                    scheduleHideControls()
+                    playerManager.toggleVLCFullscreen()
                 } label: {
-                    Image(systemName: isFullscreen
+                    Image(systemName: playerManager.isVLCFullscreen
                           ? "arrow.down.right.and.arrow.up.left"
                           : "arrow.up.left.and.arrow.down.right")
                         .font(.title3)
@@ -90,7 +76,7 @@ public struct VLCPlayerView: View {
                 HStack(spacing: 40) {
                     Button {
                         playerManager.skipBackward(10)
-                        scheduleHideControls()
+                        playerManager.scheduleHideVLCControls()
                     } label: {
                         Image(systemName: "gobackward.10")
                             .font(.title)
@@ -99,7 +85,7 @@ public struct VLCPlayerView: View {
 
                     Button {
                         playerManager.togglePlayPause()
-                        scheduleHideControls()
+                        playerManager.scheduleHideVLCControls()
                     } label: {
                         Image(
                             systemName: playerManager.isPlaying
@@ -112,7 +98,7 @@ public struct VLCPlayerView: View {
 
                     Button {
                         playerManager.skipForward(10)
-                        scheduleHideControls()
+                        playerManager.scheduleHideVLCControls()
                     } label: {
                         Image(systemName: "goforward.10")
                             .font(.title)
@@ -127,21 +113,21 @@ public struct VLCPlayerView: View {
                             ? playerManager.currentTime / playerManager.duration
                             : 0,
                         onDragStarted: {
-                            hideControlsTask?.cancel()
+                            playerManager.cancelVLCHideControls()
                         },
                         onSeek: { value in
                             let target = value * playerManager.duration
                             playerManager.seekTo(target)
-                            scheduleHideControls()
+                            playerManager.scheduleHideVLCControls()
                         }
                     )
 
                     HStack {
-                        Text(formatTime(playerManager.currentTime))
+                        Text(playerManager.currentTimeDisplay)
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.8))
                         Spacer()
-                        Text(formatTime(playerManager.duration))
+                        Text(playerManager.durationDisplay)
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.8))
                     }
@@ -149,29 +135,6 @@ public struct VLCPlayerView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
             }
-    }
-
-    private func scheduleHideControls() {
-        hideControlsTask?.cancel()
-        hideControlsTask = Task {
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                controlsVisible = false
-            }
-        }
-    }
-
-    private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "-" }
-        let total = Int(seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let seconds = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

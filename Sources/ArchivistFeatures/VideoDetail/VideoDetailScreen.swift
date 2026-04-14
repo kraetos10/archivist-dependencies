@@ -139,6 +139,7 @@ public struct VideoDetailScreen: View {
             if isCompact {
                 OrientationLock.shared.unlock()
             }
+            PlayerManager.shared.isVLCFullscreen = false
         }
         .alert($store.scope(state: \.alert, action: \.alert))
         .modifier(PlaylistPickerPresentation(
