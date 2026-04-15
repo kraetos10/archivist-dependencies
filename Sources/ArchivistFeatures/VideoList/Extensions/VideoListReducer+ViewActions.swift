@@ -118,10 +118,10 @@ extension VideoListReducer {
         state: inout State
     ) -> Effect<Action> {
         if filter == .downloaded && state.watchFilter == .downloaded {
-            state.watchFilter = .unwatched
+            state.$watchFilter.withLock { $0 = .unwatched }
             return .none
         }
-        state.watchFilter = filter
+        state.$watchFilter.withLock { $0 = filter }
         guard filter == .downloaded else { return .none }
 
         // downloadedVideoIDs is reactive via @FetchAll

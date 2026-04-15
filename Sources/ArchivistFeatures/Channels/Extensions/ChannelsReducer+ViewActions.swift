@@ -22,7 +22,7 @@ extension ChannelsReducer {
         case .unsubscribeTapped(let channel):
             return handleUnsubscribeTapped(channel, state: &state)
         case .filterChanged(let filter):
-            state.filter = filter
+            state.$filter.withLock { $0 = filter }
             return .none
         case .splitViewEnabled:
             state.useSplitView = true

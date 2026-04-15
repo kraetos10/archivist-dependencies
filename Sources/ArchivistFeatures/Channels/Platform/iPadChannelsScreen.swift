@@ -162,26 +162,26 @@ public struct iPadChannelsScreen: View {
     }
 
     private var filterRow: some View {
-        HStack(spacing: 8) {
-            filterPill(
-                label: String.localised("generic.all", table: .generic),
-                icon: "line.3.horizontal.decrease.circle",
-                filter: .all
-            )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterPill(
+                    label: String.localised("generic.all", table: .generic),
+                    icon: "line.3.horizontal.decrease.circle",
+                    filter: .all
+                )
 
-            filterPill(
-                label: String.localised("generic.newVideos", table: .generic),
-                icon: "sparkles",
-                filter: .withNew
-            )
+                filterPill(
+                    label: String.localised("generic.newVideos", table: .generic),
+                    icon: "sparkles",
+                    filter: .withNew
+                )
 
-            filterPill(
-                label: String.localised("generic.unwatched", table: .generic),
-                icon: "eye.slash",
-                filter: .withUnwatched
-            )
-
-            Spacer()
+                filterPill(
+                    label: String.localised("generic.unwatched", table: .generic),
+                    icon: "eye.slash",
+                    filter: .withUnwatched
+                )
+            }
         }
     }
 
