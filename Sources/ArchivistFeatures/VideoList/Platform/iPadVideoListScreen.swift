@@ -12,7 +12,7 @@ public struct iPadVideoListScreen: View {
         self.store = store
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 300), spacing: 16)]
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
 
     public var body: some View {
         NavigationStack {

@@ -18,7 +18,7 @@ public struct DownloadsScreen: View {
         [GridItem(.adaptive(minimum: 400), spacing: 48)]
         #else
         if horizontalSizeClass == .regular {
-            [GridItem(.adaptive(minimum: 300), spacing: 16)]
+            Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
         } else {
             [GridItem(.flexible())]
         }

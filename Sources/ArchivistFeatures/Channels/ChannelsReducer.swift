@@ -2,7 +2,7 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
-public enum ChannelListFilter: Sendable, Equatable {
+public enum ChannelListFilter: String, Sendable, Equatable {
     case all
     case withNew
     case withUnwatched
@@ -27,7 +27,7 @@ public struct ChannelsReducer {
         var channelIdsWithNewContent: Set<String> = []
         var channelIdsWithUnwatchedVideos: Set<String> = []
         var isLoadingUnwatchedIds = false
-        var filter: ChannelListFilter = .all
+        @Shared(.appStorage("channelsFilter")) var filter: ChannelListFilter = .all
 
         @Presents var alert: AlertState<AlertAction>?
         @Presents var addChannel: AddChannelReducer.State?
