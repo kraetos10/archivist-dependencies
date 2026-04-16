@@ -14,12 +14,6 @@ public struct TVChannelDetailScreen: View {
 
     private let columns = [GridItem(.adaptive(minimum: 400), spacing: 48)]
 
-    private func isNewVideo(_ video: VideoResponse) -> Bool {
-        guard let since = store.newContentSince,
-              let published = video.publishedDate else { return false }
-        return published > since
-    }
-
     public var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
@@ -229,19 +223,6 @@ public struct TVChannelDetailScreen: View {
                             serverConfig: store.serverConfig
                         ) {
                             send(.videoCardTapped(video))
-                        }
-                        .overlay(alignment: .topLeading) {
-                            if isNewVideo(video) {
-                                Text(String(localized: "NEW"))
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.Accent.dark)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                                    .padding(8)
-                            }
                         }
                         .onAppear {
                             if video.id == store.videos.last?.id {

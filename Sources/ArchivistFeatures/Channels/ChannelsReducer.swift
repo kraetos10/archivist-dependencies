@@ -4,7 +4,6 @@ import Foundation
 
 public enum ChannelListFilter: String, Sendable, Equatable {
     case all
-    case withNew
     case withUnwatched
 }
 
@@ -24,7 +23,6 @@ public struct ChannelsReducer {
         var searchResults: IdentifiedArrayOf<ChannelResponse> = []
         var isSearching = false
         var useSplitView = false
-        var channelIdsWithNewContent: Set<String> = []
         var channelIdsWithUnwatchedVideos: Set<String> = []
         var isLoadingUnwatchedIds = false
         @Shared(.appStorage("channelsFilter")) var filter: ChannelListFilter = .all
@@ -58,8 +56,6 @@ public struct ChannelsReducer {
             switch filter {
             case .all:
                 return base
-            case .withNew:
-                return base.filter { channelIdsWithNewContent.contains($0.channelId) }
             case .withUnwatched:
                 return base.filter { channelIdsWithUnwatchedVideos.contains($0.channelId) }
             }
@@ -84,7 +80,6 @@ public struct ChannelsReducer {
 
         case searchResult(Result<[ChannelResponse], Error>)
         case unsubscribeResult(Result<String, Error>)
-        case newContentIdsLoaded(Set<String>)
         case unwatchedChannelIdsLoaded(Set<String>)
 
         @CasePathable
@@ -109,7 +104,6 @@ public struct ChannelsReducer {
     @Dependency(\.searchService) var searchService
     @Dependency(\.videoService) var videoService
     @Dependency(\.continuousClock) var clock
-    @Dependency(\.newContentSyncManager) var newContentSyncManager
 
     public var body: some Reducer<State, Action> {
         BindingReducer()

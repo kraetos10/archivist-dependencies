@@ -48,13 +48,7 @@ public struct iPhoneChannelsScreen: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
 
-            if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withNew {
-                EmptyStateView(
-                    icon: "sparkles",
-                    title: String.localised("generic.noNewVideos", table: .generic),
-                    description: String.localised("generic.noNewVideosDescription", table: .generic)
-                )
-            } else if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
+            if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
                 EmptyStateView(
                     icon: "eye.slash",
                     title: String.localised("video.empty.noUnwatched", table: .videos),
@@ -86,8 +80,7 @@ public struct iPhoneChannelsScreen: View {
                         ForEach(store.filteredChannels) { channel in
                             ChannelCardView(
                                 channel: channel,
-                                serverConfig: store.serverConfig,
-                                hasNewContent: store.channelIdsWithNewContent.contains(channel.channelId)
+                                serverConfig: store.serverConfig
                             )
                             .contextMenu {
                                 Button(role: .destructive) {
@@ -135,12 +128,6 @@ public struct iPhoneChannelsScreen: View {
                 label: String.localised("generic.all", table: .generic),
                 icon: "line.3.horizontal.decrease.circle",
                 filter: .all
-            )
-
-            filterPill(
-                label: String.localised("generic.newVideos", table: .generic),
-                icon: "sparkles",
-                filter: .withNew
             )
 
             filterPill(

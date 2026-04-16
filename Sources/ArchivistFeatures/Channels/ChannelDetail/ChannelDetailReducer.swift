@@ -27,7 +27,6 @@ public struct ChannelDetailReducer: Sendable {
         var isDescriptionExpanded = false
         var videoFilter: ChannelVideoFilter = .unwatched
         var videoSortOrder: VideoSortOrder = .published
-        var newContentSince: Date?
 
         var filteredVideos: IdentifiedArrayOf<VideoResponse> {
             switch videoFilter {

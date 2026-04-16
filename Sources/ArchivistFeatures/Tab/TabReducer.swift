@@ -83,7 +83,6 @@ public struct TabReducer {
 
     @Dependency(\.pipRestoreService) var pipRestoreService
     @Dependency(\.pipMinimizeService) var pipMinimizeService
-    @Dependency(\.newContentSyncManager) var newContentSyncManager
     @Dependency(\.continuousClock) var clock
     @Dependency(\.videoService) var videoService
 
@@ -105,14 +104,10 @@ public struct TabReducer {
                 return handlePiPStartedMinimizeRequested(state: &state)
 
             case .homeChannelTapped(let channel):
-                state.channels.channelIdsWithNewContent.remove(channel.channelId)
-                var detailState = ChannelDetailReducer.State(
+                let detailState = ChannelDetailReducer.State(
                     serverConfig: state.channels.serverConfig,
                     channel: channel
                 )
-                detailState.newContentSince = UserDefaults.standard.object(
-                    forKey: "newContentSync.lastLaunchDate"
-                ) as? Date
                 state.channels.selectedChannel = detailState
                 return .none
 

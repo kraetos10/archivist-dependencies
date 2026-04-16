@@ -27,12 +27,6 @@ public struct ChannelDetailScreen: View {
         #endif
     }
 
-    private func isNewVideo(_ video: VideoResponse) -> Bool {
-        guard let since = store.newContentSince,
-              let published = video.publishedDate else { return false }
-        return published > since
-    }
-
     private var pendingColumns: [GridItem] {
         #if os(tvOS)
         [GridItem(.adaptive(minimum: 300), spacing: 32)]
@@ -309,19 +303,6 @@ public struct ChannelDetailScreen: View {
                                 video: video,
                                 serverConfig: store.serverConfig
                             )
-                            .overlay(alignment: .topLeading) {
-                                if isNewVideo(video) {
-                                    Text(String(localized: "NEW"))
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.Accent.dark)
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                                        .padding(6)
-                                }
-                            }
                             .frame(width: videoCardWidth)
                             #if !os(tvOS)
                             .contextMenu {
