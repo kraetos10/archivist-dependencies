@@ -152,6 +152,16 @@ extension VideoDetailScreen {
                         serverConfig: store.serverConfig,
                         compact: compact
                     )
+                    .contextMenu {
+                        Button {
+                            send(.addUpNextToPlayNextTapped(video))
+                        } label: {
+                            Label(
+                                String.localised("video.playNext", table: .videos),
+                                systemImage: "text.line.first.and.arrowtriangle.forward"
+                            )
+                        }
+                    }
                     .pressable {
                         send(.nextUpVideoTapped(video))
                     }
