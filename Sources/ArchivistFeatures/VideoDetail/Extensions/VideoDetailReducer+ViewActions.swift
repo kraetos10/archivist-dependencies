@@ -38,6 +38,8 @@ extension VideoDetailReducer {
             return handleAddToPlaylistTapped(state: &state)
         case .addToPlayNextTapped:
             return handleAddToPlayNextTapped(state: &state)
+        case .addUpNextToPlayNextTapped(let video):
+            return handleAddUpNextToPlayNextTapped(video, state: &state)
         case .removeFromPlayNextTapped(let id):
             return handleRemoveFromPlayNextTapped(id, state: &state)
         case .videoChanged:
@@ -402,6 +404,15 @@ extension VideoDetailReducer {
 
     private func handleAddToPlayNextTapped(state: inout State) -> Effect<Action> {
         let video = state.video
+        return .run { [playNextDatabase] _ in
+            try? await playNextDatabase.addToQueue(video)
+        }
+    }
+
+    private func handleAddUpNextToPlayNextTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
         return .run { [playNextDatabase] _ in
             try? await playNextDatabase.addToQueue(video)
         }

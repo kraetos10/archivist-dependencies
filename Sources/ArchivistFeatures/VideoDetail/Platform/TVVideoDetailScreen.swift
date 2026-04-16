@@ -159,6 +159,16 @@ public struct TVVideoDetailScreen: View {
                                         send(.nextUpVideoTapped(video))
                                     }
                                     .frame(width: 400)
+                                    .contextMenu {
+                                        Button {
+                                            send(.addUpNextToPlayNextTapped(video))
+                                        } label: {
+                                            Label(
+                                                String.localised("video.playNext", table: .videos),
+                                                systemImage: "text.line.first.and.arrowtriangle.forward"
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal, 48)
