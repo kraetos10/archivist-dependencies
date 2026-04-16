@@ -161,10 +161,6 @@ public struct iPhoneSettingsScreen: View {
                         title: String.localised("video.cache.row", table: .videos)
                     )
                 }
-                Toggle(
-                    String.localised("settings.checkForChannelUpdates", table: .settings),
-                    isOn: $store.checkForChannelUpdates
-                )
             } header: {
                 Text(String.localised("video.playback", table: .videos))
             }

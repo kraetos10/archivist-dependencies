@@ -1,4 +1,3 @@
-import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -33,24 +32,17 @@ extension ChannelsReducer {
     // MARK: - Private Handlers
 
     private func handleOnAppear(state: inout State) -> Effect<Action> {
-        // Refresh new content badges every time view appears
-        let refreshBadges: Effect<Action> = .run { [newContentSyncManager] send in
-            let ids = await newContentSyncManager.allNewChannelIds()
-            await send(.newContentIdsLoaded(ids))
-        }
-
         state.isLoadingUnwatchedIds = true
         let refreshUnwatched = fetchUnwatchedChannelIdsEffect(config: state.serverConfig)
 
         guard state.channels.isEmpty, !state.isLoading else {
-            return .merge(refreshBadges, refreshUnwatched)
+            return refreshUnwatched
         }
 
         state.isLoading = true
         let config = state.serverConfig
         let channelService = self.channelService
         return .merge(
-            refreshBadges,
             refreshUnwatched,
             .run { send in
                 let result = await Result {
@@ -156,23 +148,15 @@ extension ChannelsReducer {
                 return .none
             }
         }
-        // Clear the "new" badge when the user taps a channel
-        state.channelIdsWithNewContent.remove(channel.channelId)
-        var detailState = ChannelDetailReducer.State(
+        let detailState = ChannelDetailReducer.State(
             serverConfig: state.serverConfig,
             channel: channel
         )
-        detailState.newContentSince = UserDefaults.standard.object(
-            forKey: "newContentSync.lastLaunchDate"
-        ) as? Date
         state.selectedChannel = detailState
         if !state.useSplitView {
             state.path.append(.channelDetail(detailState))
         }
-        let channelId = channel.channelId
-        return .run { [newContentSyncManager] _ in
-            await newContentSyncManager.markSeen(channelId: channelId)
-        }
+        return .none
     }
 
     private func handleAddChannelTapped(state: inout State) -> Effect<Action> {

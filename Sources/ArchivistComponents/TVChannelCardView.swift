@@ -5,7 +5,6 @@ import SwiftUI
 public struct TVChannelCardView: View {
     public let channel: ChannelResponse
     public let serverConfig: ServerConfig
-    public let hasNewContent: Bool
     public var action: () -> Void = {}
 
     @FocusState private var isFocused: Bool
@@ -13,12 +12,10 @@ public struct TVChannelCardView: View {
     public init(
         channel: ChannelResponse,
         serverConfig: ServerConfig,
-        hasNewContent: Bool = false,
         action: @escaping () -> Void = {}
     ) {
         self.channel = channel
         self.serverConfig = serverConfig
-        self.hasNewContent = hasNewContent
         self.action = action
     }
 
@@ -38,18 +35,6 @@ public struct TVChannelCardView: View {
 
     private var thumbnailView: some View {
         ChannelThumbView(url: thumbnailURL, size: 120)
-            .overlay(alignment: .topTrailing) {
-                if hasNewContent {
-                    Circle()
-                        .fill(Color.Accent.dark)
-                        .frame(width: 16, height: 16)
-                        .overlay(
-                            Circle()
-                                .stroke(.black.opacity(0.3), lineWidth: 2)
-                        )
-                        .offset(x: 2, y: -2)
-                }
-            }
     }
 
     private var infoView: some View {

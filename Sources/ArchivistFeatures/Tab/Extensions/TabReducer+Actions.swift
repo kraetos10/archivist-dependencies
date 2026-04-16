@@ -5,8 +5,6 @@ import SwiftUI
 
 extension TabReducer {
     func handleAppeared(state: inout State) -> Effect<Action> {
-        let config = state.serverConfig
-        let shouldSync = state.settings.checkForChannelUpdates
         // Wire PlayerManager callbacks to TCA services so the player layer
         // can request minimize / restore without holding TCA dependencies.
         let restoreService = pipRestoreService
@@ -19,7 +17,7 @@ extension TabReducer {
                 Task { await minimizeService.request() }
             }
         }
-        var effects: [Effect<Action>] = [
+        return .merge(
             .send(.settings(.activeTask(.view(.startPolling)))),
             .run { [pipRestoreService] send in
                 for await requested in await pipRestoreService.subscribe() {
@@ -35,25 +33,14 @@ extension TabReducer {
                     await send(.pipStartedMinimizeRequested)
                 }
             }
-        ]
-        if shouldSync {
-            effects.append(.run { [newContentSyncManager] _ in
-                await newContentSyncManager.sync(config: config)
-            })
-        }
-        return .merge(effects)
+        )
     }
 
     func handleScenePhaseChanged(
         _ phase: ScenePhase,
         state: inout State
     ) -> Effect<Action> {
-        guard phase == .active else { return .none }
-        guard state.settings.checkForChannelUpdates else { return .none }
-        let config = state.serverConfig
-        return .run { [newContentSyncManager] _ in
-            await newContentSyncManager.sync(config: config)
-        }
+        return .none
     }
 
     // MARK: - Mini Player

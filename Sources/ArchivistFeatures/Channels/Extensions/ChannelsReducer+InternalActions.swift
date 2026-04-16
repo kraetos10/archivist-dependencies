@@ -26,9 +26,6 @@ extension ChannelsReducer {
             return .none
         case .unsubscribeResult(.failure):
             return .none
-        case .newContentIdsLoaded(let ids):
-            state.channelIdsWithNewContent = ids
-            return .none
         case .unwatchedChannelIdsLoaded(let ids):
             state.channelIdsWithUnwatchedVideos = ids
             state.isLoadingUnwatchedIds = false
@@ -56,10 +53,7 @@ extension ChannelsReducer {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
-        return .run { [newContentSyncManager] send in
-            let ids = await newContentSyncManager.allNewChannelIds()
-            await send(.newContentIdsLoaded(ids))
-        }
+        return .none
     }
 
     private func handleChannelsFailed(state: inout State) -> Effect<Action> {

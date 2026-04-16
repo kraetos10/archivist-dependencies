@@ -152,10 +152,6 @@ public struct TVSettingsScreen: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Toggle(
-                    String.localised("settings.checkForChannelUpdates", table: .settings),
-                    isOn: $store.checkForChannelUpdates
-                )
             } header: {
                 Text(String.localised("video.playback", table: .videos))
             }

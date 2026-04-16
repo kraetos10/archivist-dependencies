@@ -4,18 +4,15 @@ import SwiftUI
 public struct ChannelCardView: View {
     public let channel: ChannelResponse
     public let serverConfig: ServerConfig
-    public let hasNewContent: Bool
 
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     public init(
         channel: ChannelResponse,
-        serverConfig: ServerConfig,
-        hasNewContent: Bool = false
+        serverConfig: ServerConfig
     ) {
         self.channel = channel
         self.serverConfig = serverConfig
-        self.hasNewContent = hasNewContent
     }
 
     private var avatarSize: CGFloat {
@@ -36,18 +33,6 @@ public struct ChannelCardView: View {
 
     private var thumbnailView: some View {
         ChannelThumbView(url: thumbnailURL, size: avatarSize)
-            .overlay(alignment: .topTrailing) {
-                if hasNewContent {
-                    Circle()
-                        .fill(Color.Accent.dark)
-                        .frame(width: 14, height: 14)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.Surface.highlight, lineWidth: 2)
-                        )
-                        .offset(x: 2, y: -2)
-                }
-            }
     }
 
     private var infoView: some View {
