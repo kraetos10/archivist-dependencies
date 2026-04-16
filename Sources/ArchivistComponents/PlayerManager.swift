@@ -274,6 +274,7 @@ public final class PlayerManager: NSObject {
             authHeaders: effectiveAuthHeaders
         )
         backend = newBackend
+        currentVideoID = videoId
         isPlaying = true
         isBuffering = true
         // New playback always begins in the full detail container.
@@ -298,7 +299,8 @@ public final class PlayerManager: NSObject {
                 videoId: videoId,
                 authHeaders: authHeaders
             ) { [weak self] fileURL in
-                self?.backend?.swapToLocalFile(fileURL)
+                guard let self, self.currentVideoID == videoId else { return }
+                self.backend?.swapToLocalFile(fileURL)
             }
         }
     }
@@ -309,6 +311,11 @@ public final class PlayerManager: NSObject {
             stopPiP()
         }
         #endif
+        // Cancel any in-progress cache download so its completion callback
+        // doesn't swap a stale file into the next video's backend.
+        if let videoId = currentVideoID {
+            PlaybackCache.shared.cancelDownload(videoId: videoId)
+        }
         backend?.stop()
         backend = nil
         isPlaying = false

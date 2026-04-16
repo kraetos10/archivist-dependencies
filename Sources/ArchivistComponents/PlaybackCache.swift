@@ -28,7 +28,7 @@ public final class PlaybackCache {
         public let lastAccessed: Date
     }
 
-    private var activeDownloads: [String: Task<Void, Never>] = [:]
+    private var activeSessions: [String: URLSession] = [:]
 
     private init() {}
 
@@ -71,7 +71,7 @@ public final class PlaybackCache {
         onCompleted: @escaping @MainActor (URL) -> Void
     ) {
         guard !videoId.isEmpty else { return }
-        guard activeDownloads[videoId] == nil else { return }
+        guard activeSessions[videoId] == nil else { return }
         if cachedFileURL(for: videoId) != nil {
             print("[PlaybackCache] Already cached: \(videoId)")
             onCompleted(Self.fileURL(for: videoId))
@@ -95,11 +95,11 @@ public final class PlaybackCache {
             videoId: videoId,
             destination: destination,
             onCompleted: { [weak self] in
-                self?.activeDownloads[videoId] = nil
+                self?.activeSessions[videoId] = nil
                 onCompleted(destination)
             },
             onFailed: { [weak self] in
-                self?.activeDownloads[videoId] = nil
+                self?.activeSessions[videoId] = nil
             }
         )
 
@@ -109,18 +109,14 @@ public final class PlaybackCache {
             delegateQueue: nil
         )
         let downloadTask = session.downloadTask(with: request)
-        let wrapper = Task { @MainActor in
-            // Hold strong references so delegate + session stay alive
-            withExtendedLifetime((session, delegate)) {}
-        }
-        activeDownloads[videoId] = wrapper
+        activeSessions[videoId] = session
         delegate.session = session
         downloadTask.resume()
     }
 
     public func cancelDownload(videoId: String) {
-        activeDownloads[videoId]?.cancel()
-        activeDownloads[videoId] = nil
+        guard let session = activeSessions.removeValue(forKey: videoId) else { return }
+        session.invalidateAndCancel()
     }
 
     // MARK: - Cache management
