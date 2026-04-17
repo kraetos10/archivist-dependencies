@@ -6,6 +6,7 @@ public struct WatchServerQueueView: View {
     @State var viewModel: WatchServerQueueViewModel
     @State private var showingAddSheet = false
     @State private var selectedDownload: DownloadResponse?
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(viewModel: WatchServerQueueViewModel) {
         self.viewModel = viewModel
@@ -90,8 +91,11 @@ public struct WatchServerQueueView: View {
             .refreshable {
                 await viewModel.refresh()
             }
-            .onAppear {
-                Task { await viewModel.viewDidAppear() }
+            .task { await viewModel.viewDidAppear() }
+            .onChange(of: scenePhase) {
+                if scenePhase == .active {
+                    Task { await viewModel.refresh() }
+                }
             }
             .confirmationDialog(
                 selectedDownload?.title ?? "",
