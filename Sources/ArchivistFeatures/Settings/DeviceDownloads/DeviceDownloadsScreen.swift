@@ -37,12 +37,18 @@ public struct DeviceDownloadsScreen: View {
                             )
 
                             if download.status == .downloading {
-                                ProgressView(value: min(max(download.progress, 0), 1.0))
-                                    .tint(Color.Accent.dark)
-                                    .scaleEffect(y: 2)
-                                    .padding(.horizontal, 12)
-                                    .padding(.bottom, 8)
-                                    .animation(.easeInOut(duration: 0.3), value: download.progress)
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .tint(Color.Accent.dark)
+                                    Text(
+                                        download.progress > 0
+                                            ? "\(Int(download.progress * 100))%"
+                                            : String.localised("video.downloading", table: .videos)
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(Color.Brand.secondary)
+                                }
+                                .padding(.bottom, 8)
                             }
                         }
                         .contextMenu {

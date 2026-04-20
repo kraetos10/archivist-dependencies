@@ -109,6 +109,12 @@ public final class PlayerManager: NSObject {
     private var foregroundObserver: NSObjectProtocol?
     #endif
 
+    #if !os(tvOS) && !os(watchOS)
+    /// Background task that keeps the app alive between videos so the
+    /// auto-play transition can complete (fetch next video + start playback).
+    private var playbackTransitionTask: UIBackgroundTaskIdentifier = .invalid
+    #endif
+
     public var onPause: (() -> Void)?
 
     private struct AuthContext {
@@ -219,6 +225,14 @@ public final class PlayerManager: NSObject {
         videoId: String? = nil
     ) {
         stop()
+
+        // End the background transition task — new audio is about to start.
+        #if !os(tvOS) && !os(watchOS)
+        if playbackTransitionTask != .invalid {
+            UIApplication.shared.endBackgroundTask(playbackTransitionTask)
+            playbackTransitionTask = .invalid
+        }
+        #endif
 
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
@@ -539,7 +553,17 @@ public final class PlayerManager: NSObject {
         }
 
         backend.onPlaybackEnd = { [weak self] in
-            // Handled via playbackEndEvents() async stream
+            // Begin a background task immediately (on main thread) so iOS
+            // doesn't suspend the app before the next video can start.
+            #if !os(tvOS) && !os(watchOS)
+            guard let self else { return }
+            if self.playbackTransitionTask != .invalid {
+                UIApplication.shared.endBackgroundTask(self.playbackTransitionTask)
+            }
+            self.playbackTransitionTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+                self?.playbackTransitionTask = .invalid
+            }
+            #endif
         }
     }
 }
