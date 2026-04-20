@@ -272,7 +272,7 @@ extension VideoListReducer {
         state: inout State
     ) -> Effect<Action> {
         guard sort != state.sortOrder else { return .none }
-        state.sortOrder = sort
+        state.$sortOrder.withLock { $0 = sort }
         state.videos = []
         state.currentPage = 1
         state.lastPage = 1

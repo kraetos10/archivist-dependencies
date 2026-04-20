@@ -51,11 +51,25 @@ extension TabReducer {
     ) -> Effect<Action> {
         state.miniPlayerDetail = detail
         state.isMiniPlayerMinimized = true
-        return .run { _ in
-            await MainActor.run {
-                PlayerManager.shared.activePlayerSurfaceRole = .mini
+        return .merge(
+            .run { _ in
+                await MainActor.run {
+                    PlayerManager.shared.activePlayerSurfaceRole = .mini
+                }
+            },
+            // Re-subscribe to playback end events. The original subscription
+            // was cancelled when the presenting scope set videoDetail = nil,
+            // so the mini player needs its own listener for auto-play/play-next.
+            .run { send in
+                let stream = await MainActor.run {
+                    PlayerManager.shared.playbackEndEvents()
+                }
+                for await _ in stream {
+                    await send(.miniPlayerDetail(.view(.videoPlaybackDidEnd)))
+                }
             }
-        }
+            .cancellable(id: CancelID.miniPlayerPlayback, cancelInFlight: true)
+        )
     }
 
     func handleMiniPlayerTapped(state: inout State) -> Effect<Action> {
@@ -109,6 +123,7 @@ extension TabReducer {
         state.miniPlayerDetail = nil
         state.isMiniPlayerMinimized = false
         return .merge(
+            .cancel(id: CancelID.miniPlayerPlayback),
             .run { _ in
                 await MainActor.run {
                     PlayerManager.shared.stop()
