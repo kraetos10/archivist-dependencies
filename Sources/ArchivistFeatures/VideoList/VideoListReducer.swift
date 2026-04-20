@@ -69,7 +69,7 @@ public struct VideoListReducer {
         var isLoadingMore = false
         var hasLoaded = false
         @Shared(.appStorage("videoListWatchFilter")) var watchFilter: WatchFilter = .unwatched
-        var sortOrder: VideoSortOrder = .published
+        @Shared(.appStorage("videoListSortOrder")) var sortOrder: VideoSortOrder = .published
         @FetchAll(
             DeviceDownload
                 .where { $0.status.eq(DeviceDownloadStatus.completed) }

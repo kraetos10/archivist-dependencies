@@ -81,6 +81,8 @@ public struct TabReducer {
         #endif
     }
 
+    enum CancelID { case miniPlayerPlayback }
+
     @Dependency(\.pipRestoreService) var pipRestoreService
     @Dependency(\.pipMinimizeService) var pipMinimizeService
     @Dependency(\.continuousClock) var clock
