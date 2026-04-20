@@ -2,9 +2,6 @@ import ArchivistNetworking
 import ArchivistComponents
 import ComposableArchitecture
 import Foundation
-#if canImport(UIKit)
-import UIKit
-#endif
 
 extension VideoDetailReducer {
     public func handleViewAction(
@@ -362,13 +359,6 @@ extension VideoDetailReducer {
         let shouldAutoPlayNext = state.shouldAutoPlayNextVideo
         let similarVideos = state.similarVideos
         return .merge(saveEffect, .run { [playNextDatabase, videoService] send in
-            // Request background execution time so iOS doesn't suspend the app
-            // between videos (no audio is playing during this transition).
-            #if canImport(UIKit) && !os(tvOS)
-            let taskID = await UIApplication.shared.beginBackgroundTask()
-            defer { UIApplication.shared.endBackgroundTask(taskID) }
-            #endif
-
             // 1. Play Next queue (user-curated, highest priority)
             if let nextItem = try? await playNextDatabase.popNext() {
                 do {
