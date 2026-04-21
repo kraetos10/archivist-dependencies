@@ -30,27 +30,10 @@ public struct DeviceDownloadsScreen: View {
                     spacing: 16
                 ) {
                     ForEach(downloads) { download in
-                        VStack(spacing: 8) {
-                            VideoCardView(
-                                data: cardData(for: download),
-                                serverConfig: store.serverConfig
-                            )
-
-                            if download.status == .downloading {
-                                HStack(spacing: 6) {
-                                    ProgressView()
-                                        .tint(Color.Accent.dark)
-                                    Text(
-                                        download.progress > 0
-                                            ? "\(Int(download.progress * 100))%"
-                                            : String.localised("video.downloading", table: .videos)
-                                    )
-                                    .font(.caption)
-                                    .foregroundStyle(Color.Brand.secondary)
-                                }
-                                .padding(.bottom, 8)
-                            }
-                        }
+                        VideoCardView(
+                            data: cardData(for: download),
+                            serverConfig: store.serverConfig
+                        )
                         .contextMenu {
                             if let url = URL(string: "https://www.youtube.com/watch?v=\(download.id)") {
                                 ShareLink(item: url) {

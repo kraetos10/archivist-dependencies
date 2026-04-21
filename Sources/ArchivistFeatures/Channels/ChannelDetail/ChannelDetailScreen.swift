@@ -62,6 +62,7 @@ public struct ChannelDetailScreen: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(Color.Brand.primary)
+        .refreshable { send(.pullToRefreshTriggered) }
         .toolbar {
             #if !os(tvOS)
             ToolbarItem(placement: .navigationBarTrailing) {

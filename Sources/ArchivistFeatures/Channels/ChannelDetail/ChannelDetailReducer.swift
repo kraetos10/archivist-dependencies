@@ -74,6 +74,7 @@ public struct ChannelDetailReducer: Sendable {
         @CasePathable
         public enum View {
             case viewDidAppear
+            case pullToRefreshTriggered
             case lastVideoAppeared
             case videoCardTapped(VideoResponse)
             case downloadCardTapped(DownloadResponse)
@@ -121,6 +122,7 @@ public struct ChannelDetailReducer: Sendable {
             case .alert(.presented(.confirmUnsubscribe)):
                 return handleUnsubscribeConfirmed(state: &state)
             case .alert(.presented(.confirmDownload(let videoId))):
+                state.pendingDownloads.remove(id: videoId)
                 let config = state.serverConfig
                 return .run { _ in
                     try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
