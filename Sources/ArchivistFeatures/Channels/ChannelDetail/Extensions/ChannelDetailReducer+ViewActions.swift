@@ -11,6 +11,8 @@ extension ChannelDetailReducer {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
+        case .pullToRefreshTriggered:
+            return handlePullToRefreshTriggered(state: &state)
         case .lastVideoAppeared:
             return handleLastVideoAppeared(state: &state)
         case .videoCardTapped(let video):
@@ -89,6 +91,45 @@ extension ChannelDetailReducer {
         }
 
         return .merge(effects)
+    }
+
+    private func handlePullToRefreshTriggered(state: inout State) -> Effect<Action> {
+        state.isLoadingVideos = true
+        state.isLoadingDownloads = true
+        state.currentPage = 1
+        let config = state.serverConfig
+        let channelId = state.channel.channelId
+        let sort = state.videoSortOrder.apiValue
+        return .merge(
+            .run { send in
+                let result = await Result {
+                    try await videoService.getVideos(
+                        config: config,
+                        page: 1,
+                        sort: sort,
+                        order: "desc",
+                        type: nil,
+                        watch: nil,
+                        channel: channelId,
+                        playlist: nil
+                    )
+                }
+                await send(.videosResult(result))
+            },
+            .run { send in
+                let result = await Result {
+                    try await downloadService.getDownloads(
+                        config: config,
+                        page: 1,
+                        filter: "pending",
+                        channel: channelId,
+                        query: nil,
+                        vidType: nil
+                    )
+                }
+                await send(.downloadsResult(result))
+            }
+        )
     }
 
     private func handleLastVideoAppeared(state: inout State) -> Effect<Action> {
