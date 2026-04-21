@@ -68,10 +68,12 @@ public final class AVPlayerBackend: PlayerBackend {
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
-            queue: .main
+            queue: nil
         ) { [weak self] _ in
-            self?.playbackEndContinuation?.yield()
-            self?.onPlaybackEnd?()
+            Task { @MainActor in
+                self?.playbackEndContinuation?.yield()
+                self?.onPlaybackEnd?()
+            }
         }
 
         statusObservation = player.observe(
@@ -164,10 +166,12 @@ public final class AVPlayerBackend: PlayerBackend {
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: newItem,
-            queue: .main
+            queue: nil
         ) { [weak self] _ in
-            self?.playbackEndContinuation?.yield()
-            self?.onPlaybackEnd?()
+            Task { @MainActor in
+                self?.playbackEndContinuation?.yield()
+                self?.onPlaybackEnd?()
+            }
         }
 
         durationObservation = newItem.observe(
