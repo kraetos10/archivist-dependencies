@@ -6,12 +6,6 @@ public protocol KeychainServiceType: Sendable {
     func save(token: String) throws
     func loadToken() -> String?
     func deleteToken() throws
-    func saveCredentials(
-        username: String,
-        password: String
-    ) throws
-    func loadCredentials() -> (username: String, password: String)?
-    func deleteCredentials() throws
 }
 
 public nonisolated enum KeychainError: Error, Equatable {
@@ -22,12 +16,17 @@ public nonisolated enum KeychainError: Error, Equatable {
 public struct KeychainService: KeychainServiceType {
     private static let service = "com.mintywater.archivist"
     private static let accountToken = "apiToken"
-    private static let accountUsername = "username"
-    private static let accountPassword = "password"
+    private static let legacyAccountUsername = "username"
+    private static let legacyAccountPassword = "password"
 
     private var keychain: Keychain { Keychain(service: Self.service) }
 
-    public init() {}
+    public init() {
+        // Best-effort cleanup of legacy credential entries from the previous
+        // username/password auth flow.
+        try? keychain.remove(Self.legacyAccountUsername)
+        try? keychain.remove(Self.legacyAccountPassword)
+    }
 
     public func save(token: String) throws {
         do {
@@ -44,35 +43,6 @@ public struct KeychainService: KeychainServiceType {
     public func deleteToken() throws {
         do {
             try keychain.remove(Self.accountToken)
-        } catch {
-            throw KeychainError.deleteFailed((error as? Status)?.rawValue ?? errSecParam)
-        }
-    }
-
-    public func saveCredentials(
-        username: String,
-        password: String
-    ) throws {
-        do {
-            try keychain.set(username, key: Self.accountUsername)
-            try keychain.set(password, key: Self.accountPassword)
-        } catch {
-            throw KeychainError.saveFailed((error as? Status)?.rawValue ?? errSecParam)
-        }
-    }
-
-    public func loadCredentials() -> (username: String, password: String)? {
-        guard let username = try? keychain.get(Self.accountUsername),
-              let password = try? keychain.get(Self.accountPassword) else {
-            return nil
-        }
-        return (username, password)
-    }
-
-    public func deleteCredentials() throws {
-        do {
-            try keychain.remove(Self.accountUsername)
-            try keychain.remove(Self.accountPassword)
         } catch {
             throw KeychainError.deleteFailed((error as? Status)?.rawValue ?? errSecParam)
         }

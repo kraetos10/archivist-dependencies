@@ -16,25 +16,22 @@ extension LoginReducer {
     // MARK: - Private Handlers
 
     private func handleLoginButtonTapped(state: inout State) -> Effect<Action> {
-        guard !state.username.isEmpty, !state.password.isEmpty else { return .none }
+        let token = state.apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return .none }
+        state.apiToken = token
         state.isLoading = true
-        let serverURL = state.registrationDetails.serverAddress
-        let port = Int(state.registrationDetails.port)
-        let useHTTP = state.registrationDetails.useHTTP
-        let username = state.username
-        let password = state.password
-        let userService = self.userService
+        let config = ServerConfig(
+            baseURL: state.registrationDetails.serverAddress,
+            port: Int(state.registrationDetails.port),
+            apiToken: token,
+            useHTTP: state.registrationDetails.useHTTP
+        )
+        let pingService = self.pingService
         return .run { send in
             let result = await Result {
-                try await userService.login(
-                    baseURL: serverURL,
-                    port: port,
-                    useHTTP: useHTTP,
-                    username: username,
-                    password: password
-                )
+                _ = try await pingService.ping(config: config)
             }
-            await send(.loginResult(result))
+            await send(.pingResult(result))
         }
     }
 }

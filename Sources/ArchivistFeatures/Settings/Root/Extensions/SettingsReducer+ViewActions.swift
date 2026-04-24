@@ -56,33 +56,10 @@ extension SettingsReducer {
     }
 
     private func handleReAuthTapped(config: ServerConfig) -> Effect<Action> {
-        .run { [keychainService, userService] send in
-            let result = await Result {
-                guard let credentials = keychainService.loadCredentials() else {
-                    throw NetworkingError.missingData
-                }
-                // Logout first to clear stale session cookies
-                try? await userService.logout(config: config)
-                // Re-login to get fresh csrftoken + sessionid cookies
-                _ = try await userService.login(
-                    baseURL: config.baseURL,
-                    port: config.port,
-                    useHTTP: config.useHTTP,
-                    username: credentials.username,
-                    password: credentials.password
-                )
-                let tokenResponse = try await userService.getToken(
-                    baseURL: config.baseURL,
-                    port: config.port,
-                    useHTTP: config.useHTTP
-                )
-                guard let token = tokenResponse.token else {
-                    throw NetworkingError.missingData
-                }
-                try keychainService.save(token: token)
-                return token
-            }
-            await send(.reAuthResult(result))
-        }
+        // With API-key auth there is no username/password to re-login with.
+        // If the current token has stopped working the user must log out and
+        // paste a new API key. Surface that by triggering logout.
+        _ = config
+        return .send(.didRequestLogout)
     }
 }

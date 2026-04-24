@@ -117,14 +117,6 @@ public final class PlayerManager: NSObject {
 
     public var onPause: (() -> Void)?
 
-    private struct AuthContext {
-        let videoId: String
-        let videoService: any VideoServiceType
-        let config: ServerConfig
-    }
-
-    private var pendingAuthContext: AuthContext?
-
     public var currentMetadata: NowPlayingMetadata? {
         didSet {
             #if !os(tvOS)
@@ -204,24 +196,9 @@ public final class PlayerManager: NSObject {
 
     // MARK: - Playback Control
 
-    /// Stores auth context for VLC signed URLs. Must be called before
-    /// `load()` when using the VLC backend. No-op for AVPlayer backend.
-    public func configureAuth(
-        videoId: String,
-        videoService: any VideoServiceType,
-        config: ServerConfig
-    ) {
-        pendingAuthContext = AuthContext(
-            videoId: videoId,
-            videoService: videoService,
-            config: config
-        )
-    }
-
     public func load(
         url: URL,
         startPosition: Double?,
-        authHeaders: [String: String] = [:],
         videoId: String? = nil
     ) {
         stop()
@@ -234,36 +211,34 @@ public final class PlayerManager: NSObject {
         }
         #endif
 
+        // tvOS wipes the cache at the start of every new playback so the box
+        // isn't accumulating older videos on limited storage — each load gets
+        // a fresh cache populated by the prebuffer download below.
+        #if os(tvOS)
+        PlaybackCache.shared.clearAll()
+        #endif
+
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
         @Shared(.appStorage("useVLCPlayer")) var useVLC = false
-        @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = false
+        @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = true
 
         // Cache-first: if we already have the file from a prior session,
-        // play it directly as a file:// URL. Skips signed URL flow entirely.
+        // play it directly as a file:// URL.
         var effectiveURL = url
-        var effectiveAuthHeaders = authHeaders
         var playingFromCache = false
         if let videoId,
            !url.isFileURL,
            let cachedURL = PlaybackCache.shared.cachedFileURL(for: videoId) {
             effectiveURL = cachedURL
-            effectiveAuthHeaders = [:]
             playingFromCache = true
         }
 
         let newBackend: any PlayerBackend
         if useVLC {
             let vlcBackend = VLCPlayerBackend()
-            if !playingFromCache, let ctx = pendingAuthContext {
-                vlcBackend.configureAuth(
-                    videoId: ctx.videoId,
-                    videoService: ctx.videoService,
-                    config: ctx.config
-                )
-            }
             vlcBackend.onPiPStopped = { [weak self] in
                 self?.onPiPRestore?()
             }
@@ -280,12 +255,10 @@ public final class PlayerManager: NSObject {
             #endif
             newBackend = avBackend
         }
-        pendingAuthContext = nil
         setupBackendCallbacks(newBackend)
         newBackend.load(
             url: effectiveURL,
-            startPosition: startPosition,
-            authHeaders: effectiveAuthHeaders
+            startPosition: startPosition
         )
         backend = newBackend
         currentVideoID = videoId
@@ -303,7 +276,10 @@ public final class PlayerManager: NSObject {
         // full file to disk while playback streams. On completion the backend
         // swaps to the local file for instant-seek.
         let isOnWifi = Self.isConnectedToWifi()
-        let shouldPrebuffer = prebufferEnabled && (!prebufferWifiOnly || isOnWifi)
+        // Don't run the parallel download while VLC is streaming: both hit the
+        // same media URL and VLC starves waiting for bandwidth, so playback
+        // takes forever to start. VLC has its own internal buffering.
+        let shouldPrebuffer = prebufferEnabled && !useVLC && (!prebufferWifiOnly || isOnWifi)
         if !playingFromCache,
            shouldPrebuffer,
            !url.isFileURL,
@@ -311,7 +287,7 @@ public final class PlayerManager: NSObject {
             PlaybackCache.shared.startDownload(
                 url: url,
                 videoId: videoId,
-                authHeaders: authHeaders
+                authHeaders: [:]
             ) { [weak self] fileURL in
                 guard let self, self.currentVideoID == videoId else { return }
                 self.backend?.swapToLocalFile(fileURL)
@@ -455,6 +431,43 @@ public final class PlayerManager: NSObject {
             OrientationLock.shared.lockPortrait()
         }
         scheduleHideVLCControls()
+    }
+    #endif
+
+    // MARK: - Background Lifecycle
+
+    #if !os(tvOS) && !os(watchOS)
+    /// Called when the app enters background. Detaches the player from its
+    /// visible layer/drawable so iOS does not pause playback when the hosting
+    /// view is removed from the window. Audio continues via AVAudioSession
+    /// `.playback` + `UIBackgroundModes: audio`.
+    public func prepareForBackground() {
+        guard !isInPiP else { return }
+        if let avBackend = backend as? AVPlayerBackend {
+            _ = avBackend
+            activePlayerViewController?.player = nil
+        }
+        #if canImport(VLCKit)
+        if let vlcBackend = backend as? VLCPlayerBackend {
+            vlcBackend.detachDrawableForBackground()
+        }
+        #endif
+    }
+
+    /// Called when the app returns to the foreground. Reattaches the player
+    /// to the currently active visual surface.
+    public func restoreForForeground() {
+        try? AVAudioSession.sharedInstance().setActive(true)
+        if let avBackend = backend as? AVPlayerBackend {
+            activePlayerViewController?.player = avBackend.avPlayer
+        }
+        #if canImport(VLCKit)
+        if let vlcBackend = backend as? VLCPlayerBackend {
+            if let drawable = persistentVLCDrawable {
+                vlcBackend.reattachDrawableAfterBackground(drawable)
+            }
+        }
+        #endif
     }
     #endif
 

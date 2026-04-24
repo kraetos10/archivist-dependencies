@@ -8,10 +8,8 @@ public struct LoginReducer {
     @ObservableState
     public struct State: Equatable, Sendable {
         @Shared var registrationDetails: RegistrationDetails
-        var username = ""
-        var password = ""
+        var apiToken = ""
         var isLoading = false
-        var pendingToken: String?
         @Presents var alert: AlertState<AlertAction>?
 
         public init(registrationDetails: Shared<RegistrationDetails>) {
@@ -27,9 +25,7 @@ public struct LoginReducer {
         case view(View)
         case alert(PresentationAction<AlertAction>)
         case binding(BindingAction<State>)
-        case loginResult(Result<Void, Error>)
-        case tokenResult(Result<String, Error>)
-        case loginSucceeded(String, username: String, password: String)
+        case loginSucceeded(String)
         case pingResult(Result<Void, Error>)
 
         @CasePathable
@@ -38,7 +34,6 @@ public struct LoginReducer {
         }
     }
 
-    @Dependency(\.userService) var userService
     @Dependency(\.pingService) var pingService
 
     public var body: some Reducer<State, Action> {

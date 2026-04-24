@@ -69,6 +69,14 @@ public struct TVSettingsScreen: View {
                     }
                     .padding(.vertical, 8)
                 }
+
+                Button { send(.playbackCacheTapped) } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "externaldrive.badge.timemachine")
+                        Text(String.localised("video.cache.title", table: .videos))
+                    }
+                    .padding(.vertical, 8)
+                }
             }
 
             Section {

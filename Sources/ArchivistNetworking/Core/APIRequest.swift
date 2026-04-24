@@ -101,13 +101,7 @@ public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unc
 
     public func execute() async throws -> (data: DecodableData, headers: [AnyHashable: Any]) {
         @Dependency(\.urlSession) var urlSession
-        var request = try urlRequest()
-
-        if method != .get, let url = request.url,
-           let csrfToken = HTTPCookieStorage.shared.cookies(for: url)?
-            .first(where: { $0.name == "csrftoken" })?.value {
-            request.addValue(csrfToken, forHTTPHeaderField: "X-CSRFToken")
-        }
+        let request = try urlRequest()
 
         let (data, response) = try await urlSession.data(for: request)
         var responseHeaders = [AnyHashable: Any]()

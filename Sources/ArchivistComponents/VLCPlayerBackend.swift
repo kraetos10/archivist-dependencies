@@ -1,5 +1,4 @@
 #if !os(watchOS)
-import ArchivistNetworking
 import Foundation
 import UIKit
 import VLCKit
@@ -35,35 +34,15 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     public var onPiPStopped: (() -> Void)?
     public var onPiPRestoreRequested: (() -> Void)?
 
-    // Signed URL auth
-    private var baseURL: URL?
-    private var videoId: String?
-    private var videoService: (any VideoServiceType)?
-    private var serverConfig: ServerConfig?
-    private var currentSig: String?
-    private var renewalTask: Task<Void, Never>?
-
     override public init() {
         mediaPlayer = VLCMediaPlayer()
         super.init()
         mediaPlayer.delegate = self
     }
 
-    /// Configure auth for the next `load()` call. Must be called before `load()`.
-    public func configureAuth(
-        videoId: String,
-        videoService: any VideoServiceType,
-        config: ServerConfig
-    ) {
-        self.videoId = videoId
-        self.videoService = videoService
-        self.serverConfig = config
-    }
-
     public func load(
         url: URL,
-        startPosition: Double?,
-        authHeaders: [String: String]
+        startPosition: Double?
     ) {
         pendingStartPosition = startPosition
         isBuffering = true
@@ -74,23 +53,28 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
             onTimeUpdate?(currentTime)
         }
 
-        // Local files (including prebuffer cache hits) play directly — no
-        // signed URL, no token, no renewal.
-        if url.isFileURL {
-            startPlaybackWithSignedURL(url)
-            return
-        }
+        startPlayback(url: url)
+    }
 
-        baseURL = url
+    /// Nils the drawable so VLC stops trying to render into a view that the
+    /// system is about to remove from the window. Audio continues via the
+    /// AVAudioSession `.playback` category.
+    public func detachDrawableForBackground() {
+        mediaPlayer.drawable = nil
+    }
 
-        guard videoId != nil, videoService != nil, serverConfig != nil else {
-            print("[VLC] Missing auth config — call configureAuth() first")
-            isBuffering = false
-            return
-        }
-
-        Task { [weak self] in
-            await self?.fetchTokenAndStart()
+    /// Reattaches the persistent drawable after returning from background.
+    /// Uses the same pause/play nudge as `attachDrawable` to kick the video
+    /// output pipeline back on the reattached surface.
+    public func reattachDrawableAfterBackground(_ view: UIView) {
+        let wasPlaying = mediaPlayer.isPlaying
+        let resumeTime = mediaPlayer.time
+        drawableView = view
+        mediaPlayer.drawable = view
+        if wasPlaying {
+            mediaPlayer.pause()
+            mediaPlayer.play()
+            mediaPlayer.time = resumeTime
         }
     }
 
@@ -144,19 +128,6 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     }
 
     public func stop() {
-        // Revoke the current token on the server
-        if let sig = currentSig,
-           let service = videoService,
-           let config = serverConfig,
-           let id = videoId {
-            Task {
-                try? await service.revokeStreamToken(config: config, videoId: id, sig: sig)
-            }
-        }
-
-        renewalTask?.cancel()
-        renewalTask = nil
-
         mediaPlayer.stop()
         mediaPlayer.drawable = nil
         mediaPlayer.media = nil
@@ -171,11 +142,6 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         duration = 0
         pendingStartPosition = nil
         seekTargetTime = nil
-        baseURL = nil
-        videoId = nil
-        videoService = nil
-        serverConfig = nil
-        currentSig = nil
 
         playbackEndContinuation?.finish()
         playbackEndContinuation = nil
@@ -196,53 +162,9 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         }
     }
 
-    // MARK: - Signed URL Handling
+    // MARK: - Playback
 
-    private func fetchTokenAndStart() async {
-        guard let baseURL,
-              let videoId,
-              let service = videoService,
-              let config = serverConfig else {
-            return
-        }
-
-        do {
-            let response = try await service.getStreamToken(config: config, videoId: videoId)
-            currentSig = response.sig
-            print("[VLC] Base URL: \(baseURL)")
-
-            guard let signedURL = buildSignedURL(base: baseURL, response: response) else {
-                isBuffering = false
-                onStateChange?()
-                return
-            }
-
-            print("[VLC] Signed URL: \(signedURL)")
-            startPlaybackWithSignedURL(signedURL)
-            scheduleRenewal(expiresAt: response.expires)
-        } catch {
-            // Server may not support signed URLs (older version or static
-            // auth disabled) — fall back to the raw media URL.
-            startPlaybackWithSignedURL(baseURL)
-        }
-    }
-
-    private func buildSignedURL(base: URL, response: StreamTokenResponse) -> URL? {
-        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
-        // Signed URLs go through the /stream/ nginx location which uses the
-        // stream-auth subrequest instead of session auth.
-        if let path = components?.path, path.hasPrefix("/youtube/") {
-            components?.path = "/stream/" + path.dropFirst("/youtube/".count)
-        }
-        // Only `sig` lives in the URL. The server reads the expiry from Redis
-        // alongside the stored HMAC payload, so we don't need to echo it back.
-        var queryItems = components?.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "sig", value: response.sig))
-        components?.queryItems = queryItems
-        return components?.url
-    }
-
-    private func startPlaybackWithSignedURL(_ url: URL) {
+    private func startPlayback(url: URL) {
         guard let media = VLCMedia(url: url) else {
             isBuffering = false
             return
@@ -265,9 +187,9 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         isPlaying = true
     }
 
-    /// Swap to a local `file://` URL at the current playback position. Mirrors
-    /// the token-renewal swap pattern. After this, VLC reads from disk so
-    /// seeks are instant and we no longer need signed URLs or renewal.
+    /// Swap to a local `file://` URL at the current playback position. Called
+    /// from `PlayerManager` after the parallel `PlaybackCache` download finishes
+    /// so subsequent seeks read from disk.
     public func swapToLocalFile(_ fileURL: URL) {
         guard fileURL.isFileURL,
               let newMedia = VLCMedia(url: fileURL) else { return }
@@ -284,19 +206,6 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
                 self.seekTo(resumeTime)
             }
         }
-
-        // Reading from disk now — cancel renewal and revoke the live token.
-        renewalTask?.cancel()
-        renewalTask = nil
-        if let sig = currentSig,
-           let service = videoService,
-           let config = serverConfig,
-           let id = videoId {
-            currentSig = nil
-            Task {
-                try? await service.revokeStreamToken(config: config, videoId: id, sig: sig)
-            }
-        }
     }
 
     /// Applies VLC media options for playback.
@@ -309,66 +218,6 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         media.addOption(":file-caching=300")
         media.addOption(":http-reconnect")
         media.addOption(":input-fast-seek")
-    }
-
-    private func scheduleRenewal(expiresAt: Int) {
-        renewalTask?.cancel()
-        // Renew 10 minutes before expiry, or 10 seconds from now if that's sooner
-        let renewAt = max(expiresAt - 600, Int(Date().timeIntervalSince1970) + 10)
-        let delay = renewAt - Int(Date().timeIntervalSince1970)
-        guard delay > 0 else { return }
-
-        renewalTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            await self?.renewToken()
-        }
-    }
-
-    private func renewToken() async {
-        guard let baseURL,
-              let videoId,
-              let service = videoService,
-              let config = serverConfig else {
-            return
-        }
-
-        let oldSig = currentSig
-
-        do {
-            let response = try await service.getStreamToken(config: config, videoId: videoId)
-            currentSig = response.sig
-
-            // Reload VLC with the new URL at current playback time
-            guard let newURL = buildSignedURL(base: baseURL, response: response),
-                  let newMedia = VLCMedia(url: newURL) else { return }
-
-            Self.applyStreamingOptions(to: newMedia)
-
-            let resumeTime = currentTime
-            loadedMedia = newMedia
-            mediaPlayer.media = newMedia
-            mediaPlayer.play()
-
-            // Seek back to where we were after a short delay
-            if resumeTime > 0 {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(500))
-                    self.seekTo(resumeTime)
-                }
-            }
-
-            // Revoke the old token
-            if let oldSig {
-                Task {
-                    try? await service.revokeStreamToken(config: config, videoId: videoId, sig: oldSig)
-                }
-            }
-
-            scheduleRenewal(expiresAt: response.expires)
-        } catch {
-            print("[VLC] Renewal failed: \(error)")
-        }
     }
 }
 

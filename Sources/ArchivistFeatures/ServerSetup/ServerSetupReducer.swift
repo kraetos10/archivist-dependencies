@@ -53,8 +53,8 @@ public struct ServerSetupReducer {
                     registrationDetails: state.$registrationDetails
                 )))
                 return .none
-            case .path(.element(_, action: .login(.loginSucceeded(let token, let username, let password)))):
-                return handleLoginSucceeded(token: token, username: username, password: password, state: &state)
+            case .path(.element(_, action: .login(.loginSucceeded(let token)))):
+                return handleLoginSucceeded(token: token, state: &state)
             case .alert, .binding, .loginCompleted, .path:
                 return .none
             default:
@@ -67,8 +67,6 @@ public struct ServerSetupReducer {
 
     private func handleLoginSucceeded(
         token: String,
-        username: String,
-        password: String,
         state: inout State
     ) -> Effect<Action> {
         let details = state.registrationDetails
@@ -91,7 +89,6 @@ public struct ServerSetupReducer {
                     .execute(db)
             }
             try keychainService.save(token: token)
-            try keychainService.saveCredentials(username: username, password: password)
             await send(.loginCompleted)
         }
     }

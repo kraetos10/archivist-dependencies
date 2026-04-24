@@ -1,19 +1,11 @@
 import Foundation
 
 public nonisolated protocol UserServiceType: Sendable {
-    func login(
-        baseURL: String,
-        port: Int?,
-        useHTTP: Bool,
-        username: String,
-        password: String
-    ) async throws
     func getToken(
         baseURL: String,
         port: Int?,
         useHTTP: Bool
     ) async throws -> TokenResponse
-    func logout(config: ServerConfig) async throws
     func getAccount(config: ServerConfig) async throws -> UserAccountResponse
     func getUserConfig(config: ServerConfig) async throws -> UserConfigResponse
     func updateUserConfig(
@@ -24,27 +16,6 @@ public nonisolated protocol UserServiceType: Sendable {
 
 public nonisolated struct UserService: UserServiceType {
     public init() {}
-
-    public func login(
-        baseURL: String,
-        port: Int? = nil,
-        useHTTP: Bool = false,
-        username: String,
-        password: String
-    ) async throws {
-        let body = try JSONEncoder().encode(
-            LoginRequest(username: username, password: password, rememberMe: nil)
-        )
-        let request = NetworkAPIRequest<EmptyResponse>(
-            useHTTP: useHTTP,
-            baseURL: baseURL,
-            path: .userLogin,
-            method: .post,
-            body: body,
-            port: port
-        )
-        _ = try await request.execute()
-    }
 
     public func getToken(
         baseURL: String,
@@ -58,15 +29,6 @@ public nonisolated struct UserService: UserServiceType {
             port: port
         )
         return try await request.execute().data
-    }
-
-    public func logout(config: ServerConfig) async throws {
-        let request = NetworkAPIRequest<EmptyResponse>(
-            config: config,
-            path: .userLogout,
-            method: .post
-        )
-        _ = try await request.execute()
     }
 
     public func getAccount(config: ServerConfig) async throws -> UserAccountResponse {

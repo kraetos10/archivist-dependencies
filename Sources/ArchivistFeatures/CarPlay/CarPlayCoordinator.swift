@@ -217,7 +217,6 @@ public final class CarPlayCoordinator {
         PlayerManager.shared.load(
             url: url,
             startPosition: video.player?.position,
-            authHeaders: config.authHeaders,
             videoId: videoId
         )
         PlayerManager.shared.currentVideoID = videoId

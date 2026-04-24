@@ -34,6 +34,8 @@ extension ChannelDetailReducer {
             return handleMarkAsWatchedTapped(video, state: &state)
         case .deleteFromServerTapped(let video):
             return handleDeleteFromServerTapped(video, state: &state)
+        case .playNextTapped(let video):
+            return handlePlayNextTapped(video, state: &state)
         case .downloadSortToggled:
             return handleDownloadSortToggled(state: &state)
         case .videoSortOrderChanged(let sort):
@@ -295,6 +297,15 @@ extension ChannelDetailReducer {
                 try await videoService.deleteVideo(config: config, id: videoId)
             }
             await send(.deleteVideoResult(result.map { videoId }), animation: .default)
+        }
+    }
+
+    private func handlePlayNextTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
+        return .run { [playNextDatabase] _ in
+            try? await playNextDatabase.addToQueue(video)
         }
     }
 
