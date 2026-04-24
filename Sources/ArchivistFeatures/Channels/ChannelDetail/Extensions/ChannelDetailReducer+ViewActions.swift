@@ -40,6 +40,8 @@ extension ChannelDetailReducer {
             return handleDownloadSortToggled(state: &state)
         case .videoSortOrderChanged(let sort):
             return handleVideoSortOrderChanged(sort, state: &state)
+        case .clearFilteredTapped:
+            return handleClearFilteredTapped(state: &state)
         }
     }
 
@@ -329,6 +331,47 @@ extension ChannelDetailReducer {
                 )
             }
             await send(.downloadsResult(result))
+        }
+    }
+
+    private func handleClearFilteredTapped(state: inout State) -> Effect<Action> {
+        let count = state.filteredVideos.count
+        guard count > 0 else { return .none }
+        let message = state.videoFilter == .unwatched
+            ? String(localized: "Delete all \(count) unwatched videos in this channel from the server? This cannot be undone.")
+            : String(localized: "Delete all \(count) videos in this channel from the server? This cannot be undone.")
+        state.alert = AlertState {
+            TextState(String.localised("video.clearFiltered.title", table: .videos))
+        } actions: {
+            ButtonState(role: .cancel) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+            ButtonState(role: .destructive, action: .confirmClearFiltered) {
+                TextState(String.localised("generic.delete", table: .generic))
+            }
+        } message: {
+            TextState(message)
+        }
+        return .none
+    }
+
+    func handleConfirmClearFiltered(state: inout State) -> Effect<Action> {
+        let videoIds = state.filteredVideos.map(\.videoId)
+        let config = state.serverConfig
+        return .run { [videoService] send in
+            await withTaskGroup(of: Void.self) { group in
+                for videoId in videoIds {
+                    group.addTask {
+                        let result = await Result {
+                            try await videoService.deleteVideo(config: config, id: videoId)
+                        }
+                        await send(
+                            .deleteVideoResult(result.map { videoId }),
+                            animation: .default
+                        )
+                    }
+                }
+            }
         }
     }
 

@@ -54,6 +54,9 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
 
     public var isWatched: Bool { player?.watched ?? false }
     public var isPartiallyWatched: Bool { !isWatched && watchProgress > 0 }
+    /// Strict "unwatched": never started and not marked watched. Partially
+    /// watched videos belong in the continue-watching list, not here.
+    public var isUnwatched: Bool { !isWatched && !isPartiallyWatched }
 
     /// Normalized watch progress from 0 to 1
     public var watchProgress: Double {

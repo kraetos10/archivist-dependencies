@@ -112,7 +112,7 @@ public struct VideoListReducer {
                 case .all:
                     filtered = videos
                 case .unwatched:
-                    filtered = videos.filter { !$0.isWatched }
+                    filtered = videos.filter { $0.isUnwatched }
                 case .continueWatching:
                     filtered = videos.filter { $0.isPartiallyWatched }
                 case .watched:

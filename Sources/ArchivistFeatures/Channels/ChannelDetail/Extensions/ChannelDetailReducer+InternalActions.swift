@@ -42,6 +42,36 @@ extension ChannelDetailReducer {
         state.isLoadingVideos = false
         state.isLoadingMoreVideos = false
         state.hasLoadedVideos = true
+
+        // Filtering (e.g. "Unwatched") can thin the rendered list far below
+        // the server's page size. If there are more pages, eagerly pull the
+        // next one so the user doesn't see a short list with content still
+        // off-screen. Mirrors the pattern used by the Queue page.
+        if state.filteredVideos.count < response.paginate.pageSize,
+           state.currentPage < state.lastPage,
+           !state.isLoadingMoreVideos {
+            state.isLoadingMoreVideos = true
+            let config = state.serverConfig
+            let channelId = state.channel.channelId
+            let nextPage = state.currentPage + 1
+            let sort = state.videoSortOrder.apiValue
+            return .run { send in
+                let result = await Result {
+                    try await videoService.getVideos(
+                        config: config,
+                        page: nextPage,
+                        sort: sort,
+                        order: "desc",
+                        type: nil,
+                        watch: nil,
+                        channel: channelId,
+                        playlist: nil
+                    )
+                }
+                await send(.videosResult(result))
+            }
+        }
+
         return .none
     }
 
