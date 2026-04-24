@@ -22,6 +22,11 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     /// VLC reports a time within 2s of this target (avoids a visible bounce
     /// back to 0 from stale notifications queued before the seek).
     private var seekTargetTime: Double?
+    /// Sticky flag set in `handleTimeChange` once we've observed a time
+    /// near the duration. VLC sometimes resets `mediaPlayer.time` to 0 just
+    /// before firing `.stopped` on natural end-of-media, so checking the
+    /// current time at state-change time alone misses the event.
+    private var reachedEndOfMedia = false
     private var loadedMedia: VLCMedia?
     private var drawableView: UIView?
 
@@ -45,6 +50,7 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         startPosition: Double?
     ) {
         pendingStartPosition = startPosition
+        reachedEndOfMedia = false
         isBuffering = true
         // Seed the UI with the resume position so the seek bar renders at the
         // correct spot from the first frame instead of flashing 0:00.
@@ -142,6 +148,7 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         duration = 0
         pendingStartPosition = nil
         seekTargetTime = nil
+        reachedEndOfMedia = false
 
         playbackEndContinuation?.finish()
         playbackEndContinuation = nil
@@ -254,7 +261,11 @@ extension VLCPlayerBackend: VLCMediaPlayerDelegate {
         case .stopped:
             isPlaying = false
             isBuffering = false
-            if currentTime > 0, duration > 0, currentTime >= duration - 1 {
+            // Clean end of media: VLC transitions to `.stopped` after it
+            // played through. `reachedEndOfMedia` was latched in
+            // `handleTimeChange` when the position crossed the duration.
+            if reachedEndOfMedia {
+                reachedEndOfMedia = false
                 playbackEndContinuation?.yield()
                 onPlaybackEnd?()
             }
@@ -299,6 +310,12 @@ extension VLCPlayerBackend: VLCMediaPlayerDelegate {
 
         currentTime = reportedTime
         onTimeUpdate?(currentTime)
+
+        // Latch "reached end" once we observe a time within 1s of the end.
+        // VLC's `.stopped` state fires shortly after but may report time 0.
+        if duration > 0, reportedTime > 0, reportedTime >= duration - 1 {
+            reachedEndOfMedia = true
+        }
     }
 
     private func applyPendingStartPositionIfReady() {

@@ -3,6 +3,41 @@ import ArchivistComponents
 import ArchivistNetworking
 import SwiftUI
 
+/// Redacted carousel shown while the home page's first fetch is in flight.
+/// Matches the real `HomeFilterSection` so the transition to real content
+/// doesn't reflow the layout.
+struct HomeFilterSectionPlaceholder: View {
+    let filter: WatchFilter
+    let serverConfig: ServerConfig
+    let cardWidth: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(filter.label, systemImage: filter.icon)
+                    .font(.headline)
+                    .foregroundStyle(Color.Text.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .center, spacing: 12) {
+                    ForEach(VideoResponse.placeholders.prefix(3)) { video in
+                        VideoCardView(video: video, serverConfig: serverConfig)
+                            .frame(width: cardWidth)
+                            .redacted(reason: .placeholder)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollDisabled(true)
+            .scrollClipDisabled()
+        }
+        .padding(.vertical, 8)
+    }
+}
+
 /// Single horizontal carousel rendered on the home page for one `WatchFilter`.
 /// Shows up to `maxItems` cards, followed by a compact "View All" chevron.
 struct HomeFilterSection: View {
@@ -19,7 +54,7 @@ struct HomeFilterSection: View {
     var onDeleteFromServer: (VideoResponse) -> Void
     var onViewAll: () -> Void
 
-    static let maxItems = 20
+    static let maxItems = 10
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -67,9 +102,11 @@ struct HomeFilterSection: View {
 
                     viewAllCard
                 }
+                .scrollTargetLayout()
                 .padding(.horizontal, 16)
             }
             .scrollClipDisabled()
+            .scrollTargetBehavior(.viewAligned)
         }
         .padding(.vertical, 8)
     }

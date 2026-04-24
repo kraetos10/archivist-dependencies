@@ -44,6 +44,12 @@ public final class PlaybackCache {
         #endif
     }()
 
+    /// Default value for the `useVLCPlayer` app-storage flag. VLC is now the
+    /// default on every platform — it handles the end-of-media event reliably,
+    /// has better streaming resilience (`:http-reconnect`), and works with the
+    /// existing prebuffer cache. AVPlayer stays available as an opt-in.
+    public nonisolated static let defaultUseVLCPlayer: Bool = true
+
     public struct Entry: Equatable, Sendable {
         public let videoId: String
         public let fileURL: URL

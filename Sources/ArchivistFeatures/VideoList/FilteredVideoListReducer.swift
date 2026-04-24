@@ -103,90 +103,9 @@ public struct FilteredVideoListReducer {
                 return handleViewAction(viewAction, state: &state)
             case .delegate:
                 return .none
-            case .videosResult(.success(let response)):
-                for video in response.data {
-                    state.videos.updateOrAppend(video)
-                }
-                state.currentPage = response.paginate.currentPage
-                state.lastPage = response.paginate.lastPage
-                state.isLoading = false
-                state.isLoadingMore = false
-                state.hasLoaded = true
-
-                // Mirror the channel-detail trick: if client-side filtering
-                // thinned the page below the server's page size, eagerly pull
-                // the next page so the user isn't left with a sparse list.
-                if state.displayedVideos.count < response.paginate.pageSize,
-                   state.currentPage < state.lastPage,
-                   !state.isLoadingMore {
-                    state.isLoadingMore = true
-                    return fetchPage(state.currentPage + 1, state: &state)
-                }
-                return .none
-            case .videosResult(.failure):
-                state.isLoading = false
-                state.isLoadingMore = false
-                state.hasLoaded = true
-                return .none
+            default:
+                return handleInternalAction(action, state: &state)
             }
-        }
-    }
-
-    private func handleViewAction(
-        _ action: Action.View,
-        state: inout State
-    ) -> Effect<Action> {
-        switch action {
-        case .viewDidAppear:
-            guard !state.hasLoaded, !state.isLoading else { return .none }
-            return fetchPage(1, state: &state)
-        case .pullToRefreshTriggered:
-            state.videos = []
-            state.currentPage = 1
-            state.lastPage = 1
-            state.hasLoaded = false
-            return fetchPage(1, state: &state)
-        case .lastItemAppeared:
-            guard state.currentPage < state.lastPage,
-                  !state.isLoading,
-                  !state.isLoadingMore else { return .none }
-            state.isLoadingMore = true
-            return fetchPage(state.currentPage + 1, state: &state)
-        case .videoTapped(let video):
-            return .send(.delegate(.videoSelected(video)))
-        case .sortOrderChanged(let sort):
-            guard sort != state.sortOrder else { return .none }
-            state.$sortOrder.withLock { $0 = sort }
-            state.videos = []
-            state.currentPage = 1
-            state.lastPage = 1
-            state.hasLoaded = false
-            return fetchPage(1, state: &state)
-        }
-    }
-
-    private func fetchPage(
-        _ page: Int,
-        state: inout State
-    ) -> Effect<Action> {
-        if page == 1 { state.isLoading = true }
-        let config = state.serverConfig
-        let sort = state.sortOrder.apiValue
-        let watch = state.filter.apiValue
-        return .run { [videoService] send in
-            let result = await Result {
-                try await videoService.getVideos(
-                    config: config,
-                    page: page,
-                    sort: sort,
-                    order: "desc",
-                    type: nil,
-                    watch: watch,
-                    channel: nil,
-                    playlist: nil
-                )
-            }
-            await send(.videosResult(result))
         }
     }
 }

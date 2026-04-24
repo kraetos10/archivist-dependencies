@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -30,7 +31,7 @@ public struct VideoDetailReducer {
         var currentCommentIndex = 0
         var watchedOverride: Bool?
         var localWatchProgress: Double?
-        @Shared(.appStorage("useVLCPlayer")) var useVLCPlayer = false
+        @Shared(.appStorage("useVLCPlayer")) var useVLCPlayer = PlaybackCache.defaultUseVLCPlayer
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
         @Presents var playlistPicker: PlaylistPickerReducer.State?
