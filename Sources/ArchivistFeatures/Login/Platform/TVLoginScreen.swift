@@ -28,11 +28,10 @@ public struct TVLoginScreen: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 720)
 
-            SecureField(
+            TextField(
                 String.localised("login.apiKey", table: .login),
                 text: $store.apiToken
             )
-            .textContentType(.password)
             .frame(maxWidth: 500)
 
             if store.isLoading {

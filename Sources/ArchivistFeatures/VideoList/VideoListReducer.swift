@@ -108,22 +108,7 @@ public struct VideoListReducer {
                 }
                 filtered = merged
             } else {
-                switch watchFilter {
-                case .all:
-                    filtered = videos
-                case .unwatched:
-                    filtered = videos.filter { $0.isUnwatched }
-                case .continueWatching:
-                    filtered = videos.filter { $0.isPartiallyWatched }
-                case .watched:
-                    filtered = videos.filter { $0.isWatched }
-                case .downloaded:
-                    var merged = videos.filter { downloadedVideoIDs.contains($0.videoId) }
-                    for video in downloadedVideos {
-                        merged.updateOrAppend(video)
-                    }
-                    filtered = merged
-                }
+                filtered = filteredVideos(for: watchFilter)
             }
             return filtered.map { video in
                 DisplayedVideo(
@@ -132,6 +117,46 @@ public struct VideoListReducer {
                 )
             }
         }
+
+        /// Raw filtered list for a single filter, used by the per-filter
+        /// home sections (each section just takes the first N + a "View All"
+        /// entry).
+        func items(for filter: WatchFilter) -> [DisplayedVideo] {
+            filteredVideos(for: filter).map { video in
+                DisplayedVideo(
+                    video: video,
+                    isDownloaded: downloadedVideoIDs.contains(video.videoId)
+                )
+            }
+        }
+
+        private func filteredVideos(for filter: WatchFilter) -> IdentifiedArrayOf<VideoResponse> {
+            switch filter {
+            case .all:
+                return videos
+            case .unwatched:
+                return videos.filter { $0.isUnwatched }
+            case .continueWatching:
+                return videos.filter { $0.isPartiallyWatched }
+            case .watched:
+                return videos.filter { $0.isWatched }
+            case .downloaded:
+                var merged = videos.filter { downloadedVideoIDs.contains($0.videoId) }
+                for video in downloadedVideos {
+                    merged.updateOrAppend(video)
+                }
+                return merged
+            }
+        }
+
+        /// Ordered list of sections the home screen renders (hides empty ones).
+        static let homeSectionOrder: [WatchFilter] = [
+            .continueWatching,
+            .unwatched,
+            .downloaded,
+            .watched,
+            .all
+        ]
     }
 
     public enum AlertAction: Equatable, Sendable {
@@ -170,6 +195,7 @@ public struct VideoListReducer {
             case addVideoTapped
             case splitViewEnabled
             case sortOrderChanged(VideoSortOrder)
+            case viewAllTapped(WatchFilter)
         }
     }
 
@@ -246,6 +272,14 @@ public struct VideoListReducer {
             case .path(.element(_, action: .videoDetail(.serverDeleteResult(.success)))):
                 _ = state.path.popLast()
                 return .send(.view(.pullToRefreshTriggered))
+            case .path(.element(_, action: .filteredList(.delegate(.videoSelected(let video))))):
+                state.path.append(
+                    .videoDetail(VideoDetailReducer.State(
+                        serverConfig: state.serverConfig,
+                        video: video
+                    ))
+                )
+                return .none
             case .path:
                 return .none
             case .playlistPicker:

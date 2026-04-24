@@ -32,6 +32,18 @@ public final class PlaybackCache {
         #endif
     }()
 
+    /// Default value for the `prebufferWifiOnly` app-storage flag. On tvOS
+    /// there's no cellular to protect against, and a Wi-Fi-only gate would
+    /// block prebuffer when the box is wired to ethernet, so tvOS ships with
+    /// the gate off.
+    public nonisolated static let defaultPrebufferWifiOnly: Bool = {
+        #if os(tvOS)
+        return false
+        #else
+        return true
+        #endif
+    }()
+
     public struct Entry: Equatable, Sendable {
         public let videoId: String
         public let fileURL: URL

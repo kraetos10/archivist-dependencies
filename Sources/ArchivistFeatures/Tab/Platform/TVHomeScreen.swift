@@ -126,6 +126,9 @@ public struct TVHomeScreen: View {
             switch store.case {
             case .videoDetail(let detailStore):
                 TVVideoDetailScreen(store: detailStore)
+            case .filteredList:
+                // tvOS home keeps the flat grid — per-filter lists are iOS-only.
+                EmptyView()
             }
         }
         .fullScreenCover(

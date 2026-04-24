@@ -107,6 +107,8 @@ public final class PlayerManager: NSObject {
     #if !os(tvOS)
     private var interruptionObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
+    private var resignActiveObserver: NSObjectProtocol?
+    private var becomeActiveObserver: NSObjectProtocol?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -187,6 +189,32 @@ public final class PlayerManager: NSObject {
         ) { _ in
             try? AVAudioSession.sharedInstance().setActive(true)
         }
+
+        // Detach the player from its host view BEFORE iOS suspends rendering
+        // (e.g. screen lock). Routing this through the scene-phase action in
+        // TCA was too slow — AVPlayer had already been paused by the time the
+        // reducer handler ran. willResignActive fires early enough that we
+        // can nil out `activePlayerViewController.player` while playback is
+        // still owned by us, so audio keeps flowing in the background.
+        resignActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.prepareForBackground()
+            }
+        }
+
+        becomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.restoreForForeground()
+            }
+        }
     }
     #endif
 
@@ -223,7 +251,7 @@ public final class PlayerManager: NSObject {
 
         @Shared(.appStorage("useVLCPlayer")) var useVLC = false
         @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
-        @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = true
+        @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
 
         // Cache-first: if we already have the file from a prior session,
         // play it directly as a file:// URL.
