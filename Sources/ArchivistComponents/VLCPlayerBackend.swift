@@ -62,28 +62,6 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         startPlayback(url: url)
     }
 
-    /// Nils the drawable so VLC stops trying to render into a view that the
-    /// system is about to remove from the window. Audio continues via the
-    /// AVAudioSession `.playback` category.
-    public func detachDrawableForBackground() {
-        mediaPlayer.drawable = nil
-    }
-
-    /// Reattaches the persistent drawable after returning from background.
-    /// Uses the same pause/play nudge as `attachDrawable` to kick the video
-    /// output pipeline back on the reattached surface.
-    public func reattachDrawableAfterBackground(_ view: UIView) {
-        let wasPlaying = mediaPlayer.isPlaying
-        let resumeTime = mediaPlayer.time
-        drawableView = view
-        mediaPlayer.drawable = view
-        if wasPlaying {
-            mediaPlayer.pause()
-            mediaPlayer.play()
-            mediaPlayer.time = resumeTime
-        }
-    }
-
     public func attachDrawable(_ view: UIView) {
         let wasPlaying = mediaPlayer.isPlaying
         let resumeTime = mediaPlayer.time

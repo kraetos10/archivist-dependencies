@@ -122,7 +122,6 @@ struct MiniPlayerHostOverlay: View {
             ) {
                 MiniPlayerView(
                     title: detail.video.title,
-                    useVLC: detail.useVLCPlayer,
                     onTap: {
                         store.send(.miniPlayerTapped)
                     },

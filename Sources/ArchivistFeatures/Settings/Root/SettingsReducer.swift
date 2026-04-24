@@ -16,8 +16,6 @@ public struct SettingsReducer {
         var supportURL: URL?
         @Shared(.appStorage("autoPlayEnabled")) public var autoPlayEnabled = true
         @Shared(.appStorage("autoPlayPlaylist")) public var autoPlayPlaylist = true
-        @Shared(.appStorage("useVLCPlayer")) public var useVLCPlayer = PlaybackCache.defaultUseVLCPlayer
-        var showVLCInfo = false
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 

@@ -279,11 +279,12 @@ extension ChannelDetailReducer {
     ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = video.videoId
+        let newIsWatched = !video.isWatched
         return .run { _ in
-            try? await videoService.setProgress(
+            try? await videoService.setWatched(
                 config: config,
                 videoId: videoId,
-                position: 0
+                isWatched: newIsWatched
             )
         }
     }

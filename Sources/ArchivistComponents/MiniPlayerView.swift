@@ -3,24 +3,21 @@ import SwiftUI
 
 // MARK: - Mini Player View
 
-/// Small floating mini player that hosts ONLY the persistent player surface
-/// (AVPlayerViewController or VLC drawable) — never the surrounding video
-/// detail screen. Reparenting the persistent surface from the full container
-/// into this view leaves playback uninterrupted.
+/// Small floating mini player that hosts ONLY the persistent VLC drawable —
+/// never the surrounding video detail screen. Reparenting the persistent
+/// surface from the full container into this view leaves playback
+/// uninterrupted.
 public struct MiniPlayerView: View {
     public let title: String
-    public let useVLC: Bool
     public let onTap: () -> Void
     public let onClose: () -> Void
 
     public init(
         title: String,
-        useVLC: Bool,
         onTap: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
         self.title = title
-        self.useVLC = useVLC
         self.onTap = onTap
         self.onClose = onClose
     }
@@ -75,13 +72,8 @@ public struct MiniPlayerView: View {
         .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
     }
 
-    @ViewBuilder
     private var playerSurface: some View {
-        if useVLC {
-            VLCVideoRenderView(role: .mini)
-        } else {
-            AVPlayerViewControllerWrapper(role: .mini, showsPlaybackControls: false)
-        }
+        VLCVideoRenderView(role: .mini)
     }
 }
 

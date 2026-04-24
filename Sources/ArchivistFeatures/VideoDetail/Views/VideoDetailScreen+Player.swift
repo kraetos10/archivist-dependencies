@@ -11,26 +11,10 @@ extension VideoDetailScreen {
     @ViewBuilder
     func playerOrThumbnail(height: CGFloat) -> some View {
         if store.isPlaying {
-            ZStack {
-                if store.useVLCPlayer {
-                    VLCPlayerView()
-                        .frame(height: height)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    AVPlayerViewControllerWrapper()
-                        .frame(height: height)
-                        .frame(maxWidth: .infinity)
-
-                    if PlayerManager.shared.isBuffering {
-                        Color.black.opacity(0.4)
-                        ProgressView()
-                            .controlSize(.large)
-                            .tint(.white)
-                    }
-                }
-            }
-            .frame(height: height)
-            .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
+            VLCPlayerView()
+                .frame(height: height)
+                .frame(maxWidth: .infinity)
+                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
         } else {
             thumbnailView(height: height)
         }

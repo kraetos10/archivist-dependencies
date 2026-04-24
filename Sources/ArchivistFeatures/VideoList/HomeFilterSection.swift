@@ -23,10 +23,15 @@ struct HomeFilterSectionPlaceholder: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .center, spacing: 12) {
-                    ForEach(VideoResponse.placeholders.prefix(3)) { video in
+                    // Loop the available placeholder list up to the carousel
+                    // cap so the redacted row looks the same as the real one.
+                    ForEach(0..<HomeFilterSection.maxItems, id: \.self) { index in
+                        let placeholders = VideoResponse.placeholders
+                        let video = placeholders[index % placeholders.count]
                         VideoCardView(video: video, serverConfig: serverConfig)
                             .frame(width: cardWidth)
                             .redacted(reason: .placeholder)
+                            .id(index)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -50,7 +55,7 @@ struct HomeFilterSection: View {
     var onAddToPlaylist: (VideoResponse) -> Void
     var onDownloadToDevice: (VideoResponse) -> Void
     var onDeleteFromDevice: (VideoResponse) -> Void
-    var onMarkAsWatched: (VideoResponse) -> Void
+    var onToggleWatched: (VideoResponse) -> Void
     var onDeleteFromServer: (VideoResponse) -> Void
     var onViewAll: () -> Void
 
@@ -87,13 +92,14 @@ struct HomeFilterSection: View {
                             VideoContextMenu(
                                 youtubeURL: item.video.youtubeURL,
                                 isDownloaded: item.isDownloaded,
+                                isWatched: item.video.isWatched,
                                 onPlayNext: { onPlayNext(item.video) },
                                 onAddToPlaylist: { onAddToPlaylist(item.video) },
                                 onDownloadToDevice: { onDownloadToDevice(item.video) },
                                 onDeleteFromDevice: item.isDownloaded ? {
                                     onDeleteFromDevice(item.video)
                                 } : nil,
-                                onMarkAsWatched: { onMarkAsWatched(item.video) },
+                                onToggleWatched: { onToggleWatched(item.video) },
                                 onDeleteFromServer: { onDeleteFromServer(item.video) }
                             )
                         }

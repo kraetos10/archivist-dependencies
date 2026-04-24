@@ -5,30 +5,33 @@ import SwiftUI
 public struct VideoContextMenu: View {
     public let youtubeURL: URL?
     public let isDownloaded: Bool
+    public let isWatched: Bool
     public let onPlayNext: (() -> Void)?
     public let onAddToPlaylist: () -> Void
     public let onDownloadToDevice: () -> Void
     public let onDeleteFromDevice: (() -> Void)?
-    public let onMarkAsWatched: () -> Void
+    public let onToggleWatched: () -> Void
     public let onDeleteFromServer: () -> Void
 
     public init(
         youtubeURL: URL?,
         isDownloaded: Bool = false,
+        isWatched: Bool = false,
         onPlayNext: (() -> Void)? = nil,
         onAddToPlaylist: @escaping () -> Void,
         onDownloadToDevice: @escaping () -> Void,
         onDeleteFromDevice: (() -> Void)? = nil,
-        onMarkAsWatched: @escaping () -> Void,
+        onToggleWatched: @escaping () -> Void,
         onDeleteFromServer: @escaping () -> Void
     ) {
         self.youtubeURL = youtubeURL
         self.isDownloaded = isDownloaded
+        self.isWatched = isWatched
         self.onPlayNext = onPlayNext
         self.onAddToPlaylist = onAddToPlaylist
         self.onDownloadToDevice = onDownloadToDevice
         self.onDeleteFromDevice = onDeleteFromDevice
-        self.onMarkAsWatched = onMarkAsWatched
+        self.onToggleWatched = onToggleWatched
         self.onDeleteFromServer = onDeleteFromServer
     }
 
@@ -72,9 +75,14 @@ public struct VideoContextMenu: View {
         }
         Button {
             HapticFeedback.selection.play()
-            onMarkAsWatched()
+            onToggleWatched()
         } label: {
-            Label(String.localised("video.markAsWatched", table: .videos), systemImage: "eye")
+            Label(
+                isWatched
+                    ? String.localised("video.markAsUnwatched", table: .videos)
+                    : String.localised("video.markAsWatched", table: .videos),
+                systemImage: isWatched ? "eye.slash" : "eye"
+            )
         }
         Button(role: .destructive) {
             HapticFeedback.warning.play()

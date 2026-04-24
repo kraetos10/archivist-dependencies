@@ -22,7 +22,9 @@ public struct FilteredVideoListReducer {
         public var isLoadingMore = false
         public var hasLoaded = false
         public var searchQuery: String = ""
-        @Shared(.appStorage("videoListSortOrder")) public var sortOrder: VideoSortOrder = .published
+        /// Sort persists per filter so "Watched" can be ordered differently
+        /// than "Unwatched" without the two overwriting each other.
+        @Shared public var sortOrder: VideoSortOrder
         @FetchAll(
             DeviceDownload
                 .where { $0.status.eq(DeviceDownloadStatus.completed) }
@@ -32,6 +34,10 @@ public struct FilteredVideoListReducer {
         public init(serverConfig: ServerConfig, filter: WatchFilter) {
             self.serverConfig = serverConfig
             self.filter = filter
+            _sortOrder = Shared(
+                wrappedValue: .published,
+                .appStorage("videoListSortOrder.\(filter.rawValue)")
+            )
         }
 
         var downloadedVideoIDs: Set<String> {
