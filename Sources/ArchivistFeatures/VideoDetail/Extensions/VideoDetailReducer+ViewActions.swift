@@ -59,6 +59,7 @@ extension VideoDetailReducer {
         var effects: [Effect<Action>] = []
 
         state.isDownloaded = localVideoStorage.isDownloaded(videoId: videoId)
+        state.isCached = PlaybackCache.isCached(videoId: videoId)
 
         let videoService = self.videoService
         // Fetch latest video data (progress, watched status)
@@ -136,6 +137,12 @@ extension VideoDetailReducer {
                     guard position > 0 else { return }
                     Task.detached {
                         try? await videoService.setProgress(config: config, videoId: videoId, position: position)
+                    }
+                }
+                PlayerManager.shared.onCacheCompleted = { completedId in
+                    guard completedId == videoId else { return }
+                    Task { @MainActor in
+                        await send(.cacheStatusChanged(true))
                     }
                 }
                 PlayerManager.shared.currentVideoID = videoId

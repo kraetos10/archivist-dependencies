@@ -169,7 +169,8 @@ public struct VideoDetailScreen: View {
                 qualityLabel: store.video.qualityLabel,
                 fileSize: store.video.formattedFileSize,
                 videoCodec: store.video.videoCodec,
-                duration: store.video.durationStr
+                duration: store.video.durationStr,
+                isCached: store.isCached
             )
 
             if let linkedDescription = store.video.linkedDescription {

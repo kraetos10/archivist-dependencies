@@ -17,37 +17,10 @@ public struct TVVideoListScreen: View {
     public var body: some View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
-                HStack {
-                    WatchFilterRow(
-                        watchFilter: store.watchFilter,
-                        onFilterChanged: { send(.watchFilterChanged($0)) }
-                    )
-
-                    Spacer()
-
-                    HStack(spacing: 12) {
-                        ForEach(VideoSortOrder.allCases, id: \.self) { sort in
-                            let isSelected = store.sortOrder == sort
-                            Button {
-                                send(.sortOrderChanged(sort))
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: sort.icon)
-                                    Text(sort.label)
-                                }
-                                .font(.headline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(isSelected ? Color.Brand.primary : Color.Text.primary)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(isSelected ? Color.Text.primary : Color.Surface.highlight)
-                                .clipShape(Capsule())
-                            }
-                            .buttonStyle(TVCapsuleButtonStyle())
-                        }
-                    }
-                    .padding(.trailing, 48)
-                }
+                WatchFilterRow(
+                    watchFilter: store.watchFilter,
+                    onFilterChanged: { send(.watchFilterChanged($0)) }
+                )
                 .padding(.top, 16)
                 .focusSection()
 

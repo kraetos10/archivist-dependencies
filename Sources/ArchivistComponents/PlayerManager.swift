@@ -110,6 +110,10 @@ public final class PlayerManager: NSObject {
     #endif
 
     public var onPause: (() -> Void)?
+    /// Fires on the main actor when the parallel prebuffer download finishes
+    /// and the backend has swapped to the local file. Useful for UI surfaces
+    /// like the video detail row that show a "cached" indicator.
+    public var onCacheCompleted: ((String) -> Void)?
 
     public var currentMetadata: NowPlayingMetadata? {
         didSet {
@@ -238,10 +242,6 @@ public final class PlayerManager: NSObject {
         }
         let newBackend: any PlayerBackend = vlcBackend
         setupBackendCallbacks(newBackend)
-        newBackend.load(
-            url: effectiveURL,
-            startPosition: startPosition
-        )
         backend = newBackend
         currentVideoID = videoId
         isPlaying = true
@@ -249,9 +249,20 @@ public final class PlayerManager: NSObject {
         // New playback always begins in the full detail container.
         activePlayerSurfaceRole = .fullDetail
 
+        // Attach the drawable BEFORE loading the URL. If we load first,
+        // `attachDrawable` falls through the "media loaded but not playing
+        // yet" branch (because VLC's `isPlaying` hasn't flipped true in the
+        // split-second since `play()` was called) and ends up pausing us.
+        // With the drawable attached up front, `startPlayback` wires VLC's
+        // video output directly to the host view and playback runs cleanly.
         #if !os(tvOS)
         installPersistentSurface(for: newBackend)
         #endif
+
+        newBackend.load(
+            url: effectiveURL,
+            startPosition: startPosition
+        )
 
         // Parallel download + swap: if the user opted in and we're not already
         // playing from cache or from an offline downloaded file, fetch the
@@ -270,6 +281,7 @@ public final class PlayerManager: NSObject {
             ) { [weak self] fileURL in
                 guard let self, self.currentVideoID == videoId else { return }
                 self.backend?.swapToLocalFile(fileURL)
+                self.onCacheCompleted?(videoId)
             }
         }
     }

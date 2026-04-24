@@ -50,6 +50,19 @@ public final class PlaybackCache {
     /// existing prebuffer cache. AVPlayer stays available as an opt-in.
     public nonisolated static let defaultUseVLCPlayer: Bool = true
 
+    /// Pure filesystem check that can be called from any actor context.
+    /// Matches `cachedFileURL(for:)` but without the mtime touch so it's safe
+    /// to call from reducer handlers / sync nonisolated code.
+    public nonisolated static func isCached(videoId: String) -> Bool {
+        let url = fileURL(for: videoId)
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let size = attrs[.size] as? Int64, size > 0 {
+            return true
+        }
+        return false
+    }
+
     public struct Entry: Equatable, Sendable {
         public let videoId: String
         public let fileURL: URL
@@ -223,14 +236,14 @@ public final class PlaybackCache {
 
     // MARK: - Paths
 
-    public static func cacheDirectory() -> URL {
+    public nonisolated static func cacheDirectory() -> URL {
         let base = FileManager.default.urls(
             for: .cachesDirectory, in: .userDomainMask
         ).first ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("PlaybackCache", isDirectory: true)
     }
 
-    static func fileURL(for videoId: String) -> URL {
+    nonisolated static func fileURL(for videoId: String) -> URL {
         cacheDirectory().appendingPathComponent("\(videoId).mp4")
     }
 }
