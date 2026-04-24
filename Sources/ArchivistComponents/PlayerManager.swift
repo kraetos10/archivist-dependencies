@@ -33,6 +33,7 @@ public final class PlayerManager: NSObject {
         public let artist: String
         public let duration: Double
         public let artworkURL: URL?
+        public let channelThumbURL: URL?
         public let authHeaders: [String: String]
 
         public init(
@@ -40,12 +41,14 @@ public final class PlayerManager: NSObject {
             artist: String,
             duration: Double,
             artworkURL: URL?,
+            channelThumbURL: URL? = nil,
             authHeaders: [String: String]
         ) {
             self.title = title
             self.artist = artist
             self.duration = duration
             self.artworkURL = artworkURL
+            self.channelThumbURL = channelThumbURL
             self.authHeaders = authHeaders
         }
     }
@@ -114,6 +117,15 @@ public final class PlayerManager: NSObject {
     /// and the backend has swapped to the local file. Useful for UI surfaces
     /// like the video detail row that show a "cached" indicator.
     public var onCacheCompleted: ((String) -> Void)?
+    /// User tapped "next" on the transport overlay. Wired by the VideoDetail
+    /// reducer to the same auto-advance rules end-of-media uses.
+    public var onNextRequested: (() -> Void)?
+    /// User tapped "previous" on the transport overlay. No-op while
+    /// `canGoPrevious` is false.
+    public var onPreviousRequested: (() -> Void)?
+    /// True when a history of previously-played videos exists, so the
+    /// "previous" transport button should be enabled.
+    public var canGoPrevious: Bool = false
 
     public var currentMetadata: NowPlayingMetadata? {
         didSet {
@@ -242,6 +254,10 @@ public final class PlayerManager: NSObject {
         }
         let newBackend: any PlayerBackend = vlcBackend
         setupBackendCallbacks(newBackend)
+        newBackend.load(
+            url: effectiveURL,
+            startPosition: startPosition
+        )
         backend = newBackend
         currentVideoID = videoId
         isPlaying = true
@@ -249,20 +265,9 @@ public final class PlayerManager: NSObject {
         // New playback always begins in the full detail container.
         activePlayerSurfaceRole = .fullDetail
 
-        // Attach the drawable BEFORE loading the URL. If we load first,
-        // `attachDrawable` falls through the "media loaded but not playing
-        // yet" branch (because VLC's `isPlaying` hasn't flipped true in the
-        // split-second since `play()` was called) and ends up pausing us.
-        // With the drawable attached up front, `startPlayback` wires VLC's
-        // video output directly to the host view and playback runs cleanly.
         #if !os(tvOS)
         installPersistentSurface(for: newBackend)
         #endif
-
-        newBackend.load(
-            url: effectiveURL,
-            startPosition: startPosition
-        )
 
         // Parallel download + swap: if the user opted in and we're not already
         // playing from cache or from an offline downloaded file, fetch the

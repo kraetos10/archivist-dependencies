@@ -20,8 +20,36 @@ public struct TVVLCPlayerView: View {
                     .tint(.white)
             }
 
-            VStack {
+            VStack(alignment: .leading, spacing: 12) {
                 Spacer()
+
+                if let metadata = playerManager.currentMetadata {
+                    HStack(spacing: 12) {
+                        if let thumb = metadata.channelThumbURL {
+                            AsyncImage(url: thumb) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                default:
+                                    Circle().fill(.white.opacity(0.2))
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .clipShape(Circle())
+                        }
+                        Text(metadata.artist)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("·")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text(metadata.title)
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                }
 
                 VStack(spacing: 8) {
                     ProgressView(
@@ -41,9 +69,9 @@ public struct TVVLCPlayerView: View {
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 }
-                .padding(.horizontal, 80)
-                .padding(.bottom, 40)
             }
+            .padding(.horizontal, 80)
+            .padding(.bottom, 40)
         }
         .onPlayPauseCommand {
             playerManager.togglePlayPause()

@@ -37,6 +37,9 @@
     "video.addToPlaylist" : {
 
     },
+    "video.cached" : {
+
+    },
     "video.deleteDownload" : {
 
     },

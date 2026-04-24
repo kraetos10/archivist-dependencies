@@ -24,25 +24,21 @@ public final class PlaybackCache {
     /// Default value for the `vlcPrebufferToDisk` app-storage flag. tvOS ships
     /// with caching on because Apple TV streams have been pausing regularly
     /// without a parallel disk copy to fall back to.
-    public nonisolated static let defaultPrebufferEnabled: Bool = {
-        #if os(tvOS)
-        return true
-        #else
-        return false
-        #endif
-    }()
+    #if os(tvOS)
+    public nonisolated static let defaultPrebufferEnabled: Bool = true
+    #else
+    public nonisolated static let defaultPrebufferEnabled: Bool = false
+    #endif
 
     /// Default value for the `prebufferWifiOnly` app-storage flag. On tvOS
     /// there's no cellular to protect against, and a Wi-Fi-only gate would
     /// block prebuffer when the box is wired to ethernet, so tvOS ships with
     /// the gate off.
-    public nonisolated static let defaultPrebufferWifiOnly: Bool = {
-        #if os(tvOS)
-        return false
-        #else
-        return true
-        #endif
-    }()
+    #if os(tvOS)
+    public nonisolated static let defaultPrebufferWifiOnly: Bool = false
+    #else
+    public nonisolated static let defaultPrebufferWifiOnly: Bool = true
+    #endif
 
     /// Default value for the `useVLCPlayer` app-storage flag. VLC is now the
     /// default on every platform — it handles the end-of-media event reliably,

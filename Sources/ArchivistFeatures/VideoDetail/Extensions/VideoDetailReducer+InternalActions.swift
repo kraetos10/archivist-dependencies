@@ -85,6 +85,12 @@ extension VideoDetailReducer {
     ) -> Effect<Action> {
         // Remove the autoplayed video from the up next queue
         state.nextVideos.removeAll { $0.videoId == video.videoId }
+        // Push the outgoing video onto the history stack so "previous" can
+        // walk it back. Guarded to avoid duplicates in case of replays.
+        if state.video.videoId != video.videoId {
+            state.previousVideos.append(state.video)
+        }
+        let hasPrevious = !state.previousVideos.isEmpty
         state.resetForNewVideo(video)
         state.isPlaying = true
         let url = mediaURL(state: state)
@@ -96,6 +102,7 @@ extension VideoDetailReducer {
             .run { [videoService] send in
                 let stream = await MainActor.run {
                     PlayerManager.shared.stop()
+                    PlayerManager.shared.canGoPrevious = hasPrevious
                     guard let url else { return nil as AsyncStream<Void>? }
                     PlayerManager.shared.load(
                         url: url,
@@ -111,6 +118,16 @@ extension VideoDetailReducer {
                                 videoId: videoId,
                                 position: position
                             )
+                        }
+                    }
+                    PlayerManager.shared.onNextRequested = {
+                        Task { @MainActor in
+                            await send(.view(.nextVideoRequested))
+                        }
+                    }
+                    PlayerManager.shared.onPreviousRequested = {
+                        Task { @MainActor in
+                            await send(.view(.previousVideoRequested))
                         }
                     }
                     PlayerManager.shared.currentVideoID = videoId
