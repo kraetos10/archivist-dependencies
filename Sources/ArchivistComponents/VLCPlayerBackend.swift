@@ -68,17 +68,16 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         drawableView = view
         mediaPlayer.drawable = view
 
-        // VLC needs a nudge to render onto a new drawable. A quick
-        // pause/play cycle forces the video output pipeline to
-        // reinitialize without the heavyweight stop/reload/seek.
+        // Nudge the video output pipeline onto the new drawable if VLC is
+        // already mid-playback. If we're called before `startPlayback`'s
+        // `play()` has flipped `isPlaying` true (initial-load race) we'd
+        // previously fall through to an `else if loadedMedia != nil` branch
+        // that ended with `pause()` — killing playback. Just skip the nudge
+        // in that case; VLC picks up the drawable reference on its own.
         if wasPlaying {
             mediaPlayer.pause()
             mediaPlayer.play()
             mediaPlayer.time = resumeTime
-        } else if loadedMedia != nil {
-            mediaPlayer.play()
-            mediaPlayer.time = resumeTime
-            mediaPlayer.pause()
         }
     }
 
@@ -156,13 +155,17 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         }
 
         Self.applyStreamingOptions(to: media)
-        loadedMedia = media
 
-        // Hide the drawable during the initial seek to avoid a flash
-        // of the video start before seeking to the resume position.
-        if pendingStartPosition != nil, pendingStartPosition! > 0 {
-            drawableView?.isHidden = true
+        // Resume-at-offset via a VLC media option. This bakes the start
+        // position into the HTTP range request VLC issues, which is far more
+        // reliable over a network stream than a post-play `mediaPlayer.position`
+        // seek — the latter kept putting VLC into a half-loaded state on
+        // Continue-Watching resumes and the video never started rendering.
+        if let startPosition = pendingStartPosition, startPosition > 0 {
+            media.addOption(":start-time=\(Int(startPosition))")
         }
+        pendingStartPosition = nil
+        loadedMedia = media
 
         if let view = drawableView {
             mediaPlayer.drawable = view
@@ -228,7 +231,6 @@ extension VLCPlayerBackend: VLCMediaPlayerDelegate {
         case .playing:
             isPlaying = true
             isBuffering = false
-            applyPendingStartPositionIfReady()
         case .paused:
             isPlaying = false
             isBuffering = false
@@ -267,15 +269,7 @@ extension VLCPlayerBackend: VLCMediaPlayerDelegate {
             }
         }
 
-        // If we're still waiting to apply a start position, swallow updates
-        // entirely — otherwise the UI flashes 0:00 before jumping to the
-        // saved resume point.
-        if pendingStartPosition != nil {
-            applyPendingStartPositionIfReady()
-            return
-        }
-
-        // If a start-position seek is in flight, swallow time updates until
+        // If a user-initiated seek is in flight, swallow time updates until
         // VLC actually lands near the target.
         if let target = seekTargetTime {
             if abs(reportedTime - target) < 2.0 {
@@ -294,23 +288,6 @@ extension VLCPlayerBackend: VLCMediaPlayerDelegate {
         if duration > 0, reportedTime > 0, reportedTime >= duration - 1 {
             reachedEndOfMedia = true
         }
-    }
-
-    private func applyPendingStartPositionIfReady() {
-        guard let startPosition = pendingStartPosition,
-              startPosition > 0,
-              duration > 0 else { return }
-        pendingStartPosition = nil
-        let pos = startPosition / duration
-        mediaPlayer.position = min(max(pos, 0), 1)
-        // Show the target immediately; ignore stale time updates until VLC
-        // confirms the seek landed.
-        seekTargetTime = startPosition
-        currentTime = startPosition
-        onTimeUpdate?(currentTime)
-
-        // Reveal the drawable now that we've seeked
-        drawableView?.isHidden = false
     }
 }
 #endif

@@ -55,86 +55,154 @@ public struct VLCPlayerView: View {
     }
 
     private var controlsOverlay: some View {
-        Color.black.opacity(0.3)
+        Color.black.opacity(0.35)
             .contentShape(Rectangle())
             .onTapGesture {
                 playerManager.hideVLCControls()
             }
             .overlay(alignment: .topTrailing) {
-                Button {
+                roundedControlButton(
+                    systemImage: playerManager.isVLCFullscreen
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right",
+                    iconSize: 18,
+                    padding: 12
+                ) {
                     playerManager.toggleVLCFullscreen()
-                } label: {
-                    Image(systemName: playerManager.isVLCFullscreen
-                          ? "arrow.down.right.and.arrow.up.left"
-                          : "arrow.up.left.and.arrow.down.right")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .padding(16)
                 }
+                .padding(16)
             }
-            .overlay {
-                HStack(spacing: 40) {
-                    Button {
-                        playerManager.skipBackward(10)
-                        playerManager.scheduleHideVLCControls()
-                    } label: {
-                        Image(systemName: "gobackward.10")
-                            .font(.title)
-                            .foregroundStyle(.white)
-                    }
+            .overlay { centerTransportControls }
+            .overlay(alignment: .bottom) { bottomInfoAndSeek }
+    }
 
-                    Button {
-                        playerManager.togglePlayPause()
-                        playerManager.scheduleHideVLCControls()
-                    } label: {
-                        Image(
-                            systemName: playerManager.isPlaying
-                                ? "pause.circle.fill"
-                                : "play.circle.fill"
-                        )
-                        .font(.system(size: 56))
-                        .foregroundStyle(.white)
-                    }
+    // MARK: - Center transport
 
-                    Button {
-                        playerManager.skipForward(10)
-                        playerManager.scheduleHideVLCControls()
-                    } label: {
-                        Image(systemName: "goforward.10")
-                            .font(.title)
-                            .foregroundStyle(.white)
-                    }
+    private var centerTransportControls: some View {
+        HStack(spacing: 36) {
+            roundedControlButton(
+                systemImage: "backward.end.fill",
+                iconSize: 24,
+                padding: 18,
+                isEnabled: playerManager.canGoPrevious
+            ) {
+                playerManager.onPreviousRequested?()
+                playerManager.scheduleHideVLCControls()
+            }
+
+            roundedControlButton(
+                systemImage: playerManager.isPlaying ? "pause.fill" : "play.fill",
+                iconSize: 34,
+                padding: 22
+            ) {
+                playerManager.togglePlayPause()
+                playerManager.scheduleHideVLCControls()
+            }
+
+            roundedControlButton(
+                systemImage: "forward.end.fill",
+                iconSize: 24,
+                padding: 18
+            ) {
+                playerManager.onNextRequested?()
+                playerManager.scheduleHideVLCControls()
+            }
+        }
+    }
+
+    private func roundedControlButton(
+        systemImage: String,
+        iconSize: CGFloat,
+        padding: CGFloat,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: iconSize + padding * 2, height: iconSize + padding * 2)
+                .background(.black.opacity(0.45))
+                .background(.ultraThinMaterial.opacity(0.6))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.35)
+    }
+
+    // MARK: - Bottom info + seek bar
+
+    private var bottomInfoAndSeek: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            titleRow
+
+            SeekBar(
+                progress: playerManager.duration > 0
+                    ? playerManager.currentTime / playerManager.duration
+                    : 0,
+                onDragStarted: {
+                    playerManager.cancelVLCHideControls()
+                },
+                onSeek: { value in
+                    let target = value * playerManager.duration
+                    playerManager.seekTo(target)
+                    playerManager.scheduleHideVLCControls()
                 }
+            )
+
+            HStack {
+                Text(playerManager.currentTimeDisplay)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(playerManager.durationDisplay)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
             }
-            .overlay(alignment: .bottom) {
-                VStack(spacing: 4) {
-                    SeekBar(
-                        progress: playerManager.duration > 0
-                            ? playerManager.currentTime / playerManager.duration
-                            : 0,
-                        onDragStarted: {
-                            playerManager.cancelVLCHideControls()
-                        },
-                        onSeek: { value in
-                            let target = value * playerManager.duration
-                            playerManager.seekTo(target)
-                            playerManager.scheduleHideVLCControls()
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
+        .background(
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.55)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+        )
+    }
+
+    @ViewBuilder
+    private var titleRow: some View {
+        if playerManager.isVLCFullscreen, let metadata = playerManager.currentMetadata {
+            HStack(spacing: 10) {
+                if let thumbURL = metadata.channelThumbURL {
+                    AsyncImage(url: thumbURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        default:
+                            Circle().fill(.white.opacity(0.2))
                         }
-                    )
-
-                    HStack {
-                        Text(playerManager.currentTimeDisplay)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
-                        Spacer()
-                        Text(playerManager.durationDisplay)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
                     }
+                    .frame(width: 24, height: 24)
+                    .clipShape(Circle())
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                Text(metadata.artist)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("·")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(metadata.title)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
             }
+        }
     }
 }
 
@@ -309,22 +377,23 @@ private struct SeekBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.white.opacity(0.3))
-                    .frame(height: 4)
+                    .frame(height: 6)
 
                 Capsule()
                     .fill(.white)
                     .frame(
                         width: max(0, geometry.size.width * displayProgress),
-                        height: 4
+                        height: 6
                     )
 
                 Circle()
                     .fill(.white)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 18, height: 18)
+                    .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
                     .offset(
                         x: max(0, min(
-                            geometry.size.width * displayProgress - 7,
-                            geometry.size.width - 14
+                            geometry.size.width * displayProgress - 9,
+                            geometry.size.width - 18
                         ))
                     )
             }
@@ -348,7 +417,7 @@ private struct SeekBar: View {
                     }
             )
         }
-        .frame(height: 30)
+        .frame(height: 36)
     }
 }
 #endif

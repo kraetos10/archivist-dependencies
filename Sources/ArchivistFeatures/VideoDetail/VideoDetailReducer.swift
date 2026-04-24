@@ -19,6 +19,9 @@ public struct VideoDetailReducer {
         var similarVideos: [VideoResponse] = []
         var isLoadingSimilar = false
         var nextVideos: [VideoResponse] = []
+        /// Stack of videos we've auto-advanced past in this detail session —
+        /// powers the "previous" transport button.
+        var previousVideos: [VideoResponse] = []
         var shouldAutoPlayNextVideo: Bool = true
         var showPlayNext: Bool = true
         var isDownloaded = false
@@ -131,6 +134,8 @@ public struct VideoDetailReducer {
             case addUpNextToPlayNextTapped(VideoResponse)
             case removeFromPlayNextTapped(Int)
             case playNextItemTapped(PlayNextItem)
+            case nextVideoRequested
+            case previousVideoRequested
             case videoChanged
         }
     }

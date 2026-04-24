@@ -44,6 +44,10 @@ extension VideoDetailReducer {
             return handleRemoveFromPlayNextTapped(id, state: &state)
         case .playNextItemTapped(let item):
             return handlePlayNextItemTapped(item, state: &state)
+        case .nextVideoRequested:
+            return .send(.view(.videoPlaybackDidEnd))
+        case .previousVideoRequested:
+            return handlePreviousVideoRequested(state: &state)
         case .videoChanged:
             state.showAllComments = false
             state.currentCommentIndex = 0
@@ -145,12 +149,24 @@ extension VideoDetailReducer {
                         await send(.cacheStatusChanged(true))
                     }
                 }
+                PlayerManager.shared.onNextRequested = {
+                    Task { @MainActor in
+                        await send(.view(.nextVideoRequested))
+                    }
+                }
+                PlayerManager.shared.onPreviousRequested = {
+                    Task { @MainActor in
+                        await send(.view(.previousVideoRequested))
+                    }
+                }
                 PlayerManager.shared.currentVideoID = videoId
                 PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
                     title: video.title,
                     artist: video.channelName,
                     duration: Double(video.player?.duration ?? 0),
                     artworkURL: config.fullURL(for: video.vidThumbUrl ?? ""),
+                    channelThumbURL: video.channel.channelThumbUrl
+                        .flatMap { config.fullURL(for: $0) },
                     authHeaders: config.authHeaders
                 )
                 return PlayerManager.shared.playbackEndEvents()
@@ -464,5 +480,10 @@ extension VideoDetailReducer {
             },
             .send(.view(.viewDidAppear))
         )
+    }
+
+    private func handlePreviousVideoRequested(state: inout State) -> Effect<Action> {
+        guard let previous = state.previousVideos.popLast() else { return .none }
+        return .send(.autoPlayVideo(previous))
     }
 }
