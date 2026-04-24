@@ -94,26 +94,6 @@ public struct TVSettingsScreen: View {
                     .padding(.vertical, 8)
                 }
                 .disabled(store.isRescanningSubscriptions || store.activeTask.activeDownload != nil)
-
-                Button {
-                    send(.reAuthTapped)
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 16) {
-                            if store.isReAuthenticating {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                            }
-                            Text(String.localised("settings.refreshSession", table: .settings))
-                        }
-                        Text(String.localised("settings.refreshSessionSubtitle", table: .settings))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                }
-                .disabled(store.isReAuthenticating)
             } header: {
                 Text(String.localised("generic.actions", table: .generic))
             }

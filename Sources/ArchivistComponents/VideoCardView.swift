@@ -117,13 +117,19 @@ public struct VideoCardView: View {
 
     private var thumbnailView: some View {
         ZStack {
+            // Black backdrop fills any letterbox / pillarbox gaps when the
+            // thumbnail's native aspect isn't 16:9 (e.g. Shorts stacked
+            // vertically). Without this the green card surface shows through
+            // and cards look uneven.
+            Color.black
+
             if let thumbURL = thumbnailURL {
                 AsyncImage(url: thumbURL) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(16 / 9, contentMode: .fill)
+                            .aspectRatio(contentMode: .fit)
                     case .failure:
                         thumbnailPlaceholder
                     case .empty:

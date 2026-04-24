@@ -70,6 +70,11 @@ public struct TVVideoListScreen: View {
             switch store.case {
             case .videoDetail(let detailStore):
                 TVVideoDetailScreen(store: detailStore)
+            case .filteredList:
+                // tvOS keeps its original flat-grid layout and never pushes a
+                // per-filter list, but the path enum is shared so we need an
+                // exhaustive branch here.
+                EmptyView()
             }
         }
     }

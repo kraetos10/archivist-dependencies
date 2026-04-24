@@ -14,55 +14,62 @@ public struct LoginScreen: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                LottieView(animation: LottieAnimationFile.credentials.animation)
-                    .playing(loopMode: .playOnce)
-                    .frame(width: 200, height: 200)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 32) {
+                    LottieView(animation: LottieAnimationFile.credentials.animation)
+                        .playing(loopMode: .playOnce)
+                        .frame(width: 200, height: 200)
 
-                Text(String.localised("login.apiKey.title", table: .login))
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Text.primary)
-                    .multilineTextAlignment(.center)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(String.localised("login.apiKey.disableStaticAuthNotice", table: .login))
-                        .font(.footnote)
+                    Text(String.localised("login.apiKey.title", table: .login))
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
                         .foregroundStyle(Color.Text.primary)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.Surface.highlight)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .multilineTextAlignment(.center)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(String.localised("login.apiKey", table: .login))
-                            .font(.subheadline)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(String.localised("login.apiKey.disableStaticAuthNotice", table: .login))
+                            .font(.footnote)
                             .foregroundStyle(Color.Text.primary)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.Surface.highlight)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                        SecureField(
-                            String.localised("login.apiKey", table: .login),
-                            text: $store.apiToken
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String.localised("login.apiKey", table: .login))
+                                .font(.subheadline)
+                                .foregroundStyle(Color.Text.primary)
+
+                            TextField(
+                                String.localised("login.apiKey", table: .login),
+                                text: $store.apiToken
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        }
+
+                        Text(String.localised("login.apiKey.hint", table: .login))
+                            .font(.caption)
+                            .foregroundStyle(Color.Brand.secondary)
                     }
-
-                    Text(String.localised("login.apiKey.hint", table: .login))
-                        .font(.caption)
-                        .foregroundStyle(Color.Brand.secondary)
                 }
-
-                LoadingButton(
-                    title: String.localised("login.login", table: .login),
-                    isLoading: store.isLoading
-                ) {
-                    send(.loginButtonTapped)
-                }
-                .disabled(store.apiToken.isEmpty || store.isLoading)
+                .padding(.horizontal, 32)
+                .padding(.top, 32)
+                .padding(.bottom, 16)
             }
-            .padding(.all, 32)
+
+            LoadingButton(
+                title: String.localised("login.login", table: .login),
+                isLoading: store.isLoading
+            ) {
+                send(.loginButtonTapped)
+            }
+            .disabled(store.apiToken.isEmpty || store.isLoading)
+            .padding(.horizontal, 32)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
         .background {
             Color.Brand.primary

@@ -97,27 +97,6 @@ public struct iPadSettingsScreen: View {
                     Text(store.serverConfig.useHTTP ? "HTTP" : "HTTPS")
                         .foregroundStyle(Color.Brand.secondary)
                 }
-
-                Button {
-                    send(.reAuthTapped)
-                } label: {
-                    HStack {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundStyle(Color.Accent.dark)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(String.localised("settings.refreshSession", table: .settings))
-                            Text(String.localised("settings.refreshSessionSubtitle", table: .settings))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if store.isReAuthenticating {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
-                }
-                .disabled(store.isReAuthenticating)
             } header: {
                 Text(String.localised("settings.serverInfo", table: .settings))
             }

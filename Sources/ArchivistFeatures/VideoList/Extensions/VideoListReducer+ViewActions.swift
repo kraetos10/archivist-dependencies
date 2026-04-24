@@ -39,6 +39,14 @@ extension VideoListReducer {
             return .none
         case .sortOrderChanged(let sort):
             return handleSortOrderChanged(sort, state: &state)
+        case .viewAllTapped(let filter):
+            state.path.append(
+                .filteredList(FilteredVideoListReducer.State(
+                    serverConfig: state.serverConfig,
+                    filter: filter
+                ))
+            )
+            return .none
         }
     }
 

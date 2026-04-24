@@ -254,6 +254,17 @@
         }
       }
     },
+    "video.viewAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View All"
+          }
+        }
+      }
+    },
     "video.removeFromPlaylist": {
       "extractionState": "manual",
       "localizations": {
@@ -745,6 +756,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "Only prebuffer when connected to Wi-Fi to save mobile data."
+          }
+        }
+      }
+    },
+    "video.prebuffer.tv.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prebuffer Playback"
+          }
+        }
+      }
+    },
+    "video.prebuffer.tv.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads each video in the background while it plays so streams don't stall and seeks are instant."
+          }
+        }
+      }
+    },
+    "video.prebuffer.tv.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, each played video is downloaded in the background to avoid buffering stalls. The cache is cleared automatically when you start a new video."
           }
         }
       }
