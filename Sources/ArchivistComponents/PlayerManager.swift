@@ -249,7 +249,7 @@ public final class PlayerManager: NSObject {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
-        @Shared(.appStorage("useVLCPlayer")) var useVLC = false
+        @Shared(.appStorage("useVLCPlayer")) var useVLC = PlaybackCache.defaultUseVLCPlayer
         @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
 

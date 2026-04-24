@@ -78,13 +78,16 @@ public struct iPadVideoListScreen: View {
     @ViewBuilder
     private var homeSections: some View {
         if store.isLoading && store.videos.isEmpty {
-            LazyVGrid(columns: searchColumns, spacing: 16) {
-                ForEach(VideoResponse.placeholders) { video in
-                    VideoCardView(video: video, serverConfig: store.serverConfig)
-                        .redacted(reason: .placeholder)
+            LazyVStack(spacing: 16) {
+                ForEach(Array(VideoListReducer.State.homeSectionOrder.prefix(3)), id: \.self) { filter in
+                    HomeFilterSectionPlaceholder(
+                        filter: filter,
+                        serverConfig: store.serverConfig,
+                        cardWidth: 340
+                    )
                 }
             }
-            .padding()
+            .padding(.vertical, 8)
         } else if store.hasLoaded && store.videos.isEmpty {
             VideoListEmptyState(
                 isSearchActive: false,
