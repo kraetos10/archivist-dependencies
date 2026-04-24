@@ -63,6 +63,9 @@ extension VideoDetailScreen {
         .background(Color.Surface.highlight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .pressable {
+            send(.playNextItemTapped(item), animation: .default)
+        }
         .contextMenu {
             Button(role: .destructive) {
                 send(

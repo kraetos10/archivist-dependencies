@@ -128,6 +128,7 @@ public struct VideoDetailReducer {
             case addToPlayNextTapped
             case addUpNextToPlayNextTapped(VideoResponse)
             case removeFromPlayNextTapped(Int)
+            case playNextItemTapped(PlayNextItem)
             case videoChanged
         }
     }

@@ -28,20 +28,13 @@ public final class AVPlayerBackend: PlayerBackend {
 
     public func load(
         url: URL,
-        startPosition: Double?,
-        authHeaders: [String: String]
+        startPosition: Double?
     ) {
         stop()
 
-        let asset: AVURLAsset
-        if authHeaders.isEmpty {
-            asset = AVURLAsset(url: url)
-        } else {
-            asset = AVURLAsset(
-                url: url,
-                options: ["AVURLAssetHTTPHeaderFieldsKey": authHeaders]
-            )
-        }
+        // The server is expected to run with DISABLE_STATIC_AUTH=true so
+        // media URLs are served publicly — no auth header needed here.
+        let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 60
 

@@ -45,15 +45,6 @@ public nonisolated protocol VideoServiceType: Sendable {
         videoId: String,
         isWatched: Bool
     ) async throws
-    func getStreamToken(
-        config: ServerConfig,
-        videoId: String
-    ) async throws -> StreamTokenResponse
-    func revokeStreamToken(
-        config: ServerConfig,
-        videoId: String,
-        sig: String
-    ) async throws
 }
 
 public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
@@ -254,32 +245,6 @@ public nonisolated struct VideoService: VideoServiceType {
         _ = try await request.execute()
     }
 
-    public func getStreamToken(
-        config: ServerConfig,
-        videoId: String
-    ) async throws -> StreamTokenResponse {
-        let request = NetworkAPIRequest<StreamTokenResponse>(
-            config: config,
-            path: .videoStreamToken(id: videoId),
-            method: .post
-        )
-        return try await request.execute().data
-    }
-
-    public func revokeStreamToken(
-        config: ServerConfig,
-        videoId: String,
-        sig: String
-    ) async throws {
-        let body = try JSONEncoder().encode(["sig": sig])
-        let request = NetworkAPIRequest<EmptyResponse>(
-            config: config,
-            path: .videoStreamToken(id: videoId),
-            method: .delete,
-            body: body
-        )
-        _ = try await request.execute()
-    }
 }
 
 public nonisolated struct EmptyResponse: Decodable, Sendable {

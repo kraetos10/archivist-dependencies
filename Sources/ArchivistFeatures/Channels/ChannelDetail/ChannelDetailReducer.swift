@@ -1,6 +1,8 @@
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
+internal import SQLiteData
+import StructuredQueries
 
 public enum ChannelVideoFilter: Sendable, Equatable {
     case all
@@ -27,13 +29,17 @@ public struct ChannelDetailReducer: Sendable {
         var isDescriptionExpanded = false
         var videoFilter: ChannelVideoFilter = .unwatched
         var videoSortOrder: VideoSortOrder = .published
+        @FetchAll(PlayNextItem.all.order(by: \.id))
+        var playNextItems
 
         var filteredVideos: IdentifiedArrayOf<VideoResponse> {
+            let queuedIDs = Set(playNextItems.map(\.videoId))
+            let base = videos.filter { !queuedIDs.contains($0.videoId) }
             switch videoFilter {
             case .all:
-                return videos
+                return base
             case .unwatched:
-                return videos.filter { !$0.isWatched }
+                return base.filter { !$0.isWatched }
             }
         }
 
@@ -85,6 +91,7 @@ public struct ChannelDetailReducer: Sendable {
             case deleteFromDeviceTapped(VideoResponse)
             case markAsWatchedTapped(VideoResponse)
             case deleteFromServerTapped(VideoResponse)
+            case playNextTapped(VideoResponse)
             case downloadSortToggled
             case videoSortOrderChanged(VideoSortOrder)
         }
@@ -96,6 +103,7 @@ public struct ChannelDetailReducer: Sendable {
     @Dependency(\.persistentDownloadManager) var persistentDownloadManager
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
     @Dependency(\.localVideoStorage) var localVideoStorage
+    @Dependency(\.playNextDatabase) var playNextDatabase
 
     public var body: some Reducer<State, Action> {
         Reduce { state, action in

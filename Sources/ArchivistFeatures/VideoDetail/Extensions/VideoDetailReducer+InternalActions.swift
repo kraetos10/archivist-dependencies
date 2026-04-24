@@ -89,7 +89,6 @@ extension VideoDetailReducer {
         let config = state.serverConfig
         let videoId = state.video.videoId
         let currentVideo = video
-        let authHeaders = state.isDownloaded ? [:] : config.authHeaders
         return .merge(
             .run { [videoService] send in
                 let stream = await MainActor.run {
@@ -98,7 +97,6 @@ extension VideoDetailReducer {
                     PlayerManager.shared.load(
                         url: url,
                         startPosition: startPosition,
-                        authHeaders: authHeaders,
                         videoId: videoId
                     )
                     PlayerManager.shared.onPause = {
@@ -134,7 +132,6 @@ extension VideoDetailReducer {
         let startPosition = state.video.player?.position
         let config = state.serverConfig
         let videoId = state.video.videoId
-        let authHeaders = state.isDownloaded ? [:] : config.authHeaders
         return .merge(
             .run { [videoService] send in
                 let stream = await MainActor.run {
@@ -143,7 +140,6 @@ extension VideoDetailReducer {
                     PlayerManager.shared.load(
                         url: url,
                         startPosition: startPosition,
-                        authHeaders: authHeaders,
                         videoId: videoId
                     )
                     PlayerManager.shared.onPause = {

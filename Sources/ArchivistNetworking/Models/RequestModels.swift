@@ -1,27 +1,5 @@
 import Foundation
 
-public nonisolated struct LoginRequest: Encodable, Sendable {
-    public let username: String
-    public let password: String
-    public let rememberMe: String?
-
-    public init(
-        username: String,
-        password: String,
-        rememberMe: String?
-    ) {
-        self.username = username
-        self.password = password
-        self.rememberMe = rememberMe
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case username
-        case password
-        case rememberMe = "remember_me"
-    }
-}
-
 public nonisolated struct AddDownloadRequest: Encodable, Sendable {
     public let data: [AddDownloadItem]
 

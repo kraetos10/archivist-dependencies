@@ -42,6 +42,8 @@ extension VideoDetailReducer {
             return handleAddUpNextToPlayNextTapped(video, state: &state)
         case .removeFromPlayNextTapped(let id):
             return handleRemoveFromPlayNextTapped(id, state: &state)
+        case .playNextItemTapped(let item):
+            return handlePlayNextItemTapped(item, state: &state)
         case .videoChanged:
             state.showAllComments = false
             state.currentCommentIndex = 0
@@ -122,18 +124,11 @@ extension VideoDetailReducer {
         let config = state.serverConfig
         let videoId = state.video.videoId
         let video = state.video
-        let authHeaders = state.isDownloaded ? [:] : config.authHeaders
         return .run { [videoService] send in
             let stream = await MainActor.run {
-                PlayerManager.shared.configureAuth(
-                    videoId: videoId,
-                    videoService: videoService,
-                    config: config
-                )
                 PlayerManager.shared.load(
                     url: url,
                     startPosition: startPosition,
-                    authHeaders: authHeaders,
                     videoId: videoId
                 )
                 PlayerManager.shared.onPause = {
@@ -425,6 +420,25 @@ extension VideoDetailReducer {
         return .run { [playNextDatabase] _ in
             try? await playNextDatabase.removeFromQueue(id)
         }
+    }
+
+    private func handlePlayNextItemTapped(
+        _ item: PlayNextItem,
+        state: inout State
+    ) -> Effect<Action> {
+        let saveEffect = saveProgressEffect(state: state)
+        let config = state.serverConfig
+        return .merge(
+            saveEffect,
+            .run { [videoService, playNextDatabase] send in
+                try? await playNextDatabase.removeFromQueue(item.id)
+                guard let video = try? await videoService.getVideo(
+                    config: config,
+                    id: item.videoId
+                ) else { return }
+                await send(.autoPlayVideo(video))
+            }
+        )
     }
 
     private func handleNextUpVideoTapped(

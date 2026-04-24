@@ -10,8 +10,7 @@ public protocol PlayerBackend: AnyObject {
 
     func load(
         url: URL,
-        startPosition: Double?,
-        authHeaders: [String: String]
+        startPosition: Double?
     )
     func play()
     func pause()

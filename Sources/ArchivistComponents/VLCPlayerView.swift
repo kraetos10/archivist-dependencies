@@ -153,16 +153,21 @@ public struct VLCVideoRenderView: View {
 
     public var body: some View {
         let manager = PlayerManager.shared
-        _ = manager.activePlayerSurfaceRole
         _ = manager.persistentVLCDrawable
+        // Passing `isVLCFullscreen` as a property forces SwiftUI to call
+        // `updateUIView` on both hosts when the fullscreen cover toggles —
+        // otherwise the underlying host keeps its stale "I don't own the
+        // drawable" state after the cover dismisses and renders black.
         return VLCDrawableHostRepresentable(
-            shouldAdopt: manager.activePlayerSurfaceRole == role
+            shouldAdopt: manager.activePlayerSurfaceRole == role,
+            fullscreenToken: manager.isVLCFullscreen
         )
     }
 }
 
 private struct VLCDrawableHostRepresentable: UIViewRepresentable {
     var shouldAdopt: Bool
+    var fullscreenToken: Bool
 
     func makeUIView(context: Context) -> VLCDrawableHostView {
         let host = VLCDrawableHostView()
@@ -192,15 +197,17 @@ public final class VLCDrawableHostView: UIView {
 
         if drawable.superview === self { return }
 
-        // Pull it off any previous host and pin it into this one.
-        drawable.removeFromSuperview()
+        // `addSubview` already removes the drawable from any previous host.
+        // Avoid an explicit `removeFromSuperview` first — that intermediate
+        // orphaned state was making VLC pause its video output, causing a
+        // black surface after reparenting.
         drawable.translatesAutoresizingMaskIntoConstraints = false
         addSubview(drawable)
         NSLayoutConstraint.activate([
             drawable.topAnchor.constraint(equalTo: topAnchor),
             drawable.bottomAnchor.constraint(equalTo: bottomAnchor),
             drawable.leadingAnchor.constraint(equalTo: leadingAnchor),
-            drawable.trailingAnchor.constraint(equalTo: trailingAnchor),
+            drawable.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
     }
 

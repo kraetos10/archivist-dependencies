@@ -103,10 +103,14 @@ public enum MiniPlayerCorner: Sendable {
         let bottomY = container.height - miniSize.height - bottomInset - padding
 
         switch self {
-        case .topLeading:     return CGPoint(x: leftX,  y: topY)
-        case .topTrailing:    return CGPoint(x: rightX, y: topY)
-        case .bottomLeading:  return CGPoint(x: leftX,  y: bottomY)
-        case .bottomTrailing: return CGPoint(x: rightX, y: bottomY)
+        case .topLeading:
+            return CGPoint(x: leftX, y: topY)
+        case .topTrailing:
+            return CGPoint(x: rightX,y: topY)
+        case .bottomLeading:
+            return CGPoint(x: leftX, y: bottomY)
+        case .bottomTrailing:
+            return CGPoint(x: rightX, y: bottomY)
         }
     }
 
@@ -117,10 +121,14 @@ public enum MiniPlayerCorner: Sendable {
         let isLeft = point.x + 0.5 < container.width / 2
         let isTop = point.y + 0.5 < container.height / 2
         switch (isTop, isLeft) {
-        case (true,  true):  return .topLeading
-        case (true,  false): return .topTrailing
-        case (false, true):  return .bottomLeading
-        case (false, false): return .bottomTrailing
+        case (true, true):
+            return .topLeading
+        case (true, false):
+            return .topTrailing
+        case (false, true):
+            return .bottomLeading
+        case (false, false):
+            return .bottomTrailing
         }
     }
 }

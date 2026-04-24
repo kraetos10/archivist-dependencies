@@ -11,7 +11,7 @@ public struct PlaybackCacheReducer {
     public struct State: Equatable, Sendable {
         var totalSize: Int64 = 0
         var entryCount: Int = 0
-        @Shared(.appStorage("vlcPrebufferToDisk")) public var prebufferEnabled = false
+        @Shared(.appStorage("vlcPrebufferToDisk")) public var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) public var prebufferWifiOnly = true
 
         public init() {}

@@ -21,6 +21,17 @@ public final class PlaybackCache {
     /// same video again later today", short enough that disk doesn't grow.
     public nonisolated static let expirationTTL: TimeInterval = 60 * 60 * 24
 
+    /// Default value for the `vlcPrebufferToDisk` app-storage flag. tvOS ships
+    /// with caching on because Apple TV streams have been pausing regularly
+    /// without a parallel disk copy to fall back to.
+    public nonisolated static let defaultPrebufferEnabled: Bool = {
+        #if os(tvOS)
+        return true
+        #else
+        return false
+        #endif
+    }()
+
     public struct Entry: Equatable, Sendable {
         public let videoId: String
         public let fileURL: URL

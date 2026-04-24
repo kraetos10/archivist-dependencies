@@ -309,6 +309,7 @@ public struct ChannelDetailScreen: View {
                             .contextMenu {
                                 VideoContextMenu(
                                     youtubeURL: video.youtubeURL,
+                                    onPlayNext: { send(.playNextTapped(video), animation: .default) },
                                     onAddToPlaylist: {},
                                     onDownloadToDevice: { send(.downloadToDeviceTapped(video)) },
                                     onMarkAsWatched: { send(.markAsWatchedTapped(video)) },

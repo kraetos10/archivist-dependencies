@@ -14,22 +14,25 @@ public struct TVLoginScreen: View {
     }
 
     public var body: some View {
-        VStack(spacing: 48) {
+        VStack(spacing: 40) {
             LottieView(animation: LottieAnimationFile.credentials.animation)
                 .playing(loopMode: .playOnce)
-                .frame(width: 250, height: 250)
+                .frame(width: 220, height: 220)
 
-            Text(String.localised("login.signIn", table: .login))
+            Text(String.localised("login.apiKey.title", table: .login))
                 .font(.title)
                 .fontWeight(.bold)
 
-            VStack(spacing: 24) {
-                TextField(String.localised("login.username", table: .login), text: $store.username)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+            Text(String.localised("login.apiKey.disableStaticAuthNotice", table: .login))
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 720)
 
-                SecureField(String.localised("login.password", table: .login), text: $store.password)
-            }
+            SecureField(
+                String.localised("login.apiKey", table: .login),
+                text: $store.apiToken
+            )
+            .textContentType(.password)
             .frame(maxWidth: 500)
 
             if store.isLoading {
@@ -38,7 +41,7 @@ public struct TVLoginScreen: View {
                 Button(String.localised("login.login", table: .login)) {
                     send(.loginButtonTapped)
                 }
-                .disabled(store.username.isEmpty || store.password.isEmpty)
+                .disabled(store.apiToken.isEmpty)
             }
         }
         .padding(64)

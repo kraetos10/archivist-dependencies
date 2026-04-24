@@ -14,46 +14,56 @@ public struct LoginScreen: View {
     }
 
     public var body: some View {
-        VStack(spacing: 32) {
-            LottieView(animation: LottieAnimationFile.credentials.animation)
-                .playing(loopMode: .playOnce)
-                .frame(width: 200, height: 200)
+        ScrollView {
+            VStack(spacing: 32) {
+                LottieView(animation: LottieAnimationFile.credentials.animation)
+                    .playing(loopMode: .playOnce)
+                    .frame(width: 200, height: 200)
 
-            Text(String.localised("login.signIn", table: .login))
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .foregroundStyle(Color.Text.primary)
+                Text(String.localised("login.apiKey.title", table: .login))
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.Text.primary)
+                    .multilineTextAlignment(.center)
 
-            VStack(spacing: 24) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String.localised("login.username", table: .login))
-                        .font(.subheadline)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(String.localised("login.apiKey.disableStaticAuthNotice", table: .login))
+                        .font(.footnote)
                         .foregroundStyle(Color.Text.primary)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.Surface.highlight)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    TextField(String.localised("login.username", table: .login), text: $store.username)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String.localised("login.apiKey", table: .login))
+                            .font(.subheadline)
+                            .foregroundStyle(Color.Text.primary)
+
+                        SecureField(
+                            String.localised("login.apiKey", table: .login),
+                            text: $store.apiToken
+                        )
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    }
+
+                    Text(String.localised("login.apiKey.hint", table: .login))
+                        .font(.caption)
+                        .foregroundStyle(Color.Brand.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String.localised("login.password", table: .login))
-                        .font(.subheadline)
-                        .foregroundStyle(Color.Text.primary)
-
-                    SecureField(String.localised("login.password", table: .login), text: $store.password)
-                        .textFieldStyle(.roundedBorder)
+                LoadingButton(
+                    title: String.localised("login.login", table: .login),
+                    isLoading: store.isLoading
+                ) {
+                    send(.loginButtonTapped)
                 }
+                .disabled(store.apiToken.isEmpty || store.isLoading)
             }
-
-            Spacer()
-
-            LoadingButton(title: String.localised("login.login", table: .login), isLoading: store.isLoading) {
-                send(.loginButtonTapped)
-            }
-            .disabled(store.username.isEmpty || store.password.isEmpty || store.isLoading)
+            .padding(.all, 32)
         }
-        .padding(.all, 32)
         .background {
             Color.Brand.primary
                 .ignoresSafeArea()

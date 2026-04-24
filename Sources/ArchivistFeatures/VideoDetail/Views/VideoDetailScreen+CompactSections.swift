@@ -33,6 +33,9 @@ extension VideoDetailScreen {
                                         animation: .default
                                     )
                                 }
+                                .pressable {
+                                    send(.playNextItemTapped(item), animation: .default)
+                                }
                                 .playNextTransition()
                             }
                         }
