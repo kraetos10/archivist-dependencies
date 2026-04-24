@@ -69,6 +69,9 @@ extension VideoDetailReducer {
             return handleLoadNextVideo(state: &state)
         case .autoPlayVideo(let video):
             return handleAutoPlayVideo(video, state: &state)
+        case .cacheStatusChanged(let isCached):
+            state.isCached = isCached
+            return .none
         case .watchedToggleResult(.failure):
             return .none
         default:

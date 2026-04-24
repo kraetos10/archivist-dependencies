@@ -265,6 +265,17 @@
         }
       }
     },
+    "video.cached": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cached"
+          }
+        }
+      }
+    },
     "video.removeFromPlaylist": {
       "extractionState": "manual",
       "localizations": {

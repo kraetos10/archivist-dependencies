@@ -25,6 +25,7 @@ public struct VideoDetailReducer {
         var isDownloading = false
         var downloadProgress: Double = 0
         var downloadError: String?
+        var isCached = false
         var isDeletingFromServer = false
         var isDescriptionExpanded = false
         var showAllComments = false
@@ -100,6 +101,7 @@ public struct VideoDetailReducer {
         case downloadCompleted
         case downloadFailed(String)
         case autoPlayVideo(VideoResponse)
+        case cacheStatusChanged(Bool)
         case pipRestoreRequested(VideoResponse)
         case serverDeleteResult(Result<Void, Error>)
         case loadNextVideo
