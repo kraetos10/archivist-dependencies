@@ -52,11 +52,6 @@ public final class PlayerManager: NSObject {
 
     public private(set) var backend: (any PlayerBackend)?
 
-    /// Backward-compatible AVPlayer access for AVPlayerViewControllerWrapper
-    public var player: AVPlayer? {
-        (backend as? AVPlayerBackend)?.avPlayer
-    }
-
     public private(set) var isPlaying = false
     public private(set) var isBuffering = true
     public private(set) var currentTime: Double = 0
@@ -69,7 +64,7 @@ public final class PlayerManager: NSObject {
     public var onPiPRestore: (() -> Void)?
 
     public var supportsPiP: Bool {
-        backend is AVPlayerBackend || backend is VLCPlayerBackend
+        backend is VLCPlayerBackend
     }
 
     public var isUsingFallbackPlayer: Bool {
@@ -81,7 +76,6 @@ public final class PlayerManager: NSObject {
     }
 
     #if !os(tvOS)
-    public weak var activePlayerViewController: AVPlayerViewController?
     @ObservationIgnored private let nowPlayingService = NowPlayingService()
     #endif
 
@@ -107,8 +101,6 @@ public final class PlayerManager: NSObject {
     #if !os(tvOS)
     private var interruptionObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
-    private var resignActiveObserver: NSObjectProtocol?
-    private var becomeActiveObserver: NSObjectProtocol?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -189,32 +181,6 @@ public final class PlayerManager: NSObject {
         ) { _ in
             try? AVAudioSession.sharedInstance().setActive(true)
         }
-
-        // Detach the player from its host view BEFORE iOS suspends rendering
-        // (e.g. screen lock). Routing this through the scene-phase action in
-        // TCA was too slow — AVPlayer had already been paused by the time the
-        // reducer handler ran. willResignActive fires early enough that we
-        // can nil out `activePlayerViewController.player` while playback is
-        // still owned by us, so audio keeps flowing in the background.
-        resignActiveObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.willResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.prepareForBackground()
-            }
-        }
-
-        becomeActiveObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.restoreForForeground()
-            }
-        }
     }
     #endif
 
@@ -249,7 +215,6 @@ public final class PlayerManager: NSObject {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
-        @Shared(.appStorage("useVLCPlayer")) var useVLC = PlaybackCache.defaultUseVLCPlayer
         @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
 
@@ -264,25 +229,14 @@ public final class PlayerManager: NSObject {
             playingFromCache = true
         }
 
-        let newBackend: any PlayerBackend
-        if useVLC {
-            let vlcBackend = VLCPlayerBackend()
-            vlcBackend.onPiPStopped = { [weak self] in
-                self?.onPiPRestore?()
-            }
-            vlcBackend.onPiPStarted = { [weak self] in
-                self?.onPiPStartRequested?()
-            }
-            newBackend = vlcBackend
-        } else {
-            let avBackend = AVPlayerBackend()
-            #if !os(tvOS)
-            avBackend.onPiPStopped = { [weak self] in
-                self?.onPiPRestore?()
-            }
-            #endif
-            newBackend = avBackend
+        let vlcBackend = VLCPlayerBackend()
+        vlcBackend.onPiPStopped = { [weak self] in
+            self?.onPiPRestore?()
         }
+        vlcBackend.onPiPStarted = { [weak self] in
+            self?.onPiPStartRequested?()
+        }
+        let newBackend: any PlayerBackend = vlcBackend
         setupBackendCallbacks(newBackend)
         newBackend.load(
             url: effectiveURL,
@@ -304,10 +258,7 @@ public final class PlayerManager: NSObject {
         // full file to disk while playback streams. On completion the backend
         // swaps to the local file for instant-seek.
         let isOnWifi = Self.isConnectedToWifi()
-        // Don't run the parallel download while VLC is streaming: both hit the
-        // same media URL and VLC starves waiting for bandwidth, so playback
-        // takes forever to start. VLC has its own internal buffering.
-        let shouldPrebuffer = prebufferEnabled && !useVLC && (!prebufferWifiOnly || isOnWifi)
+        let shouldPrebuffer = prebufferEnabled && (!prebufferWifiOnly || isOnWifi)
         if !playingFromCache,
            shouldPrebuffer,
            !url.isFileURL,
@@ -462,43 +413,6 @@ public final class PlayerManager: NSObject {
     }
     #endif
 
-    // MARK: - Background Lifecycle
-
-    #if !os(tvOS) && !os(watchOS)
-    /// Called when the app enters background. Detaches the player from its
-    /// visible layer/drawable so iOS does not pause playback when the hosting
-    /// view is removed from the window. Audio continues via AVAudioSession
-    /// `.playback` + `UIBackgroundModes: audio`.
-    public func prepareForBackground() {
-        guard !isInPiP else { return }
-        if let avBackend = backend as? AVPlayerBackend {
-            _ = avBackend
-            activePlayerViewController?.player = nil
-        }
-        #if canImport(VLCKit)
-        if let vlcBackend = backend as? VLCPlayerBackend {
-            vlcBackend.detachDrawableForBackground()
-        }
-        #endif
-    }
-
-    /// Called when the app returns to the foreground. Reattaches the player
-    /// to the currently active visual surface.
-    public func restoreForForeground() {
-        try? AVAudioSession.sharedInstance().setActive(true)
-        if let avBackend = backend as? AVPlayerBackend {
-            activePlayerViewController?.player = avBackend.avPlayer
-        }
-        #if canImport(VLCKit)
-        if let vlcBackend = backend as? VLCPlayerBackend {
-            if let drawable = persistentVLCDrawable {
-                vlcBackend.reattachDrawableAfterBackground(drawable)
-            }
-        }
-        #endif
-    }
-    #endif
-
     #if !os(tvOS)
     public func startPiP() {
         if let vlcBackend = backend as? VLCPlayerBackend {
@@ -512,14 +426,8 @@ public final class PlayerManager: NSObject {
         if let vlcBackend = backend as? VLCPlayerBackend {
             vlcBackend.stopPiP()
         }
-        if !keepPlayer {
-            activePlayerViewController?.player = nil
-        }
         isInPiP = false
         activePiPDelegate = nil
-        if !keepPlayer {
-            activePlayerViewController = nil
-        }
     }
     #endif
 

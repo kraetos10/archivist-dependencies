@@ -37,8 +37,6 @@ extension VideoListReducer {
         case .splitViewEnabled:
             state.useSplitView = true
             return .none
-        case .sortOrderChanged(let sort):
-            return handleSortOrderChanged(sort, state: &state)
         case .viewAllTapped(let filter):
             state.path.append(
                 .filteredList(FilteredVideoListReducer.State(
@@ -267,40 +265,17 @@ extension VideoListReducer {
     ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = video.videoId
+        let newIsWatched = !video.isWatched
         return .run { [videoService] send in
             let result = await Result {
-                try await videoService.setWatched(config: config, videoId: videoId, isWatched: true)
+                try await videoService.setWatched(
+                    config: config,
+                    videoId: videoId,
+                    isWatched: newIsWatched
+                )
             }
             await send(.markWatchedResult(result.map { videoId }))
         }
     }
 
-    private func handleSortOrderChanged(
-        _ sort: VideoSortOrder,
-        state: inout State
-    ) -> Effect<Action> {
-        guard sort != state.sortOrder else { return .none }
-        state.$sortOrder.withLock { $0 = sort }
-        state.videos = []
-        state.currentPage = 1
-        state.lastPage = 1
-        state.hasLoaded = false
-        state.isLoading = true
-        let config = state.serverConfig
-        return .run { [videoService] send in
-            let result = await Result {
-                try await videoService.getVideos(
-                    config: config,
-                    page: 1,
-                    sort: sort.apiValue,
-                    order: "desc",
-                    type: nil,
-                    watch: nil,
-                    channel: nil,
-                    playlist: nil
-                )
-            }
-            await send(.videosResult(result))
-        }
-    }
 }

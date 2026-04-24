@@ -28,9 +28,6 @@ public struct TVSettingsScreen: View {
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
-        .sheet(isPresented: $store.showVLCInfo) {
-            VLCInfoView()
-        }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
                 TVVideoDetailScreen(store: detailStore)
@@ -122,26 +119,6 @@ public struct TVSettingsScreen: View {
                 Toggle(String.localised("video.autoplayPlaylist", table: .videos), isOn: $store.autoPlayPlaylist)
             } header: {
                 Text(String.localised("video.autoplaySection", table: .videos))
-            }
-
-            Section {
-                HStack {
-                    Toggle(isOn: $store.useVLCPlayer) {
-                        Text(String.localised("video.useVLCPlayer", table: .videos))
-                        Text(String.localised("video.useVLCPlayerSubtitle", table: .videos))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        store.showVLCInfo = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(Color.Accent.dark)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text(String.localised("video.playback", table: .videos))
             }
 
             Section {

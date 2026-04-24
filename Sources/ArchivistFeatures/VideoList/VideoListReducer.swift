@@ -69,7 +69,9 @@ public struct VideoListReducer {
         var isLoadingMore = false
         var hasLoaded = false
         @Shared(.appStorage("videoListWatchFilter")) var watchFilter: WatchFilter = .unwatched
-        @Shared(.appStorage("videoListSortOrder")) var sortOrder: VideoSortOrder = .published
+        /// Home page always fetches by published date; per-filter sort is
+        /// owned by the "View All" detail view now.
+        let sortOrder: VideoSortOrder = .published
         @FetchAll(
             DeviceDownload
                 .where { $0.status.eq(DeviceDownloadStatus.completed) }
@@ -137,7 +139,12 @@ public struct VideoListReducer {
             case .unwatched:
                 return videos.filter { $0.isUnwatched }
             case .continueWatching:
-                return videos.filter { $0.isPartiallyWatched }
+                // Most recently watched first — `watchedDate` is bumped by the
+                // server each time we post a progress update.
+                let sorted = videos
+                    .filter { $0.isPartiallyWatched }
+                    .sorted { ($0.player?.watchedDate ?? 0) > ($1.player?.watchedDate ?? 0) }
+                return IdentifiedArrayOf(uniqueElements: sorted)
             case .watched:
                 return videos.filter { $0.isWatched }
             case .downloaded:
@@ -194,7 +201,6 @@ public struct VideoListReducer {
             case playNextTapped(VideoResponse)
             case addVideoTapped
             case splitViewEnabled
-            case sortOrderChanged(VideoSortOrder)
             case viewAllTapped(WatchFilter)
         }
     }

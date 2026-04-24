@@ -40,28 +40,11 @@ extension TabReducer {
         _ phase: ScenePhase,
         state: inout State
     ) -> Effect<Action> {
-        #if !os(tvOS) && !os(watchOS)
-        switch phase {
-        case .background:
-            return .run { _ in
-                await MainActor.run {
-                    PlayerManager.shared.prepareForBackground()
-                }
-            }
-        case .active:
-            return .run { _ in
-                await MainActor.run {
-                    PlayerManager.shared.restoreForForeground()
-                }
-            }
-        case .inactive:
-            return .none
-        @unknown default:
-            return .none
-        }
-        #else
+        // VLC handles background playback natively via the
+        // `UIBackgroundModes: audio` entitlement + AVAudioSession `.playback`,
+        // so no scene-phase intervention is required here.
+        _ = phase
         return .none
-        #endif
     }
 
     // MARK: - Mini Player

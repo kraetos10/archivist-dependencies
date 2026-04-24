@@ -188,17 +188,8 @@ public struct TVVideoDetailScreen: View {
             get: { store.isPlaying },
             set: { if !$0 { send(.stopPlayback) } }
         )) {
-            ZStack {
-                if PlayerManager.shared.isUsingFallbackPlayer {
-                    TVVLCPlayerView()
-                        .ignoresSafeArea()
-                } else {
-                    TVPlayerView {
-                        send(.stopPlayback)
-                    }
-                    .ignoresSafeArea()
-                }
-            }
+            TVVLCPlayerView()
+                .ignoresSafeArea()
             .onExitCommand {
                 send(.stopPlayback)
             }

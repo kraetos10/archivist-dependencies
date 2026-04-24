@@ -40,13 +40,6 @@ public struct iPadVideoListScreen: View {
             .refreshable { send(.pullToRefreshTriggered) }
             .navigationTitle(String.localised("generic.home", table: .generic))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    VideoSortMenu(current: store.sortOrder) { sort in
-                        send(.sortOrderChanged(sort), animation: .default)
-                    }
-                }
-            }
             .searchable(
                 text: $store.searchQuery,
                 placement: .navigationBarDrawer(displayMode: .automatic),
@@ -109,7 +102,7 @@ public struct iPadVideoListScreen: View {
                             onAddToPlaylist: { send(.addToPlaylistTapped($0)) },
                             onDownloadToDevice: { send(.downloadToDeviceTapped($0)) },
                             onDeleteFromDevice: { send(.deleteFromDeviceTapped($0)) },
-                            onMarkAsWatched: { send(.markAsWatchedTapped($0)) },
+                            onToggleWatched: { send(.markAsWatchedTapped($0)) },
                             onDeleteFromServer: { send(.deleteFromServerTapped($0)) },
                             onViewAll: { send(.viewAllTapped(filter)) }
                         )
@@ -150,13 +143,14 @@ public struct iPadVideoListScreen: View {
                         VideoContextMenu(
                             youtubeURL: item.video.youtubeURL,
                             isDownloaded: item.isDownloaded,
+                            isWatched: item.video.isWatched,
                             onPlayNext: { send(.playNextTapped(item.video)) },
                             onAddToPlaylist: { send(.addToPlaylistTapped(item.video)) },
                             onDownloadToDevice: { send(.downloadToDeviceTapped(item.video)) },
                             onDeleteFromDevice: item.isDownloaded ? {
                                 send(.deleteFromDeviceTapped(item.video))
                             } : nil,
-                            onMarkAsWatched: { send(.markAsWatchedTapped(item.video)) },
+                            onToggleWatched: { send(.markAsWatchedTapped(item.video)) },
                             onDeleteFromServer: { send(.deleteFromServerTapped(item.video)) }
                         )
                     }
