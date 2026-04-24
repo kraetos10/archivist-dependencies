@@ -194,11 +194,30 @@ public struct ChannelDetailScreen: View {
             HStack(spacing: 8) {
                 filterPill(String(localized: "All"), filter: .all)
                 filterPill(String(localized: "Unwatched"), filter: .unwatched)
+                clearButton
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+
+    private var clearButton: some View {
+        Button {
+            send(.clearFilteredTapped)
+        } label: {
+            Text(String.localised("video.clear", table: .videos))
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.red)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(store.filteredVideos.isEmpty)
+        .opacity(store.filteredVideos.isEmpty ? 0.4 : 1.0)
     }
 
     private func filterPill(_ title: String, filter: ChannelVideoFilter) -> some View {

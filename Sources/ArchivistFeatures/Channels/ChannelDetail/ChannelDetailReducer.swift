@@ -39,7 +39,7 @@ public struct ChannelDetailReducer: Sendable {
             case .all:
                 return base
             case .unwatched:
-                return base.filter { !$0.isWatched }
+                return base.filter { $0.isUnwatched }
             }
         }
 
@@ -61,6 +61,7 @@ public struct ChannelDetailReducer: Sendable {
     public enum AlertAction: Equatable, Sendable {
         case confirmUnsubscribe
         case confirmDownload(String)
+        case confirmClearFiltered
     }
 
     public enum Action: ViewAction {
@@ -72,6 +73,7 @@ public struct ChannelDetailReducer: Sendable {
         case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
         case unsubscribeResult(Result<Void, Error>)
         case deleteVideoResult(Result<String, Error>)
+        case queueDownloadResult(Result<String, Error>)
 
         public enum Delegate: Equatable, Sendable {
             case videoSelected(VideoResponse, nextVideos: [VideoResponse])
@@ -94,6 +96,7 @@ public struct ChannelDetailReducer: Sendable {
             case playNextTapped(VideoResponse)
             case downloadSortToggled
             case videoSortOrderChanged(VideoSortOrder)
+            case clearFilteredTapped
         }
     }
 
@@ -116,7 +119,11 @@ public struct ChannelDetailReducer: Sendable {
                 state.downloadDetail = nil
                 return .none
             case .downloadDetail(.presented(.downloadResult(.success))):
+                let youtubeId = state.downloadDetail?.download.youtubeId
                 state.downloadDetail = nil
+                if let youtubeId {
+                    state.pendingDownloads.remove(id: youtubeId)
+                }
                 return .none
             case .downloadDetail(.presented(.deleteResult(.success))):
                 let youtubeId = state.downloadDetail?.download.youtubeId
@@ -129,12 +136,25 @@ public struct ChannelDetailReducer: Sendable {
                 return .none
             case .alert(.presented(.confirmUnsubscribe)):
                 return handleUnsubscribeConfirmed(state: &state)
+            case .alert(.presented(.confirmClearFiltered)):
+                return handleConfirmClearFiltered(state: &state)
             case .alert(.presented(.confirmDownload(let videoId))):
-                state.pendingDownloads.remove(id: videoId)
                 let config = state.serverConfig
-                return .run { _ in
-                    try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
+                return .run { send in
+                    let result = await Result {
+                        try await downloadService.updateDownload(
+                            config: config,
+                            id: videoId,
+                            status: "priority"
+                        )
+                    }
+                    await send(.queueDownloadResult(result.map { videoId }), animation: .default)
                 }
+            case .queueDownloadResult(.success(let videoId)):
+                state.pendingDownloads.remove(id: videoId)
+                return .none
+            case .queueDownloadResult(.failure):
+                return .none
             case .alert:
                 return .none
             default:
