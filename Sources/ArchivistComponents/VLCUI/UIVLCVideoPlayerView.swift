@@ -441,6 +441,13 @@ public final class VLCVideoContentView: UIView, VLCPictureInPictureDrawable, VLC
                     PlayerManager.shared.isInPiP = false
                     if UIApplication.shared.applicationState == .active {
                         PlayerManager.shared.stop()
+                    } else {
+                        // PiP ended while the app was backgrounded —
+                        // playback should continue. If a prebuffer
+                        // download finished while PiP was up, apply the
+                        // swap now that the visible player isn't going
+                        // to flicker on us.
+                        PlayerManager.shared.applyPendingCacheSwap()
                     }
                 }
             }

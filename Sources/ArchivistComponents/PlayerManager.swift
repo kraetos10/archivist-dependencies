@@ -96,6 +96,13 @@ public final class PlayerManager: NSObject {
     /// surface, leaving the wrong container with the player.
     public var activePlayerSurfaceRole: PlayerSurfaceRole = .fullDetail
 
+    /// File URL stashed by the prebuffer cache callback while we're in PiP.
+    /// Swapping mid-PiP would tear the rendering pipeline down and restart
+    /// from zero, so we defer until PiP ends — `applyPendingCacheSwap` is
+    /// invoked from the PiP teardown path on the player view.
+    @ObservationIgnored
+    var pendingCacheSwapURL: URL?
+
     #if !os(tvOS)
     private var interruptionObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
@@ -276,10 +283,26 @@ public final class PlayerManager: NSObject {
                 authHeaders: [:]
             ) { [weak self] fileURL in
                 guard let self, self.currentVideoID == videoId else { return }
-                self.backend?.swapToLocalFile(fileURL)
+                if self.isInPiP {
+                    // Mid-PiP swap would reset the player and visibly
+                    // restart the video. Hold the URL and apply once PiP
+                    // ends (or just use the file on the next play if the
+                    // user fully dismisses PiP first).
+                    self.pendingCacheSwapURL = fileURL
+                } else {
+                    self.backend?.swapToLocalFile(fileURL)
+                }
                 self.onCacheCompleted?(videoId)
             }
         }
+    }
+
+    /// Called from the VLC player view's PiP teardown path. If a cache
+    /// download finished while we were in PiP, apply the swap now.
+    public func applyPendingCacheSwap() {
+        guard let fileURL = pendingCacheSwapURL else { return }
+        pendingCacheSwapURL = nil
+        backend?.swapToLocalFile(fileURL)
     }
 
     public func stop() {
@@ -288,11 +311,17 @@ public final class PlayerManager: NSObject {
             stopPiP()
         }
         #endif
+        // Fire `onPause` before tearing state down so the reducer-installed
+        // progress-save closure (which reads `currentTime` off this manager)
+        // gets a final position to send to the server. Without this, stops
+        // initiated from PiP teardown or external "stop" paths skip saving.
+        onPause?()
         // Cancel any in-progress cache download so its completion callback
         // doesn't swap a stale file into the next video's backend.
         if let videoId = currentVideoID {
             PlaybackCache.shared.cancelDownload(videoId: videoId)
         }
+        pendingCacheSwapURL = nil
         backend?.stop()
         backend = nil
         isPlaying = false
