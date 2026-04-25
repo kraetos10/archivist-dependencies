@@ -61,6 +61,11 @@ public struct VLCPlayerView: View {
             .onTapGesture {
                 playerManager.hideVLCControls()
             }
+            .overlay(alignment: .topLeading) {
+                titleRow
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+            }
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 12) {
                     roundedControlButton(
@@ -147,8 +152,6 @@ public struct VLCPlayerView: View {
 
     private var bottomInfoAndSeek: some View {
         VStack(alignment: .leading, spacing: 10) {
-            titleRow
-
             HStack {
                 Text(playerManager.currentTimeDisplay)
                     .font(.subheadline.weight(.semibold))
@@ -187,7 +190,7 @@ public struct VLCPlayerView: View {
 
     @ViewBuilder
     private var titleRow: some View {
-        if playerManager.isVLCFullscreen, let metadata = playerManager.currentMetadata {
+        if let metadata = playerManager.currentMetadata {
             HStack(spacing: 10) {
                 if let thumbURL = metadata.channelThumbURL {
                     AsyncImage(url: thumbURL) { phase in
