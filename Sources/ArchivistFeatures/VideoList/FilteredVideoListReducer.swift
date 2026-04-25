@@ -34,9 +34,11 @@ public struct FilteredVideoListReducer {
         public init(serverConfig: ServerConfig, filter: WatchFilter) {
             self.serverConfig = serverConfig
             self.filter = filter
+            // KVO can't observe defaults keys containing "." — substitute
+            // an underscore so cross-process observation stays efficient.
             _sortOrder = Shared(
                 wrappedValue: .published,
-                .appStorage("videoListSortOrder.\(filter.rawValue)")
+                .appStorage("videoListSortOrder_\(filter.rawValue)")
             )
         }
 

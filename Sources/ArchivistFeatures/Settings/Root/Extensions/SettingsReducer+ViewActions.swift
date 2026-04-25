@@ -52,6 +52,11 @@ extension SettingsReducer {
             state.path.append(.playbackCache(PlaybackCacheReducer.State()))
             return .none
         #endif
+        #if !os(tvOS)
+        case .thirdPartyLibrariesTapped:
+            state.path.append(.thirdPartyLibraries(ThirdPartyLibrariesReducer.State()))
+            return .none
+        #endif
         }
     }
 

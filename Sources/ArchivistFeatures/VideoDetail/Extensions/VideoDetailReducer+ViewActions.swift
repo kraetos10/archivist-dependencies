@@ -205,7 +205,18 @@ extension VideoDetailReducer {
             let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
 
             if isPlaying || isInPiP {
-                await send(.delegate(.didRequestMinimize))
+                // Hand off to system PiP. If the platform won't mint a PiP
+                // controller (Simulator, unsupported device), we just stop —
+                // the in-app mini player has been removed.
+                _ = await MainActor.run {
+                    PlayerManager.shared.startPiPIfAvailable()
+                }
+                let stillPlaying = await MainActor.run { PlayerManager.shared.isInPiP }
+                if !stillPlaying {
+                    await MainActor.run { PlayerManager.shared.stop() }
+                }
+                await send(.delegate(.didDismiss(videoId)))
+                await dismiss()
                 return
             }
 

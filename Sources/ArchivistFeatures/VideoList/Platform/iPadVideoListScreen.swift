@@ -71,7 +71,7 @@ public struct iPadVideoListScreen: View {
     @ViewBuilder
     private var homeSections: some View {
         if store.isLoading && store.videos.isEmpty {
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 20) {
                 ForEach(Array(VideoListReducer.State.homeSectionOrder.prefix(3)), id: \.self) { filter in
                     HomeFilterSectionPlaceholder(
                         filter: filter,
@@ -88,7 +88,7 @@ public struct iPadVideoListScreen: View {
                 watchFilter: store.watchFilter
             )
         } else {
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 20) {
                 ForEach(VideoListReducer.State.homeSectionOrder, id: \.self) { filter in
                     let items = store.state.items(for: filter)
                     if !items.isEmpty {

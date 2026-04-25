@@ -50,7 +50,7 @@ public struct VideoInfoRow: View {
                     )
                 }
 
-                if (hasPills || isCached), let duration {
+                if hasPills || isCached, let duration {
                     Text("·")
                         .font(.caption)
                         .foregroundStyle(Color.Brand.secondary)

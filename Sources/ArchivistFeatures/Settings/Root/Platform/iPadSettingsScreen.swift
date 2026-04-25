@@ -27,6 +27,8 @@ public struct iPadSettingsScreen: View {
                 HistoryScreen(store: store)
             case .playbackCache(let store):
                 PlaybackCacheScreen(store: store)
+            case .thirdPartyLibraries(let store):
+                ThirdPartyLibrariesScreen(store: store)
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))

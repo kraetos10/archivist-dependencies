@@ -12,7 +12,7 @@ struct HomeFilterSectionPlaceholder: View {
     let cardWidth: CGFloat
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label(filter.label, systemImage: filter.icon)
                     .font(.headline)
@@ -20,6 +20,7 @@ struct HomeFilterSectionPlaceholder: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
+            .padding(.top, 12)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .center, spacing: 12) {
@@ -35,11 +36,16 @@ struct HomeFilterSectionPlaceholder: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
             .scrollDisabled(true)
             .scrollClipDisabled()
         }
-        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.Surface.highlight)
+        )
+        .padding(.horizontal, 12)
     }
 }
 
@@ -62,7 +68,7 @@ struct HomeFilterSection: View {
     static let maxItems = 10
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label(filter.label, systemImage: filter.icon)
                     .font(.headline)
@@ -78,6 +84,7 @@ struct HomeFilterSection: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 12)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .center, spacing: 12) {
@@ -110,11 +117,16 @@ struct HomeFilterSection: View {
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
             .scrollClipDisabled()
             .scrollTargetBehavior(.viewAligned)
         }
-        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.Surface.highlight)
+        )
+        .padding(.horizontal, 12)
     }
 
     /// Compact chevron + "View All" label sitting at the end of the carousel.

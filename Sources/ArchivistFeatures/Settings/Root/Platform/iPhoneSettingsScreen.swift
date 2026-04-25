@@ -27,6 +27,8 @@ public struct iPhoneSettingsScreen: View {
                 HistoryScreen(store: store)
             case .playbackCache(let store):
                 PlaybackCacheScreen(store: store)
+            case .thirdPartyLibraries(let store):
+                ThirdPartyLibrariesScreen(store: store)
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
@@ -142,6 +144,19 @@ public struct iPhoneSettingsScreen: View {
                 } header: {
                     Text(String.localised("settings.supportHeader", table: .settings))
                 }
+            }
+
+            Section {
+                Button {
+                    send(.thirdPartyLibrariesTapped)
+                } label: {
+                    settingsRow(
+                        icon: "shippingbox",
+                        title: String.localised("settings.thirdPartyLibraries", table: .settings)
+                    )
+                }
+            } header: {
+                Text(String.localised("settings.about", table: .settings))
             }
 
             Section {

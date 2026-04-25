@@ -122,14 +122,67 @@ public struct VideoListReducer {
 
         /// Raw filtered list for a single filter, used by the per-filter
         /// home sections (each section just takes the first N + a "View All"
-        /// entry).
+        /// entry). The sort order mirrors whatever the user has selected
+        /// for that filter's "View All" detail view (persisted via the
+        /// same `videoListSortOrder_<filter>` app-storage key
+        /// `FilteredVideoListReducer` reads).
         func items(for filter: WatchFilter) -> [DisplayedVideo] {
-            filteredVideos(for: filter).map { video in
+            let raw = filteredVideos(for: filter)
+            let order = Self.savedSortOrder(for: filter)
+            let sorted = Self.sort(raw, by: order)
+            return sorted.map { video in
                 DisplayedVideo(
                     video: video,
                     isDownloaded: downloadedVideoIDs.contains(video.videoId)
                 )
             }
+        }
+
+        private static func savedSortOrder(for filter: WatchFilter) -> VideoSortOrder {
+            let key = "videoListSortOrder_\(filter.rawValue)"
+            if let raw = UserDefaults.standard.string(forKey: key),
+               let value = VideoSortOrder(rawValue: raw) {
+                return value
+            }
+            return .published
+        }
+
+        private static func sort(
+            _ videos: IdentifiedArrayOf<VideoResponse>,
+            by order: VideoSortOrder
+        ) -> IdentifiedArrayOf<VideoResponse> {
+            // `.continueWatching` is sorted by watched-date in
+            // `filteredVideos(for:)` already; don't override that for the
+            // home preview.
+            let array = Array(videos)
+            let sorted: [VideoResponse]
+            switch order {
+            case .published:
+                sorted = array.sorted {
+                    ($0.publishedDate ?? .distantPast) > ($1.publishedDate ?? .distantPast)
+                }
+            case .downloaded:
+                sorted = array.sorted {
+                    ($0.dateDownloaded ?? 0) > ($1.dateDownloaded ?? 0)
+                }
+            case .views:
+                sorted = array.sorted {
+                    ($0.stats?.viewCount ?? 0) > ($1.stats?.viewCount ?? 0)
+                }
+            case .likes:
+                sorted = array.sorted {
+                    ($0.stats?.likeCount ?? 0) > ($1.stats?.likeCount ?? 0)
+                }
+            case .duration:
+                sorted = array.sorted {
+                    ($0.player?.duration ?? 0) > ($1.player?.duration ?? 0)
+                }
+            case .mediasize:
+                sorted = array.sorted {
+                    ($0.mediaSize ?? 0) > ($1.mediaSize ?? 0)
+                }
+            }
+            return IdentifiedArrayOf(uniqueElements: sorted)
         }
 
         private func filteredVideos(for filter: WatchFilter) -> IdentifiedArrayOf<VideoResponse> {
@@ -279,12 +332,15 @@ public struct VideoListReducer {
                 _ = state.path.popLast()
                 return .send(.view(.pullToRefreshTriggered))
             case .path(.element(_, action: .filteredList(.delegate(.videoSelected(let video))))):
-                state.path.append(
-                    .videoDetail(VideoDetailReducer.State(
-                        serverConfig: state.serverConfig,
-                        video: video
-                    ))
+                let detailState = VideoDetailReducer.State(
+                    serverConfig: state.serverConfig,
+                    video: video
                 )
+                #if os(tvOS)
+                state.path.append(.videoDetail(detailState))
+                #else
+                state.videoDetail = detailState
+                #endif
                 return .none
             case .path:
                 return .none
