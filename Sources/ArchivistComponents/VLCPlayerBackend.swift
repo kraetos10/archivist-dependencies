@@ -167,7 +167,15 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     public func swapToLocalFile(_ fileURL: URL) {
         guard fileURL.isFileURL else { return }
         let resumeMs = Int(currentTime * 1000)
-        let configuration = makeConfiguration(url: fileURL, resumeMs: resumeMs)
+        // Stash the resume target on the backend rather than handing it to
+        // VLCUI's `Configuration.startTime`. VLCUI's `setConfigurationValues`
+        // no longer honours start time (we patched that out — see notes
+        // there); the backend's tick handler picks up `pendingResumeMs`
+        // and seeks once VLC reports the new media is seekable.
+        if resumeMs > 0 {
+            pendingResumeMs = resumeMs
+        }
+        let configuration = makeConfiguration(url: fileURL, resumeMs: 0)
         proxy.playNewMedia(configuration)
     }
 

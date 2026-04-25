@@ -425,6 +425,25 @@ public final class VLCVideoContentView: UIView, VLCPictureInPictureDrawable, VLC
     nonisolated public func pictureInPictureReady() -> ((any VLCPictureInPictureWindowControlling)?) -> Void {
         { [weak self] controller in
             self?.pipController = controller
+            // The in-app mini player was removed, so the source UI is
+            // typically gone when PiP starts. When iOS hands PiP back we
+            // need to clean up — but ONLY if the user actually dismissed
+            // PiP (foreground state). The same `isStarted: false` event
+            // also fires when the app is being backgrounded with PiP
+            // already active, and we must NOT stop in that case or
+            // background playback dies.
+            controller?.stateChangeEventHandler = { isStarted in
+                Task { @MainActor in
+                    if isStarted {
+                        PlayerManager.shared.isInPiP = true
+                        return
+                    }
+                    PlayerManager.shared.isInPiP = false
+                    if UIApplication.shared.applicationState == .active {
+                        PlayerManager.shared.stop()
+                    }
+                }
+            }
         }
     }
 
