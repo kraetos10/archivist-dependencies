@@ -33,6 +33,9 @@ public struct VLCPlayerView: View {
             VLCVideoRenderView()
                 .allowsHitTesting(false)
 
+            // While the stream is loading (buffering and not yet playing),
+            // show a spinner only — no controls. Controls become available
+            // once VLC reports it's actually playing.
             if playerManager.isBuffering && !playerManager.isPlaying {
                 Color.black.opacity(0.4)
                     .allowsHitTesting(false)
@@ -40,9 +43,7 @@ public struct VLCPlayerView: View {
                     .controlSize(.large)
                     .tint(.white)
                     .allowsHitTesting(false)
-            }
-
-            if playerManager.vlcControlsVisible {
+            } else if playerManager.vlcControlsVisible {
                 controlsOverlay
             } else {
                 Color.clear
@@ -61,14 +62,25 @@ public struct VLCPlayerView: View {
                 playerManager.hideVLCControls()
             }
             .overlay(alignment: .topTrailing) {
-                roundedControlButton(
-                    systemImage: playerManager.isVLCFullscreen
-                        ? "arrow.down.right.and.arrow.up.left"
-                        : "arrow.up.left.and.arrow.down.right",
-                    iconSize: 18,
-                    padding: 12
-                ) {
-                    playerManager.toggleVLCFullscreen()
+                HStack(spacing: 12) {
+                    roundedControlButton(
+                        systemImage: "pip.enter",
+                        iconSize: 16,
+                        padding: 12
+                    ) {
+                        playerManager.startPiPIfAvailable()
+                        playerManager.scheduleHideVLCControls()
+                    }
+
+                    roundedControlButton(
+                        systemImage: playerManager.isVLCFullscreen
+                            ? "arrow.down.right.and.arrow.up.left"
+                            : "arrow.up.left.and.arrow.down.right",
+                        iconSize: 18,
+                        padding: 12
+                    ) {
+                        playerManager.toggleVLCFullscreen()
+                    }
                 }
                 .padding(16)
             }
@@ -137,6 +149,16 @@ public struct VLCPlayerView: View {
         VStack(alignment: .leading, spacing: 10) {
             titleRow
 
+            HStack {
+                Text(playerManager.currentTimeDisplay)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(playerManager.durationDisplay)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+
             SeekBar(
                 progress: playerManager.duration > 0
                     ? playerManager.currentTime / playerManager.duration
@@ -150,16 +172,6 @@ public struct VLCPlayerView: View {
                     playerManager.scheduleHideVLCControls()
                 }
             )
-
-            HStack {
-                Text(playerManager.currentTimeDisplay)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Text(playerManager.durationDisplay)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
@@ -208,10 +220,11 @@ public struct VLCPlayerView: View {
 
 // MARK: - VLC Video Render View
 
-/// Hosts the persistent `VLCPiPDrawableView` owned by `PlayerManager` for a
-/// specific role. Only the host whose role matches
-/// `PlayerManager.activePlayerSurfaceRole` adopts the drawable; the other
-/// shows nothing. Same anti-race pattern as `AVPlayerViewControllerWrapper`.
+/// Hosts the persistent `UIVLCVideoPlayerView` owned by `VLCPlayerBackend`
+/// for a specific role. Only the host whose role matches
+/// `PlayerManager.activePlayerSurfaceRole` adopts the player view; the
+/// other shows nothing. Same anti-race pattern as
+/// `AVPlayerViewControllerWrapper`.
 public struct VLCVideoRenderView: View {
     public var role: PlayerSurfaceRole
 
@@ -221,140 +234,80 @@ public struct VLCVideoRenderView: View {
 
     public var body: some View {
         let manager = PlayerManager.shared
-        _ = manager.persistentVLCDrawable
+        _ = manager.persistentVLCPlayerView
         // Passing `isVLCFullscreen` as a property forces SwiftUI to call
         // `updateUIView` on both hosts when the fullscreen cover toggles —
         // otherwise the underlying host keeps its stale "I don't own the
-        // drawable" state after the cover dismisses and renders black.
-        return VLCDrawableHostRepresentable(
+        // player view" state after the cover dismisses and renders black.
+        return VLCPlayerHostRepresentable(
             shouldAdopt: manager.activePlayerSurfaceRole == role,
             fullscreenToken: manager.isVLCFullscreen
         )
     }
 }
 
-private struct VLCDrawableHostRepresentable: UIViewRepresentable {
+private struct VLCPlayerHostRepresentable: UIViewRepresentable {
     var shouldAdopt: Bool
     var fullscreenToken: Bool
 
-    func makeUIView(context: Context) -> VLCDrawableHostView {
-        let host = VLCDrawableHostView()
+    func makeUIView(context: Context) -> VLCPlayerHostView {
+        let host = VLCPlayerHostView()
         host.backgroundColor = .black
         return host
     }
 
-    func updateUIView(_ host: VLCDrawableHostView, context: Context) {
+    func updateUIView(_ host: VLCPlayerHostView, context: Context) {
+        // Only the adopting host actively grabs the player view.
+        // The non-adopting host MUST NOT call `removeFromSuperview` here
+        // — `addSubview` on the adopting host already reparents, and the
+        // intermediate "orphaned, no window" state in between makes VLC
+        // pause its video output. Detach is reserved for `dismantleUIView`
+        // (host going away) so SwiftUI doesn't leave the view dangling
+        // inside a destroyed host.
         if shouldAdopt {
-            host.adoptPersistentDrawable()
-        } else {
-            host.detachPersistentDrawable()
+            host.adoptPlayerView()
         }
     }
 
-    static func dismantleUIView(_ host: VLCDrawableHostView, coordinator: ()) {
-        host.detachPersistentDrawable()
+    static func dismantleUIView(_ host: VLCPlayerHostView, coordinator: ()) {
+        host.detachPlayerView()
     }
 }
 
-/// Container UIView that adopts the persistent `VLCPiPDrawableView` from
-/// `PlayerManager` as a pinned subview. Reparenting the drawable between
-/// hosts is what makes the mini player ↔ full transition seamless for VLC.
-public final class VLCDrawableHostView: UIView {
-    func adoptPersistentDrawable() {
-        guard let drawable = PlayerManager.shared.persistentVLCDrawable else { return }
+/// Container UIView that adopts the persistent `UIVLCVideoPlayerView`
+/// vended by `PlayerManager` as a pinned subview. Reparenting the
+/// VLCUI-owned view between hosts is what makes the mini player ↔ full
+/// transition seamless: the underlying `VLCMediaPlayer` is never recreated.
+public final class VLCPlayerHostView: UIView {
+    func adoptPlayerView() {
+        guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
 
-        if drawable.superview === self { return }
+        if playerView.superview === self { return }
 
-        // `addSubview` already removes the drawable from any previous host.
-        // Avoid an explicit `removeFromSuperview` first — that intermediate
-        // orphaned state was making VLC pause its video output, causing a
-        // black surface after reparenting.
-        drawable.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(drawable)
+        // `addSubview` already removes the player view from any previous
+        // host. Avoid an explicit `removeFromSuperview` first — that
+        // intermediate orphaned state used to make VLC pause its video
+        // output, causing a black surface after reparenting.
+        playerView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(playerView)
         NSLayoutConstraint.activate([
-            drawable.topAnchor.constraint(equalTo: topAnchor),
-            drawable.bottomAnchor.constraint(equalTo: bottomAnchor),
-            drawable.leadingAnchor.constraint(equalTo: leadingAnchor),
-            drawable.trailingAnchor.constraint(equalTo: trailingAnchor)
+            playerView.topAnchor.constraint(equalTo: topAnchor),
+            playerView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            playerView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            playerView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
+
+        // Explicit kick so we don't depend solely on `didMoveToWindow`
+        // timing — `fullScreenCover`'s window setup is async and the
+        // notification can land after we expect playback to have begun.
+        // `activatePlayback` is idempotent.
+        playerView.activatePlayback()
     }
 
-    func detachPersistentDrawable() {
-        guard let drawable = PlayerManager.shared.persistentVLCDrawable,
-              drawable.superview === self else { return }
-        drawable.removeFromSuperview()
-    }
-}
-
-// MARK: - VLC PiP Drawable View
-
-public class VLCPiPDrawableView: UIView, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling {
-    nonisolated(unsafe) weak var mediaPlayer: VLCMediaPlayer?
-    nonisolated(unsafe) weak var backend: VLCPlayerBackend?
-    nonisolated(unsafe) private weak var pipController: VLCPictureInPictureWindowControlling?
-
-    // MARK: - VLCPictureInPictureDrawable
-
-    nonisolated public func mediaController() -> (any VLCPictureInPictureMediaControlling)? {
-        self
-    }
-
-    nonisolated public func pictureInPictureReady() -> ((any VLCPictureInPictureWindowControlling)?) -> Void {
-        { [weak self] controller in
-            guard let self else { return }
-            self.pipController = controller
-
-            controller?.stateChangeEventHandler = { [weak self] isStarted in
-                guard let self, let backend = self.backend else { return }
-                Task { @MainActor in
-                    if isStarted {
-                        backend.onPiPStarted?()
-                        PlayerManager.shared.isInPiP = true
-                    } else {
-                        PlayerManager.shared.isInPiP = false
-                        backend.pipDrawableRetain = nil
-                        backend.onPiPStopped?()
-                    }
-                }
-            }
-
-            if let controller {
-                nonisolated(unsafe) let sendableController = controller
-                Task { @MainActor in
-                    self.backend?.pipController = sendableController
-                }
-            }
-        }
-    }
-
-    // MARK: - VLCPictureInPictureMediaControlling
-
-    nonisolated public func play() {
-        mediaPlayer?.play()
-    }
-
-    nonisolated public func pause() {
-        mediaPlayer?.pause()
-    }
-
-    nonisolated public func seek(by offset: Int64, completion: (() -> Void)!) {
-        mediaPlayer?.jump(withOffset: Int32(offset), completion: completion)
-    }
-
-    nonisolated public func mediaLength() -> Int64 {
-        mediaPlayer?.media?.length.value?.int64Value ?? 0
-    }
-
-    nonisolated public func mediaTime() -> Int64 {
-        mediaPlayer?.time.value?.int64Value ?? 0
-    }
-
-    nonisolated public func isMediaSeekable() -> Bool {
-        mediaPlayer?.isSeekable == true
-    }
-
-    nonisolated public func isMediaPlaying() -> Bool {
-        mediaPlayer?.isPlaying == true
+    func detachPlayerView() {
+        guard let playerView = PlayerManager.shared.persistentVLCPlayerView,
+              playerView.superview === self else { return }
+        playerView.removeFromSuperview()
     }
 }
 

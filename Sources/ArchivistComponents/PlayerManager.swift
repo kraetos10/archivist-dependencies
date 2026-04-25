@@ -63,8 +63,6 @@ public final class PlayerManager: NSObject {
     public var isInPiP = false
     public var isVLCFullscreen = false
     public var activePiPDelegate: AnyObject?
-    /// Called when VLC PiP is dismissed by the user — triggers restore flow
-    public var onPiPRestore: (() -> Void)?
 
     public var supportsPiP: Bool {
         backend is VLCPlayerBackend
@@ -82,18 +80,15 @@ public final class PlayerManager: NSObject {
     @ObservationIgnored private let nowPlayingService = NowPlayingService()
     #endif
 
-    #if canImport(VLCKit) && !os(tvOS) && !os(watchOS)
-    /// Persistent VLC drawable view. Created in `load()` for the VLC backend
-    /// and reused across containers. Reparenting it never causes a drawable
-    /// swap, which is what was making VLC video disappear during transitions.
-    public private(set) var persistentVLCDrawable: VLCPiPDrawableView?
+    #if canImport(VLCKit) && !os(watchOS)
+    /// Persistent VLCUI player view. Created on first VLC `load()` and
+    /// reused across containers. Reparenting the same `UIVLCVideoPlayerView`
+    /// keeps the underlying `VLCMediaPlayer` alive, so transitions between
+    /// the mini-player and the full video detail don't restart playback.
+    public var persistentVLCPlayerView: UIVLCVideoPlayerView? {
+        (backend as? VLCPlayerBackend)?.playerView
+    }
     #endif
-
-    /// Called when PiP starts (from any backend) so the host (TabReducer)
-    /// can auto-minimize the currently presented video detail. Without this
-    /// the original AVPlayerVC may be torn down by SwiftUI while PiP is
-    /// active, and the player has nowhere to render on restore.
-    public var onPiPStartRequested: (() -> Void)?
 
     /// Identifies which container is currently allowed to host the persistent
     /// player surface. Without this, two wrapper instances briefly co-exist
@@ -246,28 +241,24 @@ public final class PlayerManager: NSObject {
         }
 
         let vlcBackend = VLCPlayerBackend()
-        vlcBackend.onPiPStopped = { [weak self] in
-            self?.onPiPRestore?()
-        }
-        vlcBackend.onPiPStarted = { [weak self] in
-            self?.onPiPStartRequested?()
-        }
         let newBackend: any PlayerBackend = vlcBackend
         setupBackendCallbacks(newBackend)
-        newBackend.load(
-            url: effectiveURL,
-            startPosition: startPosition
-        )
+        // Assign `backend` BEFORE `load` so the seeded resume position
+        // (and any state callbacks fired synchronously inside `load`)
+        // actually flow through `setupBackendCallbacks`, which guards on
+        // `self.backend` being non-nil.
         backend = newBackend
         currentVideoID = videoId
         isPlaying = true
         isBuffering = true
         // New playback always begins in the full detail container.
         activePlayerSurfaceRole = .fullDetail
+        newBackend.load(
+            url: effectiveURL,
+            startPosition: startPosition
+        )
 
-        #if !os(tvOS)
         installPersistentSurface(for: newBackend)
-        #endif
 
         // Parallel download + swap: if the user opted in and we're not already
         // playing from cache or from an offline downloaded file, fetch the
@@ -313,8 +304,8 @@ public final class PlayerManager: NSObject {
         currentMetadata = nil
         isInPiP = false
         activePiPDelegate = nil
-        #if !os(tvOS)
         teardownPersistentSurface()
+        #if !os(tvOS)
         nowPlayingService.teardown()
         #endif
     }
@@ -438,6 +429,21 @@ public final class PlayerManager: NSObject {
         }
     }
 
+    /// Attempts to enter system PiP. Returns `true` if the platform actually
+    /// minted a PiP controller and we kicked it off — `false` if PiP isn't
+    /// available (Simulator, unsupported device, controller not yet ready),
+    /// in which case the caller should fall back to the in-app mini player.
+    @discardableResult
+    public func startPiPIfAvailable() -> Bool {
+        guard let vlcBackend = backend as? VLCPlayerBackend,
+              let controller = vlcBackend.playerView?.pipController else {
+            return false
+        }
+        controller.startPictureInPicture()
+        isInPiP = true
+        return true
+    }
+
     public func stopPiP(keepPlayer: Bool = false) {
         guard isInPiP else { return }
         if let vlcBackend = backend as? VLCPlayerBackend {
@@ -450,31 +456,24 @@ public final class PlayerManager: NSObject {
 
     // MARK: - Persistent Player Surface
 
-    #if !os(tvOS)
     private func installPersistentSurface(for backend: any PlayerBackend) {
         // Wipe any leftovers from a previous video.
         teardownPersistentSurface()
-
-        #if canImport(VLCKit)
-        if let vlcBackend = backend as? VLCPlayerBackend {
-            let drawable = VLCPiPDrawableView()
-            drawable.backgroundColor = .black
-            drawable.translatesAutoresizingMaskIntoConstraints = false
-            drawable.mediaPlayer = vlcBackend.mediaPlayer
-            drawable.backend = vlcBackend
-            vlcBackend.attachDrawable(drawable)
-            persistentVLCDrawable = drawable
-        }
-        #endif
+        // VLCUI's `UIVLCVideoPlayerView` is now the persistent surface and
+        // is owned by `VLCPlayerBackend`. There's nothing extra to install
+        // here — the host views read it back via `persistentVLCPlayerView`.
+        _ = backend
     }
 
     private func teardownPersistentSurface() {
-        #if canImport(VLCKit)
-        persistentVLCDrawable?.removeFromSuperview()
-        persistentVLCDrawable = nil
+        // The backend owns the `UIVLCVideoPlayerView` lifecycle; it's torn
+        // down inside `VLCPlayerBackend.stop()` (called from
+        // `PlayerManager.stop()`). Detach from any current host so SwiftUI
+        // hosts don't keep a dangling subview around.
+        #if canImport(VLCKit) && !os(watchOS)
+        persistentVLCPlayerView?.removeFromSuperview()
         #endif
     }
-    #endif
 
     // MARK: - Network
 
@@ -534,4 +533,3 @@ public final class PlayerManager: NSObject {
     }
 }
 #endif
-

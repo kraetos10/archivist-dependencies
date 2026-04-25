@@ -24,8 +24,6 @@ public struct TabReducer {
         public var playlists: PlaylistsReducer.State
         public var queue: DownloadsReducer.State
         public var settings: SettingsReducer.State
-        public var miniPlayerDetail: VideoDetailReducer.State?
-        public var isMiniPlayerMinimized = false
         #if os(tvOS)
         public var search: TVSearchReducer.State
         #endif
@@ -65,10 +63,6 @@ public struct TabReducer {
         case selectTab(AppTab?)
         case appeared
         case scenePhaseChanged(ScenePhase)
-        case miniPlayerTapped
-        case miniPlayerCloseTapped
-        case pipStartedMinimizeRequested
-        case miniPlayerDetail(VideoDetailReducer.Action)
         case homeChannelTapped(ChannelResponse)
         case homePlaylistTapped(PlaylistResponse)
         case videoList(VideoListReducer.Action)
@@ -81,10 +75,6 @@ public struct TabReducer {
         #endif
     }
 
-    enum CancelID { case miniPlayerPlayback }
-
-    @Dependency(\.pipRestoreService) var pipRestoreService
-    @Dependency(\.pipMinimizeService) var pipMinimizeService
     @Dependency(\.continuousClock) var clock
     @Dependency(\.videoService) var videoService
 
@@ -98,12 +88,6 @@ public struct TabReducer {
                 return handleAppeared(state: &state)
             case .scenePhaseChanged(let phase):
                 return handleScenePhaseChanged(phase, state: &state)
-            case .miniPlayerTapped:
-                return handleMiniPlayerTapped(state: &state)
-            case .miniPlayerCloseTapped:
-                return handleMiniPlayerCloseTapped(state: &state)
-            case .pipStartedMinimizeRequested:
-                return handlePiPStartedMinimizeRequested(state: &state)
 
             case .homeChannelTapped(let channel):
                 let detailState = ChannelDetailReducer.State(
@@ -136,40 +120,10 @@ public struct TabReducer {
             case .settings(.activeTask(.downloadCompleted)):
                 return .send(.channels(.refreshPendingDownloads))
 
-            // Intercept minimize delegate from all tabs and extract the full state
-            case .videoList(.selectedVideoDetail(.delegate(.didRequestMinimize))):
-                guard let detail = state.videoList.selectedVideo else { return .none }
-                state.videoList.selectedVideo = nil
-                return handleMinimizeVideoDetail(detail: detail, state: &state)
-            case .videoList(.presentedVideo(.presented(.delegate(.didRequestMinimize)))):
-                guard let detail = state.videoList.presentedVideo else { return .none }
-                state.videoList.presentedVideo = nil
-                return handleMinimizeVideoDetail(detail: detail, state: &state)
-            case .videoList(.videoDetail(.presented(.delegate(.didRequestMinimize)))):
-                guard let detail = state.videoList.videoDetail else { return .none }
-                state.videoList.videoDetail = nil
-                return handleMinimizeVideoDetail(detail: detail, state: &state)
-            case .channels(.videoDetail(.presented(.delegate(.didRequestMinimize)))):
-                guard let detail = state.channels.videoDetail else { return .none }
-                state.channels.videoDetail = nil
-                return handleMinimizeVideoDetail(detail: detail, state: &state)
-            case .playlists(.videoDetail(.presented(.delegate(.didRequestMinimize)))):
-                guard let detail = state.playlists.videoDetail else { return .none }
-                state.playlists.videoDetail = nil
-                return handleMinimizeVideoDetail(detail: detail, state: &state)
-            case .settings(.videoDetail(.presented(.delegate(.didRequestMinimize)))):
-                guard let detail = state.settings.videoDetail else { return .none }
-                state.settings.videoDetail = nil
-                return handleMinimizeVideoDetail(detail: detail, state: &state)
-
-            case .miniPlayerDetail(.delegate(.didRequestMinimize)):
-                state.isMiniPlayerMinimized = true
-                return .none
-            case .miniPlayerDetail(.delegate(.didDismiss)):
-                return handleMiniPlayerCloseTapped(state: &state)
-            case .miniPlayerDetail:
-                return .none
-
+            // Mini-player minimize hooks were removed when we switched to
+            // system PiP for minimize. Each VideoDetail dismiss now hands
+            // off via `PlayerManager.startPiPIfAvailable()` and falls
+            // through to a normal `didDismiss`.
             case .videoList, .channels, .playlists, .queue, .settings:
                 return .none
             #if os(tvOS)
@@ -202,27 +156,5 @@ public struct TabReducer {
             TVSearchReducer()
         }
         #endif
-        EmptyReducer()
-            .ifLet(\.miniPlayerDetail, action: \.miniPlayerDetail) {
-                VideoDetailReducer()
-            }
-
-        // When a NEW video detail is presented while the mini player is active,
-        // dismiss the mini player and stop the old video. Only fires when the
-        // presented video is different from the one in the mini player — this
-        // prevents the "restore from mini player" flow from killing playback.
-        Reduce { state, _ in
-            guard let mini = state.miniPlayerDetail,
-                  let presentedId = state.presentedVideoDetailVideoId,
-                  presentedId != mini.video.videoId else {
-                return .none
-            }
-            state.miniPlayerDetail = nil
-            return .run { _ in
-                await MainActor.run {
-                    PlayerManager.shared.stop()
-                }
-            }
-        }
     }
 }

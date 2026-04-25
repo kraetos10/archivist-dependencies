@@ -104,25 +104,42 @@ public struct TVVLCPlayerView: View {
     }
 }
 
-private class TVVLCDrawableView: UIView {
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        guard window != nil else { return }
-        Task { @MainActor in
-            if let vlcBackend = PlayerManager.shared.backend as? VLCPlayerBackend {
-                vlcBackend.attachDrawable(self)
-            }
-        }
+private final class TVVLCPlayerHostView: UIView {
+    func adoptPlayerView() {
+        guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
+        if playerView.superview === self { return }
+
+        playerView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(playerView)
+        NSLayoutConstraint.activate([
+            playerView.topAnchor.constraint(equalTo: topAnchor),
+            playerView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            playerView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            playerView.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+        playerView.activatePlayback()
+    }
+
+    func detachPlayerView() {
+        guard let playerView = PlayerManager.shared.persistentVLCPlayerView,
+              playerView.superview === self else { return }
+        playerView.removeFromSuperview()
     }
 }
 
 private struct TVVLCVideoRenderView: UIViewRepresentable {
-    func makeUIView(context: Context) -> TVVLCDrawableView {
-        let view = TVVLCDrawableView()
+    func makeUIView(context: Context) -> TVVLCPlayerHostView {
+        let view = TVVLCPlayerHostView()
         view.backgroundColor = .black
         return view
     }
 
-    func updateUIView(_ uiView: TVVLCDrawableView, context: Context) {}
+    func updateUIView(_ uiView: TVVLCPlayerHostView, context: Context) {
+        uiView.adoptPlayerView()
+    }
+
+    static func dismantleUIView(_ uiView: TVVLCPlayerHostView, coordinator: ()) {
+        uiView.detachPlayerView()
+    }
 }
 #endif

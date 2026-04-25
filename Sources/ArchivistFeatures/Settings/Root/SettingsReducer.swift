@@ -60,6 +60,9 @@ public struct SettingsReducer {
             #if !os(watchOS)
             case playbackCacheTapped
             #endif
+            #if !os(tvOS)
+            case thirdPartyLibrariesTapped
+            #endif
         }
     }
 

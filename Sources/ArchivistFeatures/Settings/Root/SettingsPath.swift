@@ -12,6 +12,9 @@ public enum SettingsPath {
     #if !os(watchOS)
     case playbackCache(PlaybackCacheReducer)
     #endif
+    #if !os(tvOS)
+    case thirdPartyLibraries(ThirdPartyLibrariesReducer)
+    #endif
 }
 
 extension SettingsPath.State: Sendable {}

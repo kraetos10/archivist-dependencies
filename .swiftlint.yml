@@ -1,5 +1,6 @@
 excluded:
   - .build
+  - Sources/ArchivistComponents/VLCUI
 
 identifier_name:
   excluded:
