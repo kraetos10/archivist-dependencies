@@ -113,6 +113,9 @@ public struct VideoCardView: View {
         .background(Color.Surface.highlight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+        // Fully watched videos look subdued so the unwatched ones in the
+        // channel detail's "All" filter stand out at a glance.
+        .opacity(data.isWatched ? 0.55 : 1)
     }
 
     private var thumbnailView: some View {
@@ -148,7 +151,15 @@ public struct VideoCardView: View {
 
             VStack {
                 HStack {
-                    if data.isPartiallyWatched {
+                    if data.isWatched {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .padding(6)
+                            .background(.black.opacity(0.7))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .padding(8)
+                    } else if data.isPartiallyWatched {
                         Image(systemName: "circle.lefthalf.filled")
                             .font(.caption)
                             .foregroundStyle(.white)
