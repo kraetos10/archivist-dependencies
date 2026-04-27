@@ -201,6 +201,7 @@ extension VideoDetailReducer {
         }
 
         return .merge(saveEffect, .run { [dismiss] send in
+            #if !os(tvOS)
             let isPlaying = await MainActor.run { PlayerManager.shared.isPlaying }
             let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
 
@@ -219,6 +220,7 @@ extension VideoDetailReducer {
                 await dismiss()
                 return
             }
+            #endif
 
             // Not playing — stop and dismiss
             await MainActor.run {
