@@ -196,9 +196,30 @@ public final class PlayerManager: NSObject {
             forName: UIApplication.willEnterForegroundNotification,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
             try? AVAudioSession.sharedInstance().setActive(true)
+            // VLCKit's video output occasionally loses its window/layer
+            // binding while the app is backgrounded — audio keeps playing
+            // but the picture comes back black. Force a re-bind of the
+            // rendering pipeline against the current host window.
+            MainActor.assumeIsolated {
+                self?.refreshVideoOutput()
+            }
         }
+    }
+
+    /// Pause + play + restore-time on the active VLC backend so libvlc
+    /// re-evaluates its drawable. Cheap no-op for AVPlayer / paused VLC.
+    func refreshVideoOutput() {
+        guard let vlcBackend = backend as? VLCPlayerBackend,
+              let player = vlcBackend.proxy.mediaPlayer,
+              player.isPlaying else {
+            return
+        }
+        let resume = player.time
+        player.pause()
+        player.play()
+        player.time = resume
     }
     #endif
 
@@ -223,9 +244,11 @@ public final class PlayerManager: NSObject {
         }
         #endif
 
-        // tvOS wipes the cache at the start of every new playback so the box
-        // isn't accumulating older videos on limited storage — each load gets
-        // a fresh cache populated by the prebuffer download below.
+        // tvOS doesn't use the prebuffer cache. The earlier behaviour
+        // (clear cache + parallel download + swap-to-local) was making
+        // playback appear to wait for the full download to complete on
+        // some setups — VLC streams the URL directly here and the swap
+        // path is iOS-only.
         #if os(tvOS)
         PlaybackCache.shared.clearAll()
         #endif
@@ -270,9 +293,12 @@ public final class PlayerManager: NSObject {
         // Parallel download + swap: if the user opted in and we're not already
         // playing from cache or from an offline downloaded file, fetch the
         // full file to disk while playback streams. On completion the backend
-        // swaps to the local file for instant-seek.
+        // swaps to the local file for instant-seek. Skipped on tvOS where
+        // the swap-restart on completion was making playback appear to
+        // wait for the cache to fill.
         let isOnWifi = Self.isConnectedToWifi()
         let shouldPrebuffer = prebufferEnabled && (!prebufferWifiOnly || isOnWifi)
+        #if !os(tvOS)
         if !playingFromCache,
            shouldPrebuffer,
            !url.isFileURL,
@@ -295,6 +321,7 @@ public final class PlayerManager: NSObject {
                 self.onCacheCompleted?(videoId)
             }
         }
+        #endif
     }
 
     /// Called from the VLC player view's PiP teardown path. If a cache

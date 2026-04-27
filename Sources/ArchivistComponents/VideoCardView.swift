@@ -113,9 +113,6 @@ public struct VideoCardView: View {
         .background(Color.Surface.highlight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-        // Fully watched videos look subdued so the unwatched ones in the
-        // channel detail's "All" filter stand out at a glance.
-        .opacity(data.isWatched ? 0.55 : 1)
     }
 
     private var thumbnailView: some View {

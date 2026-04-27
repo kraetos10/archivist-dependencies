@@ -7,12 +7,20 @@ public struct TVVLCPlayerView: View {
 
     private let playerManager = PlayerManager.shared
 
+    @State private var controlsVisible = true
+    @State private var hideTask: Task<Void, Never>?
+
     public init() {}
 
     public var body: some View {
         ZStack {
             TVVLCVideoRenderView()
                 .ignoresSafeArea()
+                // Stop the embedded VLC host UIView from intercepting
+                // tvOS focus / remote events — without this the
+                // `onPlayPauseCommand` / `onMoveCommand` modifiers below
+                // never receive callbacks.
+                .allowsHitTesting(false)
 
             if playerManager.isBuffering {
                 ProgressView()
@@ -20,74 +28,127 @@ public struct TVVLCPlayerView: View {
                     .tint(.white)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Spacer()
-
-                if let metadata = playerManager.currentMetadata {
-                    HStack(spacing: 12) {
-                        if let thumb = metadata.channelThumbURL {
-                            AsyncImage(url: thumb) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                default:
-                                    Circle().fill(.white.opacity(0.2))
-                                }
-                            }
-                            .frame(width: 36, height: 36)
-                            .clipShape(Circle())
-                        }
-                        Text(metadata.artist)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Text("·")
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.7))
-                        Text(metadata.title)
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                }
-
-                VStack(spacing: 8) {
-                    ProgressView(
-                        value: playerManager.duration > 0
-                            ? playerManager.currentTime / playerManager.duration
-                            : 0
-                    )
-                    .tint(.white)
-
-                    HStack {
-                        Text(formatTime(playerManager.currentTime))
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.8))
-                        Spacer()
-                        Text(formatTime(playerManager.duration))
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                }
+            if controlsVisible {
+                controlsOverlay
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 80)
-            .padding(.bottom, 40)
         }
+        // Make the SwiftUI view itself the focus target so the Siri Remote
+        // commands route here. Without `.focusable` tvOS routes nothing
+        // because the body has no buttons / focusable subviews.
+        .focusable(true)
         .onPlayPauseCommand {
             playerManager.togglePlayPause()
+            poke()
         }
         .onMoveCommand { direction in
             switch direction {
             case .left:
                 playerManager.skipBackward(10)
+                poke()
             case .right:
                 playerManager.skipForward(10)
+                poke()
             default:
-                break
+                poke()
             }
         }
         .onExitCommand {
             dismiss()
+        }
+        .onAppear { poke() }
+        .onDisappear { hideTask?.cancel() }
+    }
+
+    @ViewBuilder
+    private var controlsOverlay: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let metadata = playerManager.currentMetadata {
+                HStack(spacing: 12) {
+                    if let thumb = metadata.channelThumbURL {
+                        AsyncImage(url: thumb) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            default:
+                                Circle().fill(.white.opacity(0.2))
+                            }
+                        }
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                    }
+                    Text(metadata.artist)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("·")
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(metadata.title)
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+            }
+
+            Spacer()
+
+            VStack(spacing: 8) {
+                progressBar(
+                    progress: playerManager.duration > 0
+                        ? playerManager.currentTime / playerManager.duration
+                        : 0
+                )
+
+                HStack {
+                    Text(formatTime(playerManager.currentTime))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.8))
+                    Spacer()
+                    Text(formatTime(playerManager.duration))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .padding(.horizontal, 80)
+        .padding(.vertical, 40)
+    }
+
+    /// Custom progress bar — the SwiftUI default `ProgressView` has a
+    /// barely-visible track on a dark background. This always renders both
+    /// the unfilled and filled portions clearly.
+    private func progressBar(progress: Double) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.3))
+                    .frame(height: 6)
+                Capsule()
+                    .fill(Color.white)
+                    .frame(
+                        width: max(0, geometry.size.width * progress),
+                        height: 6
+                    )
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .frame(height: 6)
+    }
+
+    /// Show controls and reset the auto-hide timer. Called on appear and
+    /// any user input (play/pause, skip).
+    private func poke() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            controlsVisible = true
+        }
+        hideTask?.cancel()
+        hideTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                controlsVisible = false
+            }
         }
     }
 
