@@ -9,22 +9,17 @@ public struct VLCPlayerView: View {
     public init() {}
 
     public var body: some View {
+        // Single-instance, no fullScreenCover. Fullscreen is driven by the
+        // host (`VideoDetailScreen`) reshaping its layout — keeps the same
+        // SwiftUI identity across the toggle so the persistent VLC UIView
+        // doesn't get reparented (which is what was producing the black
+        // frame on every fullscreen flip).
         ZStack {
             playerContent
         }
         .clipped()
         .onAppear {
             playerManager.scheduleHideVLCControls()
-        }
-        .fullScreenCover(isPresented: $playerManager.isVLCFullscreen) {
-            playerContent
-                .ignoresSafeArea()
-                .background(Color.black)
-                .statusBarHidden()
-                .persistentSystemOverlays(.hidden)
-                .onAppear {
-                    playerManager.scheduleHideVLCControls()
-                }
         }
     }
 
