@@ -23,6 +23,7 @@ import SwiftUI
 @ViewAction(for: VideoDetailReducer.self)
 public struct VideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
+    @Bindable private var playerManager = PlayerManager.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     public init(store: StoreOf<VideoDetailReducer>) {
@@ -31,6 +32,13 @@ public struct VideoDetailScreen: View {
 
     var isCompact: Bool {
         sizeClass == .compact
+    }
+
+    /// True when the player should occupy the entire screen — driven by the
+    /// fullscreen toggle on `VLCPlayerView`'s controls. Only meaningful while
+    /// playback is active; falls back to the inline layout otherwise.
+    private var isFullscreen: Bool {
+        playerManager.isVLCFullscreen && store.isPlaying
     }
 
     public var body: some View {
@@ -47,70 +55,80 @@ public struct VideoDetailScreen: View {
             let playerHeight = leftColumnWidth * 9 / 16
             let useCompactSidebar = geo.size.width < geo.size.height
 
-            HStack(alignment: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    playerOrThumbnail(height: playerHeight)
-                        .padding(.bottom, isCompact ? 0 : 8)
+            if isFullscreen {
+                // Fullscreen mode — only the player, edge-to-edge. The
+                // detail content remains in state but isn't rendered;
+                // toggling back puts it right back where it was.
+                playerOrThumbnail(height: geo.size.height)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .background(Color.black)
+                    .ignoresSafeArea()
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(spacing: 0) {
+                        playerOrThumbnail(height: playerHeight)
+                            .padding(.bottom, isCompact ? 0 : 8)
+
+                        if !isCompact {
+                            Divider()
+                                .padding(.bottom, 8)
+                        }
+
+                        ScrollViewReader { scrollProxy in
+                            ScrollView(showsIndicators: false) {
+                                VStack(spacing: 0) {
+                                    contentView(descriptionFont: isCompact ? .subheadline : .body)
+                                        .padding(.top, 8)
+
+                                    if !store.comments.isEmpty || store.isLoadingComments {
+                                        commentsSection
+                                            .padding(.vertical, isCompact ? 8 : 0)
+                                    }
+
+                                    if isCompact {
+                                        compactPlayNextSection
+                                            .padding(.vertical, 8)
+
+                                        if !store.nextVideos.isEmpty {
+                                            compactNextUpSection
+                                                .padding(.vertical, 8)
+                                        }
+
+                                        compactSimilarSection
+                                            .padding(.vertical, 16)
+                                    }
+                                }
+                                .id("scrollTop")
+                            }
+                            .onChange(of: store.video.videoId) {
+                                send(.videoChanged)
+                                scrollProxy.scrollTo("scrollTop", anchor: .top)
+                            }
+                        }
+                    }
+                    .frame(width: isCompact ? nil : leftColumnWidth)
+                    .padding(.trailing, isCompact ? 0 : 8)
 
                     if !isCompact {
                         Divider()
-                            .padding(.bottom, 8)
-                    }
+                            .padding(.horizontal, 4)
 
-                    ScrollViewReader { scrollProxy in
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 0) {
-                                contentView(descriptionFont: isCompact ? .subheadline : .body)
-                                    .padding(.top, 8)
-
-                                if !store.comments.isEmpty || store.isLoadingComments {
-                                    commentsSection
-                                        .padding(.vertical, isCompact ? 8 : 0)
+                                if !store.playNextItems.isEmpty {
+                                    sidebarPlayNextSection(
+                                        compact: useCompactSidebar
+                                    )
                                 }
-
-                                if isCompact {
-                                    compactPlayNextSection
-                                        .padding(.vertical, 8)
-
-                                    if !store.nextVideos.isEmpty {
-                                        compactNextUpSection
-                                            .padding(.vertical, 8)
-                                    }
-
-                                    compactSimilarSection
-                                        .padding(.vertical, 16)
+                                if !store.nextVideos.isEmpty {
+                                    sidebarNextUpSection(
+                                        compact: useCompactSidebar
+                                    )
                                 }
-                            }
-                            .id("scrollTop")
-                        }
-                        .onChange(of: store.video.videoId) {
-                            send(.videoChanged)
-                            scrollProxy.scrollTo("scrollTop", anchor: .top)
-                        }
-                    }
-                }
-                .frame(width: isCompact ? nil : leftColumnWidth)
-                .padding(.trailing, isCompact ? 0 : 8)
-
-                if !isCompact {
-                    Divider()
-                        .padding(.horizontal, 4)
-
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            if !store.playNextItems.isEmpty {
-                                sidebarPlayNextSection(
+                                sidebarSimilarSection(
                                     compact: useCompactSidebar
                                 )
                             }
-                            if !store.nextVideos.isEmpty {
-                                sidebarNextUpSection(
-                                    compact: useCompactSidebar
-                                )
-                            }
-                            sidebarSimilarSection(
-                                compact: useCompactSidebar
-                            )
                         }
                     }
                 }
@@ -118,6 +136,10 @@ public struct VideoDetailScreen: View {
         }
         .background(Color.Brand.primary)
         .toolbar(.hidden, for: .bottomBar)
+        .toolbar(isFullscreen ? .hidden : .visible, for: .navigationBar)
+        .navigationBarBackButtonHidden(isFullscreen)
+        .statusBarHidden(isFullscreen)
+        .persistentSystemOverlays(isFullscreen ? .hidden : .automatic)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {

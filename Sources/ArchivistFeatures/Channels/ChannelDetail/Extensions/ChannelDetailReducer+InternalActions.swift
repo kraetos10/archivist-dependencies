@@ -46,8 +46,16 @@ extension ChannelDetailReducer {
         // Filtering (e.g. "Unwatched") can thin the rendered list far below
         // the server's page size. If there are more pages, eagerly pull the
         // next one so the user doesn't see a short list with content still
-        // off-screen. Mirrors the pattern used by the Queue page.
-        if state.filteredVideos.count < response.paginate.pageSize,
+        // off-screen. Recursion is implicit — the next page's response
+        // re-enters `handleVideosLoaded` and re-checks the threshold, so
+        // we keep pulling until either we hit `lastPage` or the filtered
+        // list is full enough.
+        //
+        // `paginate.pageSize` can come back as 0 from the server in some
+        // edge cases; floor it so we still attempt to fill at least 10
+        // items before giving up.
+        let fillTarget = max(response.paginate.pageSize, 10)
+        if state.filteredVideos.count < fillTarget,
            state.currentPage < state.lastPage,
            !state.isLoadingMoreVideos {
             state.isLoadingMoreVideos = true
