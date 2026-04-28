@@ -143,6 +143,20 @@ extension VideoDetailReducer {
                         try? await videoService.setProgress(config: config, videoId: videoId, position: position)
                     }
                 }
+                PlayerManager.shared.onPlaybackCompleted = {
+                    // Fires when the player reaches end-of-media on its
+                    // own — including when the user has dismissed the
+                    // detail screen and the video finished in PiP. Mark
+                    // it watched so the server reflects the completion
+                    // regardless of which UI surface was visible.
+                    Task.detached {
+                        try? await videoService.setWatched(
+                            config: config,
+                            videoId: videoId,
+                            isWatched: true
+                        )
+                    }
+                }
                 PlayerManager.shared.onCacheCompleted = { completedId in
                     guard completedId == videoId else { return }
                     Task { @MainActor in

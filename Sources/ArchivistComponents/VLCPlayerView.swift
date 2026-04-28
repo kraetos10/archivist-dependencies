@@ -51,15 +51,23 @@ public struct VLCPlayerView: View {
     }
 
     private var controlsOverlay: some View {
-        Color.black.opacity(0.35)
+        // Pad the controls outside the device's safe area only when we're
+        // in fullscreen — that's the only mode where the host
+        // (`VideoDetailScreen`) ignores safe-area, so the player extends
+        // under the dynamic island / home indicator. In inline mode the
+        // parent already places us below the chrome, so any extra offset
+        // would push the controls into the middle of the player.
+        let fs = playerManager.isVLCFullscreen
+        let safeArea = fs ? Self.windowSafeAreaInsets : .zero
+        return Color.black.opacity(0.35)
             .contentShape(Rectangle())
             .onTapGesture {
                 playerManager.hideVLCControls()
             }
             .overlay(alignment: .topLeading) {
                 titleRow
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
+                    .padding(.leading, 16 + safeArea.left)
+                    .padding(.top, 16 + safeArea.top)
             }
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 12) {
@@ -82,10 +90,25 @@ public struct VLCPlayerView: View {
                         playerManager.toggleVLCFullscreen()
                     }
                 }
-                .padding(16)
+                .padding(.trailing, 16 + safeArea.right)
+                .padding(.top, 16 + safeArea.top)
             }
             .overlay { centerTransportControls }
-            .overlay(alignment: .bottom) { bottomInfoAndSeek }
+            .overlay(alignment: .bottom) {
+                bottomInfoAndSeek
+                    .padding(.bottom, safeArea.bottom)
+            }
+    }
+
+    /// Snapshot of the foreground window's safe area insets. Used when
+    /// the host applies `.ignoresSafeArea` so the controls overlay can
+    /// still keep clear of the dynamic island / home indicator.
+    private static var windowSafeAreaInsets: UIEdgeInsets {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow) else { return .zero }
+        return window.safeAreaInsets
     }
 
     // MARK: - Center transport

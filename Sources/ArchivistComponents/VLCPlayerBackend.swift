@@ -60,10 +60,18 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         url: URL,
         startPosition: Double?
     ) {
+        let url = Self.preferHTTP(for: url)
+        // Push the resume offset down to libvlc as a media option (it
+        // seeks BEFORE decoder init, which is what the VLCKit / VLC
+        // canonical examples do — no post-play seek dance, no nudge
+        // loop). `pendingResumeMs` is left at zero so the tick handler
+        // doesn't ALSO try to seek.
+        let startTimeSec = max(Int((startPosition ?? 0)), 0)
         reachedEndOfMedia = false
         isBuffering = true
-        let resumeMs = Int((startPosition ?? 0) * 1000)
-        pendingResumeMs = resumeMs
+        // Don't run the post-play seek nudge — `:start-time=` handles
+        // resume server-side at libvlc's HTTP-range layer.
+        pendingResumeMs = 0
 
         if let startPosition, startPosition > 0 {
             // Seed the UI with the resume position so the seek bar renders at
@@ -72,11 +80,7 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
             onTimeUpdate?(currentTime)
         }
 
-        // VLCUI's `setConfigurationValues` no longer sets `player.time` for
-        // us (we patched it out — see the note in that method). We drive the
-        // resume seek from the backend instead so we can keep retrying
-        // across delegate callbacks until the seek actually lands.
-        let configuration = makeConfiguration(url: url, resumeMs: 0)
+        let configuration = makeConfiguration(url: url, startTimeSec: startTimeSec)
 
         if playerView == nil {
             playerView = UIVLCVideoPlayerView(
@@ -165,37 +169,27 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     /// from `PlayerManager` after the parallel `PlaybackCache` download
     /// finishes so subsequent seeks read from disk.
     public func swapToLocalFile(_ fileURL: URL) {
+        // Local cache only — `preferHTTP` doesn't apply because the URL
+        // is already `file://`.
         guard fileURL.isFileURL else { return }
-        let resumeMs = Int(currentTime * 1000)
-        // Stash the resume target on the backend rather than handing it to
-        // VLCUI's `Configuration.startTime`. VLCUI's `setConfigurationValues`
-        // no longer honours start time (we patched that out — see notes
-        // there); the backend's tick handler picks up `pendingResumeMs`
-        // and seeks once VLC reports the new media is seekable.
-        if resumeMs > 0 {
-            pendingResumeMs = resumeMs
-        }
-        let configuration = makeConfiguration(url: fileURL, resumeMs: 0)
+        let startTimeSec = max(Int(currentTime), 0)
+        // Resume via libvlc's `:start-time=` option — the file URL goes
+        // straight through `addOption` so VLC seeks before the decoder
+        // re-inits.
+        pendingResumeMs = 0
+        let configuration = makeConfiguration(url: fileURL, startTimeSec: startTimeSec)
         proxy.playNewMedia(configuration)
     }
 
     // MARK: - VLCUI callbacks
 
     private func handleTicks(ticks: Int, info: VLCVideoPlayer.PlaybackInformation) {
+        // VLCKit's `time` / `length` for the media are already absolute
+        // (`:start-time=` doesn't shift the reported clock the way we
+        // initially assumed — it just changes where playback begins).
         let reportedTime = Double(ticks) / 1000.0
         if info.length > 0 {
             duration = Double(info.length) / 1000.0
-        }
-
-        // One-shot resume seek: as soon as VLC reports it's seekable,
-        // jump to the target and stop tracking it. No retry loop — that
-        // pattern was wedging the decoder. If the user's URL doesn't end
-        // up seekable in time, we'd rather play from 0:00 than stall.
-        if pendingResumeMs > 0,
-           let player = proxy.mediaPlayer,
-           player.isSeekable {
-            player.time = VLCTime(int: Int32(pendingResumeMs))
-            pendingResumeMs = 0
         }
 
         currentTime = reportedTime
@@ -240,9 +234,8 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         onStateChange?()
     }
 
-    /// Issue the resume seek once if VLC reports the stream as seekable.
-    /// `handleTicks` does the same check — this just gives us a slightly
-    /// earlier shot when `.playing` fires before the first tick.
+    /// Apply the pending resume seek if VLC reports the stream as
+    /// seekable. Called both from `.playing` state and from `handleTicks`.
     private func applyPendingResume() {
         guard pendingResumeMs > 0,
               let player = proxy.mediaPlayer,
@@ -253,12 +246,34 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
 
     // MARK: - Helpers
 
-    private func makeConfiguration(url: URL, resumeMs: Int) -> VLCVideoPlayer.Configuration {
+    private func makeConfiguration(url: URL, startTimeSec: Int) -> VLCVideoPlayer.Configuration {
         var configuration = VLCVideoPlayer.Configuration(url: url)
         configuration.autoPlay = true
-        configuration.startTime = .ticks(resumeMs)
-        configuration.options = Self.streamingOptions
+        // Don't use VLCUI's `startTime` (it post-seeks via
+        // `mediaPlayer.time`, which is the unreliable path). Instead push
+        // the offset down as a libvlc media option below — VLC seeks
+        // before the decoder initialises, no post-play nudge needed.
+        configuration.startTime = .ticks(0)
+        var options = Self.streamingOptions
+        if startTimeSec > 0 {
+            options["start-time"] = startTimeSec
+        }
+        configuration.options = options
         return configuration
+    }
+
+    /// Rewrite an `https://` media URL to `http://` before handing it to
+    /// VLCKit. libvlc's TLS implementation is brittle on iOS — handshake
+    /// failures and EINTR-on-handshake errors have plagued playback in
+    /// this codebase. Since the TubeArchivist media URLs are public and
+    /// don't carry auth in this app, dropping TLS for the playback fetch
+    /// trades nothing for reliability. Local files / non-HTTPS URLs are
+    /// passed through unchanged.
+    private static func preferHTTP(for url: URL) -> URL {
+        guard url.scheme?.lowercased() == "https" else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "http"
+        return components?.url ?? url
     }
 
     /// VLC media options applied to every load.

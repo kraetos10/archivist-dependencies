@@ -210,10 +210,13 @@ public struct VideoListReducer {
         }
 
         /// Ordered list of sections the home screen renders (hides empty ones).
+        /// `.downloaded` (the on-device row) is intentionally omitted —
+        /// the same content already lives on the dedicated Downloads
+        /// settings screen, and surfacing it on the home page bloats
+        /// the carousel without adding new info.
         static let homeSectionOrder: [WatchFilter] = [
             .continueWatching,
             .unwatched,
-            .downloaded,
             .watched,
             .all
         ]
