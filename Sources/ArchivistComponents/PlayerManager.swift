@@ -106,6 +106,7 @@ public final class PlayerManager: NSObject {
     #if !os(tvOS)
     private var interruptionObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
+    private var orientationObserver: NSObjectProtocol?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -115,6 +116,12 @@ public final class PlayerManager: NSObject {
     #endif
 
     public var onPause: (() -> Void)?
+    /// Fires when the player reaches end-of-media on its own (i.e. the video
+    /// played through to the end, distinct from a user-initiated pause/stop).
+    /// Set by `VideoDetailReducer` so we can mark the video as watched on
+    /// the server even when the detail screen has been dismissed (e.g. the
+    /// user is in PiP and the video finishes there).
+    public var onPlaybackCompleted: (() -> Void)?
     /// Fires on the main actor when the parallel prebuffer download finishes
     /// and the backend has swapped to the local file. Useful for UI surfaces
     /// like the video detail row that show a "cached" indicator.
@@ -203,6 +210,25 @@ public final class PlayerManager: NSObject {
             // but the picture comes back black. Force a re-bind of the
             // rendering pipeline against the current host window.
             MainActor.assumeIsolated {
+                self?.refreshVideoOutput()
+            }
+        }
+
+        // Device rotation triggers a host bounds change, but VLCKit's
+        // rendering layer doesn't auto-rebind to the new geometry —
+        // audio keeps playing while the picture goes black. Nudge VLC
+        // (pause+play+seek) on every rotation so the layer reattaches
+        // to the resized drawable.
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        orientationObserver = NotificationCenter.default.addObserver(
+            forName: UIDevice.orientationDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Tiny delay so the bounds change has fully propagated
+            // through the SwiftUI layout pass before we hit VLC.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(100))
                 self?.refreshVideoOutput()
             }
         }
@@ -356,6 +382,8 @@ public final class PlayerManager: NSObject {
         currentTime = 0
         duration = 0
         onPause = nil
+        onPlaybackCompleted = nil
+        isVLCFullscreen = false
         currentVideoID = nil
         currentMetadata = nil
         isInPiP = false
@@ -577,14 +605,24 @@ public final class PlayerManager: NSObject {
             // Begin a background task immediately (on main thread) so iOS
             // doesn't suspend the app before the next video can start.
             #if !os(tvOS) && !os(watchOS)
-            guard let self else { return }
-            if self.playbackTransitionTask != .invalid {
-                UIApplication.shared.endBackgroundTask(self.playbackTransitionTask)
+            if self?.playbackTransitionTask != .invalid {
+                if let task = self?.playbackTransitionTask {
+                    UIApplication.shared.endBackgroundTask(task)
+                }
             }
-            self.playbackTransitionTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+            self?.playbackTransitionTask = UIApplication.shared.beginBackgroundTask { [weak self] in
                 self?.playbackTransitionTask = .invalid
             }
             #endif
+
+            // Notify any registered observer (typically the VideoDetail
+            // reducer's progress-save closure) that the video reached its
+            // natural end. This fires regardless of whether the detail
+            // screen is still presented — important for the PiP path,
+            // where the detail screen has been dismissed but the player
+            // continues running and the user expects the watched flag to
+            // land on the server.
+            self?.onPlaybackCompleted?()
         }
     }
 }

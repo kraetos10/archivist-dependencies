@@ -235,6 +235,15 @@ public final class CarPlayCoordinator {
                 try? await videoService.setProgress(config: config, videoId: videoId, position: position)
             }
         }
+        PlayerManager.shared.onPlaybackCompleted = { [videoService = self.videoService] in
+            Task.detached {
+                try? await videoService.setWatched(
+                    config: config,
+                    videoId: videoId,
+                    isWatched: true
+                )
+            }
+        }
 
         Task { [videoService = self.videoService] in
             for await _ in PlayerManager.shared.playbackEndEvents() {

@@ -439,14 +439,41 @@ public final class VLCVideoContentView: UIView, VLCPictureInPictureDrawable, VLC
                         return
                     }
                     PlayerManager.shared.isInPiP = false
+
+                    // Always save progress when PiP ends — the
+                    // reducer-installed `onPause` closure pulls
+                    // `currentTime` off the player and posts it to the
+                    // server. This fires regardless of which path we take
+                    // below (continue inline / stop / leave running in
+                    // background), so the user's position is always
+                    // synced when PiP closes.
+                    PlayerManager.shared.onPause?()
+
+                    // If the player view is still hosted (its window is
+                    // non-nil) the user pressed PiP-restore from inside
+                    // the video detail screen — playback should continue
+                    // there. Apply any pending cache swap that arrived
+                    // while we were in PiP and let inline take over.
+                    let stillHosted = PlayerManager.shared
+                        .persistentVLCPlayerView?
+                        .window != nil
+                    if stillHosted {
+                        PlayerManager.shared.applyPendingCacheSwap()
+                        // Nudge the rendering pipeline so VLC re-binds the
+                        // inline drawable layer (PiP moved the display
+                        // layer to its own overlay; coming back, the
+                        // inline view is otherwise often left black).
+                        PlayerManager.shared.refreshVideoOutput()
+                        return
+                    }
+
+                    // No host UI — the detail screen was dismissed before
+                    // PiP started (the user closed the video while it was
+                    // playing and PiP took over). With no place to return
+                    // to, stop cleanly.
                     if UIApplication.shared.applicationState == .active {
                         PlayerManager.shared.stop()
                     } else {
-                        // PiP ended while the app was backgrounded —
-                        // playback should continue. If a prebuffer
-                        // download finished while PiP was up, apply the
-                        // swap now that the visible player isn't going
-                        // to flicker on us.
                         PlayerManager.shared.applyPendingCacheSwap()
                     }
                 }

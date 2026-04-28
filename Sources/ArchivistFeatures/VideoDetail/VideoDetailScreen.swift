@@ -35,106 +35,110 @@ public struct VideoDetailScreen: View {
     }
 
     /// True when the player should occupy the entire screen — driven by the
-    /// fullscreen toggle on `VLCPlayerView`'s controls. Only meaningful while
-    /// playback is active; falls back to the inline layout otherwise.
+    /// fullscreen toggle on `VLCPlayerView`'s controls. Intentionally NOT
+    /// gated on `store.isPlaying`: during a device rotation VLC briefly
+    /// reports `isPlaying = false` while the rendering pipeline rebinds
+    /// to the resized window, and using that here would yank the user
+    /// out of fullscreen mid-rotation.
     private var isFullscreen: Bool {
-        playerManager.isVLCFullscreen && store.isPlaying
+        playerManager.isVLCFullscreen
     }
 
     public var body: some View {
         GeometryReader { geo in
-            // Single structural position for `playerOrThumbnail` across size
-            // class flips. When iPad multitasking changes the horizontal size
-            // class, previously the body switched between two separate layout
-            // subtrees, each with its own player view. SwiftUI tore one down
-            // and recreated the other, which reparented the persistent
-            // `AVPlayerViewController` and dropped its `AVPlayerLayer`
-            // display. Keeping the player at index 0 of a stable outer
-            // HStack/VStack keeps the host controller alive across the flip.
             let leftColumnWidth = isCompact ? geo.size.width : geo.size.width * 0.65
-            let playerHeight = leftColumnWidth * 9 / 16
+            let inlineHeight = leftColumnWidth * 9 / 16
             let useCompactSidebar = geo.size.width < geo.size.height
 
-            if isFullscreen {
-                // Fullscreen mode — only the player, edge-to-edge. The
-                // detail content remains in state but isn't rendered;
-                // toggling back puts it right back where it was.
-                playerOrThumbnail(height: geo.size.height)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .background(Color.black)
-                    .ignoresSafeArea()
-            } else {
-                HStack(alignment: .top, spacing: 0) {
-                    VStack(spacing: 0) {
-                        playerOrThumbnail(height: playerHeight)
-                            .padding(.bottom, isCompact ? 0 : 8)
+            ZStack(alignment: .top) {
+                if !isFullscreen {
+                    HStack(alignment: .top, spacing: 0) {
+                        VStack(spacing: 0) {
+                            Color.clear
+                                .frame(height: inlineHeight)
+                                .padding(.bottom, isCompact ? 0 : 8)
+
+                            if !isCompact {
+                                Divider()
+                                    .padding(.bottom, 8)
+                            }
+
+                            ScrollViewReader { scrollProxy in
+                                ScrollView(showsIndicators: false) {
+                                    VStack(spacing: 0) {
+                                        contentView(descriptionFont: isCompact ? .subheadline : .body)
+                                            .padding(.top, 8)
+
+                                        if !store.comments.isEmpty || store.isLoadingComments {
+                                            commentsSection
+                                                .padding(.vertical, isCompact ? 8 : 0)
+                                        }
+
+                                        if isCompact {
+                                            compactPlayNextSection
+                                                .padding(.vertical, 8)
+
+                                            if !store.nextVideos.isEmpty {
+                                                compactNextUpSection
+                                                    .padding(.vertical, 8)
+                                            }
+
+                                            compactSimilarSection
+                                                .padding(.vertical, 16)
+                                        }
+                                    }
+                                    .id("scrollTop")
+                                }
+                                .onChange(of: store.video.videoId) {
+                                    send(.videoChanged)
+                                    scrollProxy.scrollTo("scrollTop", anchor: .top)
+                                }
+                            }
+                        }
+                        .frame(width: isCompact ? nil : leftColumnWidth)
+                        .padding(.trailing, isCompact ? 0 : 8)
 
                         if !isCompact {
                             Divider()
-                                .padding(.bottom, 8)
-                        }
+                                .padding(.horizontal, 4)
 
-                        ScrollViewReader { scrollProxy in
                             ScrollView(showsIndicators: false) {
                                 VStack(spacing: 0) {
-                                    contentView(descriptionFont: isCompact ? .subheadline : .body)
-                                        .padding(.top, 8)
-
-                                    if !store.comments.isEmpty || store.isLoadingComments {
-                                        commentsSection
-                                            .padding(.vertical, isCompact ? 8 : 0)
+                                    if !store.playNextItems.isEmpty {
+                                        sidebarPlayNextSection(
+                                            compact: useCompactSidebar
+                                        )
                                     }
-
-                                    if isCompact {
-                                        compactPlayNextSection
-                                            .padding(.vertical, 8)
-
-                                        if !store.nextVideos.isEmpty {
-                                            compactNextUpSection
-                                                .padding(.vertical, 8)
-                                        }
-
-                                        compactSimilarSection
-                                            .padding(.vertical, 16)
+                                    if !store.nextVideos.isEmpty {
+                                        sidebarNextUpSection(
+                                            compact: useCompactSidebar
+                                        )
                                     }
-                                }
-                                .id("scrollTop")
-                            }
-                            .onChange(of: store.video.videoId) {
-                                send(.videoChanged)
-                                scrollProxy.scrollTo("scrollTop", anchor: .top)
-                            }
-                        }
-                    }
-                    .frame(width: isCompact ? nil : leftColumnWidth)
-                    .padding(.trailing, isCompact ? 0 : 8)
-
-                    if !isCompact {
-                        Divider()
-                            .padding(.horizontal, 4)
-
-                        ScrollView(showsIndicators: false) {
-                            VStack(spacing: 0) {
-                                if !store.playNextItems.isEmpty {
-                                    sidebarPlayNextSection(
+                                    sidebarSimilarSection(
                                         compact: useCompactSidebar
                                     )
                                 }
-                                if !store.nextVideos.isEmpty {
-                                    sidebarNextUpSection(
-                                        compact: useCompactSidebar
-                                    )
-                                }
-                                sidebarSimilarSection(
-                                    compact: useCompactSidebar
-                                )
                             }
                         }
                     }
+                    .transition(.opacity)
                 }
+
+                // Player — always at the same SwiftUI structural position.
+                // Only its frame + safe-area treatment changes. SwiftUI
+                // animates the frame change without re-mounting the player
+                // surface, so the persistent VLC view stays bound to the
+                // same window-backed layer through the transition.
+                playerOrThumbnail(height: isFullscreen ? geo.size.height : inlineHeight)
+                    .frame(
+                        width: isFullscreen ? geo.size.width : (isCompact ? geo.size.width : leftColumnWidth),
+                        height: isFullscreen ? geo.size.height : inlineHeight
+                    )
+                    .background(isFullscreen ? Color.black : .clear)
             }
         }
-        .background(Color.Brand.primary)
+        .background(Color.Brand.primary.ignoresSafeArea())
+        .ignoresSafeArea(isFullscreen ? .all : [])
         .toolbar(.hidden, for: .bottomBar)
         .toolbar(isFullscreen ? .hidden : .visible, for: .navigationBar)
         .navigationBarBackButtonHidden(isFullscreen)
@@ -151,6 +155,7 @@ public struct VideoDetailScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .animation(.easeInOut(duration: 0.25), value: isFullscreen)
         .onAppear {
             send(.viewDidAppear)
             if isCompact {
@@ -161,7 +166,6 @@ public struct VideoDetailScreen: View {
             if isCompact {
                 OrientationLock.shared.unlock()
             }
-            PlayerManager.shared.isVLCFullscreen = false
         }
         .alert($store.scope(state: \.alert, action: \.alert))
         .modifier(PlaylistPickerPresentation(

@@ -120,6 +120,18 @@ extension VideoDetailReducer {
                             )
                         }
                     }
+                    PlayerManager.shared.onPlaybackCompleted = {
+                        // End-of-media notification — fires even when the
+                        // detail screen has been dismissed (PiP). Mark the
+                        // video watched server-side so the state syncs.
+                        Task.detached {
+                            try? await videoService.setWatched(
+                                config: config,
+                                videoId: videoId,
+                                isWatched: true
+                            )
+                        }
+                    }
                     PlayerManager.shared.onNextRequested = {
                         Task { @MainActor in
                             await send(.view(.nextVideoRequested))
@@ -170,6 +182,15 @@ extension VideoDetailReducer {
                                 config: config,
                                 videoId: videoId,
                                 position: position
+                            )
+                        }
+                    }
+                    PlayerManager.shared.onPlaybackCompleted = {
+                        Task.detached {
+                            try? await videoService.setWatched(
+                                config: config,
+                                videoId: videoId,
+                                isWatched: true
                             )
                         }
                     }

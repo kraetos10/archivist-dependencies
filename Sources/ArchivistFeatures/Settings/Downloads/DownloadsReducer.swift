@@ -92,8 +92,13 @@ public struct DownloadsReducer {
                 state.downloadDetail = nil
                 return .none
             case .downloadDetail(.presented(.downloadResult(.success))):
+                let videoId = state.downloadDetail?.download.youtubeId
                 state.downloadDetail = nil
-                return .send(.view(.pullToRefreshTriggered))
+                if let videoId {
+                    anchorScrollBeforeRemoval(of: videoId, state: &state)
+                    state.downloads.remove(id: videoId)
+                }
+                return .none
             case .downloadDetail(.presented(.deleteResult(.success))):
                 let videoId = state.downloadDetail?.download.youtubeId
                 state.downloadDetail = nil
