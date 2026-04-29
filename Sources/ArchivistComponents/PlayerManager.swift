@@ -135,6 +135,11 @@ public final class PlayerManager: NSObject {
     /// True when a history of previously-played videos exists, so the
     /// "previous" transport button should be enabled.
     public var canGoPrevious: Bool = false
+    /// Fires when the user taps "restore from PiP" but the source detail
+    /// screen has already been dismissed. Wired at app start to push the
+    /// VideoDetail screen back onto the navigation stack so the player
+    /// has somewhere to surface. Receives the currently-playing videoId.
+    public var onPiPRestoreRequested: ((String) -> Void)?
 
     public var currentMetadata: NowPlayingMetadata? {
         didSet {
@@ -258,7 +263,8 @@ public final class PlayerManager: NSObject {
     public func load(
         url: URL,
         startPosition: Double?,
-        videoId: String? = nil
+        videoId: String? = nil,
+        expectedSize: Int64? = nil
     ) {
         stop()
 
@@ -284,6 +290,7 @@ public final class PlayerManager: NSObject {
 
         @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
+        @Shared(.appStorage("playbackCacheSizeLimitBytes")) var cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
 
         // Cache-first: if we already have the file from a prior session,
         // play it directly as a file:// URL.
@@ -332,7 +339,9 @@ public final class PlayerManager: NSObject {
             PlaybackCache.shared.startDownload(
                 url: url,
                 videoId: videoId,
-                authHeaders: [:]
+                authHeaders: [:],
+                expectedSize: expectedSize,
+                limitBytes: cacheSizeLimitBytes
             ) { [weak self] fileURL in
                 guard let self, self.currentVideoID == videoId else { return }
                 if self.isInPiP {

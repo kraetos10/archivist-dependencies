@@ -870,6 +870,28 @@
         }
       }
     },
+    "video.cache.sizeLimit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size limit"
+          }
+        }
+      }
+    },
+    "video.cache.sizeLimit.unlimited": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlimited"
+          }
+        }
+      }
+    },
     "video.cache.row": {
       "extractionState": "manual",
       "localizations": {

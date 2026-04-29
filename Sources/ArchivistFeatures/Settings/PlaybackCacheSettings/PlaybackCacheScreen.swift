@@ -47,6 +47,14 @@ public struct PlaybackCacheScreen: View {
             }
 
             Section {
+                Picker(
+                    String.localised("video.cache.sizeLimit", table: .videos),
+                    selection: $store.cacheSizeLimitBytes
+                ) {
+                    ForEach(PlaybackCache.cacheSizeLimitPresetsBytes, id: \.self) { value in
+                        Text(Self.cacheLimitLabel(for: value)).tag(value)
+                    }
+                }
                 LabeledContent(String.localised("video.cache.totalSize", table: .videos)) {
                     Text(formattedSize)
                         .foregroundStyle(Color.Brand.secondary)
@@ -125,6 +133,15 @@ public struct PlaybackCacheScreen: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
+            Picker(
+                String.localised("video.cache.sizeLimit", table: .videos),
+                selection: $store.cacheSizeLimitBytes
+            ) {
+                ForEach(PlaybackCache.cacheSizeLimitPresetsBytes, id: \.self) { value in
+                    Text(Self.cacheLimitLabel(for: value)).tag(value)
+                }
+            }
+
             HStack {
                 Text(String.localised("video.cache.totalSize", table: .videos))
                 Spacer()
@@ -156,6 +173,13 @@ public struct PlaybackCacheScreen: View {
 
     private var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: store.totalSize, countStyle: .file)
+    }
+
+    private static func cacheLimitLabel(for bytes: Int) -> String {
+        guard bytes > 0 else {
+            return String.localised("video.cache.sizeLimit.unlimited", table: .videos)
+        }
+        return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 }
 #endif

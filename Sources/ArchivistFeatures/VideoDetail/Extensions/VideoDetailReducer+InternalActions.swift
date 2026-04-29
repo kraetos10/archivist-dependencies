@@ -72,6 +72,9 @@ extension VideoDetailReducer {
         case .cacheStatusChanged(let isCached):
             state.isCached = isCached
             return .none
+        case .adoptInflightPlayback:
+            state.isPlaying = true
+            return .none
         case .watchedToggleResult(.failure):
             return .none
         default:
@@ -94,10 +97,11 @@ extension VideoDetailReducer {
         state.resetForNewVideo(video)
         state.isPlaying = true
         let url = mediaURL(state: state)
-        let startPosition = state.video.player?.position
+        let startPosition = state.video.resumePositionSeconds
         let config = state.serverConfig
         let videoId = state.video.videoId
         let currentVideo = video
+        let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .merge(
             .run { [videoService] send in
                 let stream = await MainActor.run {
@@ -107,7 +111,8 @@ extension VideoDetailReducer {
                     PlayerManager.shared.load(
                         url: url,
                         startPosition: startPosition,
-                        videoId: videoId
+                        videoId: videoId,
+                        expectedSize: expectedSize
                     )
                     PlayerManager.shared.onPause = {
                         let position = Int(PlayerManager.shared.currentTime)
@@ -161,9 +166,10 @@ extension VideoDetailReducer {
         state.resetForNewVideo(nextVideo)
         state.isPlaying = true
         let url = mediaURL(state: state)
-        let startPosition = state.video.player?.position
+        let startPosition = state.video.resumePositionSeconds
         let config = state.serverConfig
         let videoId = state.video.videoId
+        let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .merge(
             .run { [videoService] send in
                 let stream = await MainActor.run {
@@ -172,7 +178,8 @@ extension VideoDetailReducer {
                     PlayerManager.shared.load(
                         url: url,
                         startPosition: startPosition,
-                        videoId: videoId
+                        videoId: videoId,
+                        expectedSize: expectedSize
                     )
                     PlayerManager.shared.onPause = {
                         let position = Int(PlayerManager.shared.currentTime)

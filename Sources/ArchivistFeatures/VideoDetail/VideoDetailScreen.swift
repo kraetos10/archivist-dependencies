@@ -50,7 +50,7 @@ public struct VideoDetailScreen: View {
             let inlineHeight = leftColumnWidth * 9 / 16
             let useCompactSidebar = geo.size.width < geo.size.height
 
-            ZStack(alignment: .top) {
+            ZStack(alignment: .topLeading) {
                 if !isFullscreen {
                     HStack(alignment: .top, spacing: 0) {
                         VStack(spacing: 0) {
