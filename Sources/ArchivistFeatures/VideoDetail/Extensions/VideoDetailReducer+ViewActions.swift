@@ -65,6 +65,30 @@ extension VideoDetailReducer {
         state.isDownloaded = localVideoStorage.isDownloaded(videoId: videoId)
         state.isCached = PlaybackCache.isCached(videoId: videoId)
 
+        // Adopt in-flight playback if the player is already streaming
+        // this video — typically a PiP restore where the user closed the
+        // detail screen, watched in PiP, then tapped restore. We re-mount
+        // the player surface and re-subscribe to playback-end events
+        // without calling `load` (which would `stop()` and visibly
+        // restart playback from scratch).
+        if !state.isPlaying {
+            effects.append(
+                .run { send in
+                    let stream = await MainActor.run { () -> AsyncStream<Void>? in
+                        guard PlayerManager.shared.currentVideoID == videoId,
+                              PlayerManager.shared.isPlaying else { return nil }
+                        return PlayerManager.shared.playbackEndEvents()
+                    }
+                    guard let stream else { return }
+                    await send(.adoptInflightPlayback)
+                    for await _ in stream {
+                        await send(.view(.videoPlaybackDidEnd))
+                    }
+                }
+                .cancellable(id: CancelID.playback, cancelInFlight: true)
+            )
+        }
+
         let videoService = self.videoService
         // Fetch latest video data (progress, watched status)
         effects.append(
@@ -125,16 +149,18 @@ extension VideoDetailReducer {
     private func handlePlayTapped(state: inout State) -> Effect<Action> {
         guard let url = mediaURL(state: state) else { return .none }
         state.isPlaying = true
-        let startPosition = state.video.player?.position
+        let startPosition = state.video.resumePositionSeconds
         let config = state.serverConfig
         let videoId = state.video.videoId
         let video = state.video
+        let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .run { [videoService] send in
             let stream = await MainActor.run {
                 PlayerManager.shared.load(
                     url: url,
                     startPosition: startPosition,
-                    videoId: videoId
+                    videoId: videoId,
+                    expectedSize: expectedSize
                 )
                 PlayerManager.shared.onPause = {
                     let position = Int(PlayerManager.shared.currentTime)

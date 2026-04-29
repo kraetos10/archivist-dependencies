@@ -48,6 +48,14 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
     /// fails for HTTP streams (their `isSeekable` lies briefly during
     /// startup).
     private var pendingResumeMs: Int = 0
+    /// Resume target after a `swapToLocalFile`. VLC briefly reports
+    /// `ticks = 0` while the new media decoder warms up and the
+    /// `:start-time=` seek lands. While this is non-zero, `handleTicks`
+    /// suppresses UI updates so the seek bar doesn't visibly snap to
+    /// 0 mid-playback. Cleared once a tick reports a time at or above
+    /// the floor, or after `resumeFloorTicksRemaining` runs out.
+    private var resumeFloorSec: Double = 0
+    private var resumeFloorTicksRemaining: Int = 0
 
     // PiP is driven directly through `playerView.pipController`. No
     // host-facing callback chain — system PiP manages its own UI lifecycle.
@@ -61,17 +69,17 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         startPosition: Double?
     ) {
         let url = Self.preferHTTP(for: url)
-        // Push the resume offset down to libvlc as a media option (it
-        // seeks BEFORE decoder init, which is what the VLCKit / VLC
-        // canonical examples do — no post-play seek dance, no nudge
-        // loop). `pendingResumeMs` is left at zero so the tick handler
-        // doesn't ALSO try to seek.
-        let startTimeSec = max(Int((startPosition ?? 0)), 0)
+        let resumeSec = max(Int((startPosition ?? 0)), 0)
         reachedEndOfMedia = false
         isBuffering = true
-        // Don't run the post-play seek nudge — `:start-time=` handles
-        // resume server-side at libvlc's HTTP-range layer.
-        pendingResumeMs = 0
+        // Belt-and-braces resume: hand libvlc `:start-time=N` (works
+        // reliably for files, best-effort for HTTP) AND seed
+        // `pendingResumeMs` so the tick handler can perform a post-play
+        // seek if libvlc didn't honour the option. Whichever lands first
+        // wins; `applyPendingResume` clears the pending seek as soon as
+        // the reported time is within ~2s of the target.
+        let startTimeSec = resumeSec
+        pendingResumeMs = resumeSec * 1000
 
         if let startPosition, startPosition > 0 {
             // Seed the UI with the resume position so the seek bar renders at
@@ -147,6 +155,8 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         duration = 0
         pendingResumeMs = 0
         reachedEndOfMedia = false
+        resumeFloorSec = 0
+        resumeFloorTicksRemaining = 0
 
         playbackEndContinuation?.finish()
         playbackEndContinuation = nil
@@ -177,6 +187,13 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         // straight through `addOption` so VLC seeks before the decoder
         // re-inits.
         pendingResumeMs = 0
+        // Latch the swap target so `handleTicks` can ignore the
+        // stale-zero ticks the new decoder emits before the seek lands.
+        // ~60 ticks is a generous safety release if `:start-time=`
+        // misbehaves and ticks never reach the floor (VLC emits ticks
+        // a few times per second, so this is roughly a 10–20s ceiling).
+        resumeFloorSec = Double(startTimeSec)
+        resumeFloorTicksRemaining = 60
         let configuration = makeConfiguration(url: fileURL, startTimeSec: startTimeSec)
         proxy.playNewMedia(configuration)
     }
@@ -192,8 +209,33 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
             duration = Double(info.length) / 1000.0
         }
 
+        // Cache-swap blackout: hold the seek bar at the source position
+        // until VLC's clock catches up to the swap target, otherwise the
+        // first few decoder ticks (which report 0) snap the bar back to
+        // the start mid-playback.
+        if resumeFloorSec > 0 {
+            if reportedTime + 1 >= resumeFloorSec {
+                resumeFloorSec = 0
+                resumeFloorTicksRemaining = 0
+            } else if resumeFloorTicksRemaining > 0 {
+                resumeFloorTicksRemaining -= 1
+                return
+            } else {
+                // Safety release — accept whatever VLC reports rather
+                // than freezing the bar permanently.
+                resumeFloorSec = 0
+            }
+        }
+
         currentTime = reportedTime
         onTimeUpdate?(currentTime)
+
+        // For HTTP streams the `.playing` state often arrives before
+        // `isSeekable` flips true — retry from the tick handler until
+        // the seek lands and `pendingResumeMs` is cleared.
+        if pendingResumeMs > 0 {
+            applyPendingResume()
+        }
 
         // Latch "reached end" once we observe a time within 1s of the end.
         // VLCKit's `.stopped` state fires shortly after but may report time 0.
@@ -236,10 +278,19 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
 
     /// Apply the pending resume seek if VLC reports the stream as
     /// seekable. Called both from `.playing` state and from `handleTicks`.
+    /// Self-clears once VLC's actual reported `.time` is near the target
+    /// (i.e. `:start-time=` already landed us correctly) — comparing
+    /// against the player rather than our seeded `currentTime`, which is
+    /// pre-seeded to the resume target and would falsely match.
     private func applyPendingResume() {
-        guard pendingResumeMs > 0,
-              let player = proxy.mediaPlayer,
-              player.isSeekable else { return }
+        guard pendingResumeMs > 0 else { return }
+        guard let player = proxy.mediaPlayer else { return }
+        let playerTimeMs = Int(player.time.intValue)
+        if playerTimeMs > 0, abs(playerTimeMs - pendingResumeMs) <= 2000 {
+            pendingResumeMs = 0
+            return
+        }
+        guard player.isSeekable else { return }
         player.time = VLCTime(int: Int32(pendingResumeMs))
         pendingResumeMs = 0
     }

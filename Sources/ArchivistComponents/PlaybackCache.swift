@@ -46,6 +46,69 @@ public final class PlaybackCache {
     /// existing prebuffer cache. AVPlayer stays available as an opt-in.
     public nonisolated static let defaultUseVLCPlayer: Bool = true
 
+    /// Default upper bound on the playback cache (5 GB). Stored as bytes in
+    /// the `playbackCacheSizeLimitBytes` app-storage key. A value of `0`
+    /// means unlimited.
+    public nonisolated static let defaultCacheSizeLimitBytes: Int = 5_000_000_000
+
+    /// Sentinel meaning "no upper bound" for the cache size limit.
+    public nonisolated static let unlimitedCacheSizeBytes: Int = 0
+
+    /// Sensible presets surfaced in Settings. Values are in bytes;
+    /// `unlimitedCacheSizeBytes` (0) at the end represents "Unlimited".
+    public nonisolated static let cacheSizeLimitPresetsBytes: [Int] = [
+        1_000_000_000,
+        2_000_000_000,
+        5_000_000_000,
+        10_000_000_000,
+        20_000_000_000,
+        unlimitedCacheSizeBytes,
+    ]
+
+    /// True when caching `expectedSize` bytes on top of what's already on
+    /// disk would exceed `limitBytes`. `expectedSize == nil` falls back to
+    /// "are we already over the limit" — best-effort when the caller
+    /// doesn't know the file size up front.
+    public func wouldExceedLimit(
+        expectedSize: Int64?,
+        limitBytes: Int
+    ) -> Bool {
+        guard limitBytes > 0 else { return false }
+        let current = totalSize()
+        let projected = current + Int64(expectedSize ?? 0)
+        return projected > Int64(limitBytes)
+    }
+
+    /// Evict least-recently-used entries until `expectedSize` bytes can be
+    /// added without exceeding `limitBytes`. `protecting` is skipped during
+    /// eviction (the caller's own videoId — defensive, shouldn't normally
+    /// be in cache yet at this point). Returns `true` if enough space was
+    /// freed (or none was needed), `false` if even removing every evictable
+    /// entry leaves the projected size over the limit.
+    @discardableResult
+    public func evictToFit(
+        expectedSize: Int64?,
+        limitBytes: Int,
+        protecting videoId: String? = nil
+    ) -> Bool {
+        guard limitBytes > 0 else { return true }
+        let limit = Int64(limitBytes)
+        let needed = Int64(expectedSize ?? 0)
+        var current = totalSize()
+        if current + needed <= limit { return true }
+
+        // entries() is most-recent-first, so reverse for LRU eviction.
+        let candidates = entries()
+            .reversed()
+            .filter { $0.videoId != videoId }
+        for entry in candidates {
+            remove(videoId: entry.videoId)
+            current -= entry.size
+            if current + needed <= limit { return true }
+        }
+        return current + needed <= limit
+    }
+
     /// Pure filesystem check that can be called from any actor context.
     /// Matches `cachedFileURL(for:)` but without the mtime touch so it's safe
     /// to call from reducer handlers / sync nonisolated code.
@@ -106,6 +169,8 @@ public final class PlaybackCache {
         url: URL,
         videoId: String,
         authHeaders: [String: String],
+        expectedSize: Int64?,
+        limitBytes: Int,
         onCompleted: @escaping @MainActor (URL) -> Void
     ) {
         guard !videoId.isEmpty else { return }
@@ -114,6 +179,26 @@ public final class PlaybackCache {
             print("[PlaybackCache] Already cached: \(videoId)")
             onCompleted(Self.fileURL(for: videoId))
             return
+        }
+        if wouldExceedLimit(expectedSize: expectedSize, limitBytes: limitBytes) {
+            let fitted = evictToFit(
+                expectedSize: expectedSize,
+                limitBytes: limitBytes,
+                protecting: videoId
+            )
+            guard fitted else {
+                print(
+                    "[PlaybackCache] Skipping \(videoId): "
+                        + "won't fit under cache limit even after eviction "
+                        + "(\(limitBytes) bytes, currently \(totalSize()) bytes, "
+                        + "needs \(expectedSize ?? 0) more)"
+                )
+                return
+            }
+            print(
+                "[PlaybackCache] Evicted older entries to fit \(videoId) "
+                    + "(now \(totalSize()) bytes used)"
+            )
         }
 
         let destination = Self.fileURL(for: videoId)

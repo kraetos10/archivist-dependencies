@@ -469,10 +469,21 @@ public final class VLCVideoContentView: UIView, VLCPictureInPictureDrawable, VLC
 
                     // No host UI — the detail screen was dismissed before
                     // PiP started (the user closed the video while it was
-                    // playing and PiP took over). With no place to return
-                    // to, stop cleanly.
+                    // playing and PiP took over). When the app is active,
+                    // PiP-end means the user tapped restore; ask the app
+                    // to re-push the detail screen so playback has a
+                    // surface. The new screen adopts the running player
+                    // via `viewDidAppear`. If no callback is wired (e.g.
+                    // tests, or app-launch race) fall back to stopping
+                    // so we don't leak audio playback.
                     if UIApplication.shared.applicationState == .active {
-                        PlayerManager.shared.stop()
+                        if let videoId = PlayerManager.shared.currentVideoID,
+                           let restore = PlayerManager.shared.onPiPRestoreRequested {
+                            PlayerManager.shared.applyPendingCacheSwap()
+                            restore(videoId)
+                        } else {
+                            PlayerManager.shared.stop()
+                        }
                     } else {
                         PlayerManager.shared.applyPendingCacheSwap()
                     }

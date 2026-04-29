@@ -216,8 +216,9 @@ public final class CarPlayCoordinator {
 
         PlayerManager.shared.load(
             url: url,
-            startPosition: video.player?.position,
-            videoId: videoId
+            startPosition: video.resumePositionSeconds,
+            videoId: videoId,
+            expectedSize: video.mediaSize.map { Int64($0) }
         )
         PlayerManager.shared.currentVideoID = videoId
         PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(

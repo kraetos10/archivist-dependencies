@@ -65,6 +65,20 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         return min(max(progress / 100, 0), 1)
     }
 
+    /// Best-known resume position in seconds. Prefers the server's
+    /// `player.position` (set by `setProgress`), but falls back to
+    /// `progress%` × `duration` so videos that only carry a percentage
+    /// still resume correctly.
+    public var resumePositionSeconds: Double? {
+        if let position = player?.position, position > 0 {
+            return position
+        }
+        guard let progress = player?.progress, progress > 0,
+              let duration = player?.duration, duration > 0 else { return nil }
+        let derived = (progress / 100) * Double(duration)
+        return derived > 0 ? derived : nil
+    }
+
     public var publishedDate: Date? {
         guard let published else { return nil }
         if let date = isoFormatter.date(from: published) {
