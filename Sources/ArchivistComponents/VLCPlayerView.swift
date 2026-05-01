@@ -204,16 +204,11 @@ public struct VLCPlayerView: View {
                 }
             )
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 20)
-        .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.55)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 16)
     }
 
     @ViewBuilder
@@ -243,8 +238,10 @@ public struct VLCPlayerView: View {
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1)
-                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.55), in: Capsule())
         }
     }
 }
