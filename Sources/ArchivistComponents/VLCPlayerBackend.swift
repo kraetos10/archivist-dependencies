@@ -1,5 +1,6 @@
 #if !os(watchOS)
 import Foundation
+import Sharing
 import UIKit
 import VLCKit
 
@@ -68,7 +69,8 @@ public final class VLCPlayerBackend: NSObject, PlayerBackend, @unchecked Sendabl
         url: URL,
         startPosition: Double?
     ) {
-        let url = Self.preferHTTP(for: url)
+        @Shared(.appStorage("forceHTTPPlayback")) var forceHTTP = true
+        let url = forceHTTP ? Self.preferHTTP(for: url) : url
         let resumeSec = max(Int((startPosition ?? 0)), 0)
         reachedEndOfMedia = false
         isBuffering = true

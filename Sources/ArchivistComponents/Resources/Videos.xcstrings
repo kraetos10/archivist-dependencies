@@ -914,6 +914,28 @@
         }
       }
     },
+    "video.forceHTTP": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force HTTP for Playback"
+          }
+        }
+      }
+    },
+    "video.forceHTTP.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VLC's TLS implementation can fail to handshake against self-signed or unusual certificates. Disabling HTTPS for the playback fetch trades transport encryption for far better compatibility — turn this off only if your server requires HTTPS."
+          }
+        }
+      }
+    },
     "video.deviceDownloads": {
       "extractionState": "manual",
       "localizations": {

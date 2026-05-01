@@ -124,8 +124,14 @@ public struct iPhoneSettingsScreen: View {
                         title: String.localised("video.cache.row", table: .videos)
                     )
                 }
+                Toggle(
+                    String.localised("video.forceHTTP", table: .videos),
+                    isOn: $store.forceHTTPPlayback
+                )
             } header: {
                 Text(String.localised("video.playback", table: .videos))
+            } footer: {
+                Text(String.localised("video.forceHTTP.footer", table: .videos))
             }
 
             if let supportURL = store.supportURL {

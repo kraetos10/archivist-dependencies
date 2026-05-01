@@ -413,16 +413,7 @@ extension VideoDetailReducer {
         let saveEffect = saveProgressEffect(state: state)
         @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
         guard autoPlayEnabled else {
-            state.isPlaying = false
-            state.localWatchProgress = 1.0
-            state.watchedOverride = true
-            return .merge(
-                saveEffect,
-                .cancel(id: CancelID.playback),
-                .run { _ in
-                    await MainActor.run { PlayerManager.shared.stop() }
-                }
-            )
+            return .merge(saveEffect, .send(.autoPlayExhausted))
         }
         let config = state.serverConfig
         let currentVideoId = state.video.videoId
@@ -454,14 +445,14 @@ extension VideoDetailReducer {
             }
 
             // 4. Fetch similar from server as last resort
-            do {
-                let similar = try await videoService.getSimilar(config: config, videoId: currentVideoId)
-                if let first = similar.first {
-                    await send(.autoPlayVideo(first))
-                }
-            } catch {
-                // Nothing to play
+            if let similar = try? await videoService.getSimilar(config: config, videoId: currentVideoId),
+               let first = similar.first {
+                await send(.autoPlayVideo(first))
+                return
             }
+
+            // No source had a follow-up — drop back to the thumbnail.
+            await send(.autoPlayExhausted)
         })
     }
 
