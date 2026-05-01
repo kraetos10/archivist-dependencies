@@ -436,6 +436,11 @@ public final class VLCVideoContentView: UIView, VLCPictureInPictureDrawable, VLC
                 Task { @MainActor in
                     if isStarted {
                         PlayerManager.shared.isInPiP = true
+                        // PiP enter often fires intermediate VLC state
+                        // changes that are deduped before they reach the
+                        // manager — re-read the backend so the in-app
+                        // controls match what's playing in the PiP window.
+                        PlayerManager.shared.syncPlaybackState()
                         return
                     }
                     PlayerManager.shared.isInPiP = false
@@ -459,11 +464,18 @@ public final class VLCVideoContentView: UIView, VLCPictureInPictureDrawable, VLC
                         .window != nil
                     if stillHosted {
                         PlayerManager.shared.applyPendingCacheSwap()
+                        #if !os(tvOS)
                         // Nudge the rendering pipeline so VLC re-binds the
                         // inline drawable layer (PiP moved the display
                         // layer to its own overlay; coming back, the
                         // inline view is otherwise often left black).
                         PlayerManager.shared.refreshVideoOutput()
+                        #endif
+                        // Sync state after the refresh — covers the
+                        // paused-in-PiP case where `refreshVideoOutput`
+                        // is a no-op and otherwise wouldn't trigger a
+                        // state callback.
+                        PlayerManager.shared.syncPlaybackState()
                         return
                     }
 

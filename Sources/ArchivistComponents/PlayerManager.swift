@@ -251,8 +251,27 @@ public final class PlayerManager: NSObject {
         player.pause()
         player.play()
         player.time = resume
+        // VLC's `.paused` → `.playing` state callbacks from this nudge
+        // can occasionally arrive deduped or land in the wrong order, so
+        // re-read the settled state once libvlc has finished churning.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            self.syncPlaybackState()
+        }
     }
     #endif
+
+    /// Pull `isPlaying` / `isBuffering` directly from the active backend.
+    /// State callbacks normally keep these in sync, but events fired
+    /// during a PiP enter/exit transition can land while the player view
+    /// is between hosts and end up missed — call this after a PiP
+    /// transition (or any other event that bypasses the state callback)
+    /// so the in-app controls reflect what VLC is actually doing.
+    public func syncPlaybackState() {
+        guard let backend else { return }
+        isPlaying = backend.isPlaying
+        isBuffering = backend.isBuffering
+    }
 
     public func playbackEndEvents() -> AsyncStream<Void> {
         backend?.playbackEndEvents() ?? AsyncStream { $0.finish() }
@@ -534,6 +553,7 @@ public final class PlayerManager: NSObject {
         }
         controller.startPictureInPicture()
         isInPiP = true
+        syncPlaybackState()
         return true
     }
 
@@ -544,6 +564,7 @@ public final class PlayerManager: NSObject {
         }
         isInPiP = false
         activePiPDelegate = nil
+        syncPlaybackState()
     }
     #endif
 

@@ -24,28 +24,38 @@ public struct VLCPlayerView: View {
     }
 
     private var playerContent: some View {
-        ZStack {
+        // True only on the first load, before VLC has produced a single
+        // tick. We treat this as "stream is being resolved" — full dim
+        // and no controls. After we've seen any time, we're in
+        // mid-playback territory: any subsequent buffering is a rebuffer,
+        // so we keep the controls live and just overlay a spinner.
+        let isInitialLoad = playerManager.isBuffering && playerManager.currentTime == 0
+
+        return ZStack {
             VLCVideoRenderView()
                 .allowsHitTesting(false)
 
-            // While the stream is loading (buffering and not yet playing),
-            // show a spinner only — no controls. Controls become available
-            // once VLC reports it's actually playing.
-            if playerManager.isBuffering && !playerManager.isPlaying {
-                Color.black.opacity(0.4)
-                    .allowsHitTesting(false)
+            if !isInitialLoad {
+                if playerManager.vlcControlsVisible {
+                    controlsOverlay
+                } else {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            playerManager.showVLCControls()
+                        }
+                }
+            }
+
+            if playerManager.isBuffering {
+                if isInitialLoad {
+                    Color.black.opacity(0.4)
+                        .allowsHitTesting(false)
+                }
                 ProgressView()
                     .controlSize(.large)
                     .tint(.white)
                     .allowsHitTesting(false)
-            } else if playerManager.vlcControlsVisible {
-                controlsOverlay
-            } else {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        playerManager.showVLCControls()
-                    }
             }
         }
     }

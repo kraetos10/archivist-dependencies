@@ -104,6 +104,7 @@ public struct VideoDetailReducer {
         case downloadCompleted
         case downloadFailed(String)
         case autoPlayVideo(VideoResponse)
+        case autoPlayExhausted
         case cacheStatusChanged(Bool)
         case pipRestoreRequested(VideoResponse)
         case adoptInflightPlayback

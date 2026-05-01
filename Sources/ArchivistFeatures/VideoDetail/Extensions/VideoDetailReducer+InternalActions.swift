@@ -69,6 +69,8 @@ extension VideoDetailReducer {
             return handleLoadNextVideo(state: &state)
         case .autoPlayVideo(let video):
             return handleAutoPlayVideo(video, state: &state)
+        case .autoPlayExhausted:
+            return handleAutoPlayExhausted(state: &state)
         case .cacheStatusChanged(let isCached):
             state.isCached = isCached
             return .none
@@ -80,6 +82,18 @@ extension VideoDetailReducer {
         default:
             return .none
         }
+    }
+
+    private func handleAutoPlayExhausted(state: inout State) -> Effect<Action> {
+        state.isPlaying = false
+        state.localWatchProgress = 1.0
+        state.watchedOverride = true
+        return .merge(
+            .cancel(id: CancelID.playback),
+            .run { _ in
+                await MainActor.run { PlayerManager.shared.stop() }
+            }
+        )
     }
 
     private func handleAutoPlayVideo(
