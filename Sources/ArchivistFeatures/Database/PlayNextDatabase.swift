@@ -9,6 +9,11 @@ public struct PlayNextDatabase: Sendable {
     var removeFromQueue: @Sendable (Int) async throws -> Void
     public var clearQueue: @Sendable () async throws -> Void
     var popNext: @Sendable () async throws -> PlayNextItem?
+    /// Returns the next queue item without removing it. Used by the
+    /// autoplay countdown — the row only gets popped if the countdown
+    /// actually fires the autoplay (or the user taps "Play now"). If
+    /// they cancel the countdown, the item stays queued for next time.
+    var peekNext: @Sendable () async throws -> PlayNextItem?
 }
 
 extension PlayNextDatabase: DependencyKey {
@@ -52,6 +57,15 @@ extension PlayNextDatabase: DependencyKey {
                     let id = first.id
                     try PlayNextItem.find(id).delete().execute(db)
                     return first
+                }
+            },
+            peekNext: {
+                try database.read { db in
+                    try PlayNextItem
+                        .order(by: \.id)
+                        .limit(1)
+                        .fetchAll(db)
+                        .first
                 }
             }
         )

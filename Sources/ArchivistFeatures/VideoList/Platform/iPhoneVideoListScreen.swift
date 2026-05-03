@@ -103,15 +103,17 @@ public struct iPhoneVideoListScreen: View {
                 // Trigger pagination when the user scrolls to the end of the
                 // last section — each carousel only renders a capped slice so
                 // we can't rely on per-card onAppear like the old flat list.
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear { send(.lastItemAppeared) }
-
-                if store.isLoadingMore {
-                    ProgressView()
-                        .tint(Color.Progress.tint)
-                        .padding()
+                // Fixed-height container so toggling the spinner doesn't
+                // reflow the LazyVStack and remount the sentinel mid-scroll.
+                ZStack {
+                    if store.isLoadingMore {
+                        ProgressView().tint(Color.Progress.tint)
+                    }
                 }
+                .frame(height: 44)
+                .frame(maxWidth: .infinity)
+                .id("paginationSentinel")
+                .onAppear { send(.lastItemAppeared) }
             }
             .padding(.vertical, 8)
         }

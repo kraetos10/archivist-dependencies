@@ -48,7 +48,7 @@ public struct SimilarVideoCard: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        .frame(width: 180)
+        .frame(width: 200)
         .background(Color.Surface.highlight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)

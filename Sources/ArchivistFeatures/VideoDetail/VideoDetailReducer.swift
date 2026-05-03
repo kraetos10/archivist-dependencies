@@ -5,9 +5,31 @@ import Foundation
 internal import SQLiteData
 import StructuredQueries
 
+public struct AutoPlayCountdown: Equatable, Sendable {
+    public let nextVideo: VideoResponse
+    /// Set to true if the resolved next video came from the play-next
+    /// queue. Used to know whether the queue row should be popped (vs
+    /// "up next" / similar, which aren't backed by the queue table).
+    public let consumesPlayNextQueue: Bool
+    public var remainingSeconds: Int
+
+    public init(
+        nextVideo: VideoResponse,
+        consumesPlayNextQueue: Bool,
+        remainingSeconds: Int
+    ) {
+        self.nextVideo = nextVideo
+        self.consumesPlayNextQueue = consumesPlayNextQueue
+        self.remainingSeconds = remainingSeconds
+    }
+}
+
 @Reducer
 public struct VideoDetailReducer {
     public init() {}
+    /// Seconds the auto-advance overlay counts down before firing.
+    static let autoPlayCountdownSeconds = 5
+
     @ObservableState
     public struct State: Equatable, Sendable, Identifiable {
         public var id: String { video.videoId }
@@ -35,6 +57,7 @@ public struct VideoDetailReducer {
         var currentCommentIndex = 0
         var watchedOverride: Bool?
         var localWatchProgress: Double?
+        var autoPlayCountdown: AutoPlayCountdown?
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
         @Presents var playlistPicker: PlaylistPickerReducer.State?
@@ -81,6 +104,7 @@ public struct VideoDetailReducer {
             currentCommentIndex = 0
             watchedOverride = nil
             playlistPicker = nil
+            autoPlayCountdown = nil
         }
     }
 
@@ -105,6 +129,8 @@ public struct VideoDetailReducer {
         case downloadFailed(String)
         case autoPlayVideo(VideoResponse)
         case autoPlayExhausted
+        case autoPlayCountdownStarted(VideoResponse, consumesPlayNextQueue: Bool)
+        case autoPlayCountdownTick
         case cacheStatusChanged(Bool)
         case pipRestoreRequested(VideoResponse)
         case adoptInflightPlayback
@@ -139,10 +165,15 @@ public struct VideoDetailReducer {
             case nextVideoRequested
             case previousVideoRequested
             case videoChanged
+            case autoPlayCountdownPlayNowTapped
+            case autoPlayCountdownCancelTapped
         }
     }
 
-    enum CancelID { case playback }
+    enum CancelID {
+        case playback
+        case autoPlayCountdown
+    }
 
     @Dependency(\.dismiss) var dismiss
     @Dependency(\.videoService) var videoService

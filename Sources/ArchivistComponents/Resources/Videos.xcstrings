@@ -1,6 +1,28 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "video.autoPlayCountdown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playing in %d…"
+          }
+        }
+      }
+    },
+    "video.autoPlayPlayNow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play Now"
+          }
+        }
+      }
+    },
     "video.playNext": {
       "extractionState": "manual",
       "localizations": {

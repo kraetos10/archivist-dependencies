@@ -23,6 +23,13 @@ public protocol PlayerBackend: AnyObject {
     /// subsequent seeks read from disk.
     func swapToLocalFile(_ fileURL: URL)
 
+    /// Re-bind the rendering pipeline to its current host view. Called
+    /// after device rotation / foreground transitions where the layer's
+    /// drawable can stop receiving frames even though the host view is
+    /// still visible (audio plays, picture goes black). Default is a
+    /// no-op for backends that don't need the nudge.
+    func refreshDrawable()
+
     func playbackEndEvents() -> AsyncStream<Void>
 
     var onTimeUpdate: ((Double) -> Void)? { get set }
@@ -33,6 +40,11 @@ public protocol PlayerBackend: AnyObject {
 public extension PlayerBackend {
     func swapToLocalFile(_ fileURL: URL) {
         // Default no-op — backends without progressive swap ignore the call.
+    }
+
+    func refreshDrawable() {
+        // Default no-op — backends with a stable drawable binding don't
+        // need to do anything on rotation / foreground transitions.
     }
 }
 #endif

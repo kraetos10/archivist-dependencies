@@ -11,6 +11,16 @@ public struct DisplayedVideo: Identifiable, Sendable {
     public var id: String { video.videoId }
 }
 
+/// Pre-sorted slice of videos for one home page carousel. Cached on the
+/// reducer's state so SwiftUI's body re-runs (image loads, scroll-driven
+/// state mutations, `@FetchAll` updates) don't re-sort the full list on
+/// every frame.
+public struct HomeSectionVideos: Equatable, Sendable, Identifiable {
+    public let filter: WatchFilter
+    public let videos: [VideoResponse]
+    public var id: WatchFilter { filter }
+}
+
 public enum VideoListItem: Identifiable, Sendable, Equatable {
     case video(VideoResponse)
     case download(DownloadResponse)
@@ -82,6 +92,10 @@ public struct VideoListReducer {
             Set(completedDownloads.map(\.id))
         }
         var downloadedVideos: IdentifiedArrayOf<VideoResponse> = []
+        /// Sorted+capped slice for each home carousel. Recomputed only by
+        /// `recomputeHomeSections()` on data-changing actions; reading it
+        /// from the view costs an array index, not a sort.
+        var cachedHomeSections: [HomeSectionVideos] = []
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<VideoResponse> = []
         var isSearching = false
@@ -126,14 +140,32 @@ public struct VideoListReducer {
         /// for that filter's "View All" detail view (persisted via the
         /// same `videoListSortOrder_<filter>` app-storage key
         /// `FilteredVideoListReducer` reads).
+        ///
+        /// Reads from `cachedHomeSections` so the home view never sorts
+        /// during scroll — only the `isDownloaded` decoration runs (a
+        /// Set lookup per card).
         func items(for filter: WatchFilter) -> [DisplayedVideo] {
-            let raw = filteredVideos(for: filter)
-            let order = Self.savedSortOrder(for: filter)
-            let sorted = Self.sort(raw, by: order)
-            return sorted.map { video in
+            let cached = cachedHomeSections.first(where: { $0.filter == filter })?.videos ?? []
+            let downloadedIDs = downloadedVideoIDs
+            return cached.map { video in
                 DisplayedVideo(
                     video: video,
-                    isDownloaded: downloadedVideoIDs.contains(video.videoId)
+                    isDownloaded: downloadedIDs.contains(video.videoId)
+                )
+            }
+        }
+
+        /// Recompute the cached home sections from the current `videos`
+        /// + per-filter sort order. Call after any mutation to `videos`
+        /// — pagination append, single-video refresh, server delete, etc.
+        mutating func recomputeHomeSections() {
+            cachedHomeSections = Self.homeSectionOrder.map { filter in
+                let raw = filteredVideos(for: filter)
+                let order = Self.savedSortOrder(for: filter)
+                let sorted = Self.sort(raw, by: order)
+                return HomeSectionVideos(
+                    filter: filter,
+                    videos: Array(sorted.prefix(Self.homeSectionItemCap))
                 )
             }
         }
@@ -220,6 +252,11 @@ public struct VideoListReducer {
             .watched,
             .all
         ]
+
+        /// Per-section cap held by the home cache. Larger than the carousel's
+        /// visible cap so the cache stays valid even if the visible cap is
+        /// bumped, while still bounding the sort cost.
+        static let homeSectionItemCap = 20
     }
 
     public enum AlertAction: Equatable, Sendable {

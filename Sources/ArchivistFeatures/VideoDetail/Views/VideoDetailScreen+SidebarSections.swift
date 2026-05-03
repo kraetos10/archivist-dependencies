@@ -85,7 +85,7 @@ extension VideoDetailScreen {
     }
 
     func playNextThumbnail(_ item: PlayNextItem) -> some View {
-        ZStack(alignment: .bottomTrailing) {
+        Group {
             if let thumbPath = item.thumbUrl,
                let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
                 AsyncImage(url: thumbURL) { phase in
@@ -98,18 +98,6 @@ extension VideoDetailScreen {
                 }
             } else {
                 Rectangle().fill(Color.Brand.secondary.opacity(0.3))
-            }
-
-            if let duration = item.duration {
-                Text(duration)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.7))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .padding(6)
             }
         }
     }

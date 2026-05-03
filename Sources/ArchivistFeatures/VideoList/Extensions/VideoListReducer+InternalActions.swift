@@ -15,6 +15,7 @@ extension VideoListReducer {
             return handleVideosFailed(error, state: &state)
         case .contextDeleteResult(.success(let videoId)):
             state.videos.remove(id: videoId)
+            state.recomputeHomeSections()
             return .none
         case .contextDeleteResult(.failure(let error)):
             return handleContextDeleteFailed(error, state: &state)
@@ -35,6 +36,7 @@ extension VideoListReducer {
             return .none
         case .videoRefreshed(let video):
             state.videos.updateOrAppend(video)
+            state.recomputeHomeSections()
             return .none
         case .downloadedVideosLoaded(let videos):
             state.downloadedVideos = IdentifiedArrayOf(uniqueElements: videos)
@@ -65,6 +67,7 @@ extension VideoListReducer {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
+        state.recomputeHomeSections()
         // downloadedVideoIDs is reactive via @FetchAll
 
         // Cache video data + thumbnails for Top Shelf

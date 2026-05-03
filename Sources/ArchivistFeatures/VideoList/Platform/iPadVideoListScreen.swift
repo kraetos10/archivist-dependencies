@@ -109,15 +109,19 @@ public struct iPadVideoListScreen: View {
                     }
                 }
 
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear { send(.lastItemAppeared) }
-
-                if store.isLoadingMore {
-                    ProgressView()
-                        .tint(Color.Progress.tint)
-                        .padding()
+                // Fixed-height pagination footer so toggling the spinner
+                // doesn't reflow the LazyVStack and remount the sentinel
+                // mid-scroll (which produced choppy scrolling near the
+                // bottom while the next page was loading).
+                ZStack {
+                    if store.isLoadingMore {
+                        ProgressView().tint(Color.Progress.tint)
+                    }
                 }
+                .frame(height: 44)
+                .frame(maxWidth: .infinity)
+                .id("paginationSentinel")
+                .onAppear { send(.lastItemAppeared) }
             }
             .padding(.vertical, 8)
         }

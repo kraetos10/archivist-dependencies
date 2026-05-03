@@ -244,11 +244,14 @@ public final class PlayerManager: NSObject {
         }
     }
 
-    /// VLCUI-era no-op stub kept for callers. The new
-    /// `PlaybackServiceBackend` reparents libvlc's persistent
-    /// `_actualVideoOutputView` automatically on `videoOutputView =`,
-    /// so we don't need to manually re-bind the drawable.
-    func refreshVideoOutput() {}
+    /// Forward to the active backend's `refreshDrawable`. Wired to the
+    /// rotation + foreground notifications above — VLC's rendering layer
+    /// can lose its drawable binding when the host bounds change (audio
+    /// keeps playing, picture goes black). The backend's implementation
+    /// nudges libvlc into rebinding to the current host.
+    func refreshVideoOutput() {
+        backend?.refreshDrawable()
+    }
     #endif
 
     /// Pull `isPlaying` / `isBuffering` directly from the active backend.

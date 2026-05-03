@@ -52,7 +52,35 @@ extension VideoDetailReducer {
             state.showAllComments = false
             state.currentCommentIndex = 0
             return .none
+        case .autoPlayCountdownPlayNowTapped:
+            return handleAutoPlayCountdownPlayNow(state: &state)
+        case .autoPlayCountdownCancelTapped:
+            return handleAutoPlayCountdownCancel(state: &state)
         }
+    }
+
+    func handleAutoPlayCountdownPlayNow(state: inout State) -> Effect<Action> {
+        guard let countdown = state.autoPlayCountdown else { return .none }
+        let next = countdown.nextVideo
+        let consumes = countdown.consumesPlayNextQueue
+        state.autoPlayCountdown = nil
+        return .merge(
+            .cancel(id: CancelID.autoPlayCountdown),
+            .run { [playNextDatabase] send in
+                if consumes {
+                    _ = try? await playNextDatabase.popNext()
+                }
+                await send(.autoPlayVideo(next))
+            }
+        )
+    }
+
+    func handleAutoPlayCountdownCancel(state: inout State) -> Effect<Action> {
+        state.autoPlayCountdown = nil
+        return .merge(
+            .cancel(id: CancelID.autoPlayCountdown),
+            .send(.autoPlayExhausted)
+        )
     }
 
     // MARK: - Private Handlers
@@ -422,10 +450,13 @@ extension VideoDetailReducer {
         let similarVideos = state.similarVideos
         return .merge(saveEffect, .run { [playNextDatabase, videoService] send in
             // 1. Play Next queue (user-curated, highest priority)
-            if let nextItem = try? await playNextDatabase.popNext() {
+            // Peek (don't pop) so the row stays queued if the user
+            // cancels the countdown — we only consume it when the
+            // autoplay actually fires.
+            if let nextItem = try? await playNextDatabase.peekNext() {
                 do {
                     let video = try await videoService.getVideo(config: config, id: nextItem.videoId)
-                    await send(.autoPlayVideo(video))
+                    await send(.autoPlayCountdownStarted(video, consumesPlayNextQueue: true))
                     return
                 } catch {
                     // Video not found, try next source
@@ -434,20 +465,20 @@ extension VideoDetailReducer {
 
             // 2. Up Next (contextual queue from video list / playlist)
             if shouldAutoPlayNext, let firstNext = nextVideos.first {
-                await send(.autoPlayVideo(firstNext))
+                await send(.autoPlayCountdownStarted(firstNext, consumesPlayNextQueue: false))
                 return
             }
 
             // 3. Similar videos (pre-loaded)
             if let firstSimilar = similarVideos.first {
-                await send(.autoPlayVideo(firstSimilar))
+                await send(.autoPlayCountdownStarted(firstSimilar, consumesPlayNextQueue: false))
                 return
             }
 
             // 4. Fetch similar from server as last resort
             if let similar = try? await videoService.getSimilar(config: config, videoId: currentVideoId),
                let first = similar.first {
-                await send(.autoPlayVideo(first))
+                await send(.autoPlayCountdownStarted(first, consumesPlayNextQueue: false))
                 return
             }
 

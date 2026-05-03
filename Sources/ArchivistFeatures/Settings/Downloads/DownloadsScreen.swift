@@ -54,9 +54,9 @@ public struct DownloadsScreen: View {
                         get: { store.sortOrder },
                         set: { send(.sortOrderChanged($0)) }
                     )) {
-                        Text(String.localised("generic.recentlyAdded", table: .generic))
+                        Text(String.localised("generic.descending", table: .generic))
                             .tag(DownloadSortOrder.newestFirst)
-                        Text(String.localised("generic.oldestAdded", table: .generic))
+                        Text(String.localised("generic.ascending", table: .generic))
                             .tag(DownloadSortOrder.oldestFirst)
                     } label: {
                         EmptyView()

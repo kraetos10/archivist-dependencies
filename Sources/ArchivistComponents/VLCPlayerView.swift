@@ -95,6 +95,17 @@ public struct VLCPlayerView: View {
                         playerManager.scheduleHideVLCControls()
                     }
 
+                    if playerManager.isVLCFullscreen {
+                        roundedControlButton(
+                            systemImage: "rotate.right",
+                            iconSize: 18,
+                            padding: 12
+                        ) {
+                            OrientationLock.shared.rotateFullscreen()
+                            playerManager.scheduleHideVLCControls()
+                        }
+                    }
+
                     roundedControlButton(
                         systemImage: playerManager.isVLCFullscreen
                             ? "arrow.down.right.and.arrow.up.left"

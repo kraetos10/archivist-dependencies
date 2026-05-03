@@ -109,6 +109,19 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         service.playbackPosition = Float(min(max(seconds / length, 0), 1))
     }
 
+    /// Re-assign the video output view to the same host. libvlc's
+    /// drawable binding is occasionally stuck on a stale layer after a
+    /// rotation — audio keeps flowing while the picture goes black. Setting
+    /// `videoOutputView` again forces `PlaybackService` to reparent its
+    /// `_actualVideoOutputView` and rebind the rendering layer to the
+    /// current host bounds.
+    public func refreshDrawable() {
+        guard service.videoOutputView != nil else { return }
+        let host = playerView
+        service.videoOutputView = nil
+        service.videoOutputView = host
+    }
+
     public func swapToLocalFile(_ fileURL: URL) {
         guard fileURL.isFileURL else { return }
         let resumeSec = max(currentTime, 0)
