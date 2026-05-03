@@ -43,6 +43,21 @@ public struct FilteredVideoListScreen: View {
                                 serverConfig: store.serverConfig,
                                 isDownloaded: item.isDownloaded
                             )
+                            .contextMenu {
+                                VideoContextMenu(
+                                    youtubeURL: item.video.youtubeURL,
+                                    isDownloaded: item.isDownloaded,
+                                    isWatched: item.video.isWatched,
+                                    onPlayNext: { send(.playNextTapped(item.video)) },
+                                    onAddToPlaylist: { send(.addToPlaylistTapped(item.video)) },
+                                    onDownloadToDevice: { send(.downloadToDeviceTapped(item.video)) },
+                                    onDeleteFromDevice: item.isDownloaded
+                                        ? { send(.deleteFromDeviceTapped(item.video)) }
+                                        : nil,
+                                    onToggleWatched: { send(.markAsWatchedTapped(item.video)) },
+                                    onDeleteFromServer: { send(.deleteFromServerTapped(item.video)) }
+                                )
+                            }
                             .pressable { send(.videoTapped(item.video)) }
                             .onAppear {
                                 if item.video.id == store.videos.last?.id {

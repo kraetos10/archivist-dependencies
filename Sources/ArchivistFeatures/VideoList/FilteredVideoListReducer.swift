@@ -87,6 +87,16 @@ public struct FilteredVideoListReducer {
 
         public enum Delegate: Equatable, Sendable {
             case videoSelected(VideoResponse)
+            // Forwarded to the parent `VideoListReducer` so the existing
+            // context-menu handlers (download, watched, playlist, etc.)
+            // run with their full set of dependencies, instead of
+            // duplicating that surface here.
+            case playNextRequested(VideoResponse)
+            case addToPlaylistRequested(VideoResponse)
+            case downloadToDeviceRequested(VideoResponse)
+            case deleteFromDeviceRequested(VideoResponse)
+            case markAsWatchedRequested(VideoResponse)
+            case deleteFromServerRequested(VideoResponse)
         }
 
         @CasePathable
@@ -96,6 +106,12 @@ public struct FilteredVideoListReducer {
             case lastItemAppeared
             case videoTapped(VideoResponse)
             case sortOrderChanged(VideoSortOrder)
+            case playNextTapped(VideoResponse)
+            case addToPlaylistTapped(VideoResponse)
+            case downloadToDeviceTapped(VideoResponse)
+            case deleteFromDeviceTapped(VideoResponse)
+            case markAsWatchedTapped(VideoResponse)
+            case deleteFromServerTapped(VideoResponse)
         }
     }
 

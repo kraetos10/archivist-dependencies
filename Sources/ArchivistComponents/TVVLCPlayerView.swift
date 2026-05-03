@@ -178,7 +178,6 @@ private final class TVVLCPlayerHostView: UIView {
             playerView.leadingAnchor.constraint(equalTo: leadingAnchor),
             playerView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
-        playerView.activatePlayback()
     }
 
     func detachPlayerView() {

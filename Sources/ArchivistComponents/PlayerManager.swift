@@ -13,6 +13,9 @@ import Sharing
 #if canImport(VLCKit) && !os(tvOS) && !os(watchOS)
 import VLCKit
 #endif
+#if os(iOS) || os(tvOS)
+import VLCPlayerCore
+#endif
 
 /// Identifies which on-screen container should host the persistent player
 /// surface. Used to prevent the mini and expanded video detail from racing
@@ -64,29 +67,22 @@ public final class PlayerManager: NSObject {
     public var isVLCFullscreen = false
     public var activePiPDelegate: AnyObject?
 
-    public var supportsPiP: Bool {
-        backend is VLCPlayerBackend
-    }
-
-    public var isUsingFallbackPlayer: Bool {
-        backend is VLCPlayerBackend
-    }
-
-    public var isUsingVLC: Bool {
-        backend is VLCPlayerBackend
-    }
+    public var supportsPiP: Bool { backend is PlaybackServiceBackend }
+    public var isUsingFallbackPlayer: Bool { backend is PlaybackServiceBackend }
+    public var isUsingVLC: Bool { backend is PlaybackServiceBackend }
 
     #if !os(tvOS)
     @ObservationIgnored private let nowPlayingService = NowPlayingService()
     #endif
 
     #if canImport(VLCKit) && !os(watchOS)
-    /// Persistent VLCUI player view. Created on first VLC `load()` and
-    /// reused across containers. Reparenting the same `UIVLCVideoPlayerView`
-    /// keeps the underlying `VLCMediaPlayer` alive, so transitions between
-    /// the mini-player and the full video detail don't restart playback.
-    public var persistentVLCPlayerView: UIVLCVideoPlayerView? {
-        (backend as? VLCPlayerBackend)?.playerView
+    /// Persistent VLC player surface owned by `PlaybackServiceBackend`.
+    /// Created on first `load()` and reused across containers — reparenting
+    /// the same `UIView` keeps libvlc's media player alive, so transitions
+    /// between the mini-player and the full video detail don't restart
+    /// playback.
+    public var persistentVLCPlayerView: UIView? {
+        (backend as? PlaybackServiceBackend)?.playerView
     }
     #endif
 
@@ -140,6 +136,15 @@ public final class PlayerManager: NSObject {
     /// VideoDetail screen back onto the navigation stack so the player
     /// has somewhere to surface. Receives the currently-playing videoId.
     public var onPiPRestoreRequested: ((String) -> Void)?
+
+    /// Wall-clock timestamp of the last PiP-restore-driven detail-screen
+    /// remount. Used to suppress immediate re-restores: when a user
+    /// dismisses a freshly-restored detail screen, the dismiss handler
+    /// kicks PiP again, which can race into PiP-end and re-fire restore,
+    /// looping the screen open. Cooldown breaks that cycle while leaving
+    /// normal "PiP for hours, restore later" untouched.
+    private var lastPiPRestoreAt: Date?
+    private let pipRestoreCooldown: TimeInterval = 3.0
 
     public var currentMetadata: NowPlayingMetadata? {
         didSet {
@@ -239,26 +244,11 @@ public final class PlayerManager: NSObject {
         }
     }
 
-    /// Pause + play + restore-time on the active VLC backend so libvlc
-    /// re-evaluates its drawable. Cheap no-op for AVPlayer / paused VLC.
-    func refreshVideoOutput() {
-        guard let vlcBackend = backend as? VLCPlayerBackend,
-              let player = vlcBackend.proxy.mediaPlayer,
-              player.isPlaying else {
-            return
-        }
-        let resume = player.time
-        player.pause()
-        player.play()
-        player.time = resume
-        // VLC's `.paused` → `.playing` state callbacks from this nudge
-        // can occasionally arrive deduped or land in the wrong order, so
-        // re-read the settled state once libvlc has finished churning.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            self.syncPlaybackState()
-        }
-    }
+    /// VLCUI-era no-op stub kept for callers. The new
+    /// `PlaybackServiceBackend` reparents libvlc's persistent
+    /// `_actualVideoOutputView` automatically on `videoOutputView =`,
+    /// so we don't need to manually re-bind the drawable.
+    func refreshVideoOutput() {}
     #endif
 
     /// Pull `isPlaying` / `isBuffering` directly from the active backend.
@@ -275,6 +265,23 @@ public final class PlayerManager: NSObject {
 
     public func playbackEndEvents() -> AsyncStream<Void> {
         backend?.playbackEndEvents() ?? AsyncStream { $0.finish() }
+    }
+
+    /// True when a PiP-end event should be allowed to drive a fresh
+    /// detail-screen remount via `onPiPRestoreRequested`. Returns false
+    /// during the cooldown window after a previous restore so a
+    /// dismiss-initiated PiP that races into PiP-end can't loop the
+    /// screen back open.
+    public func shouldRestoreFromPiPEnd() -> Bool {
+        guard let last = lastPiPRestoreAt else { return true }
+        return Date().timeIntervalSince(last) > pipRestoreCooldown
+    }
+
+    /// Stamp the cooldown so subsequent PiP-end events suppress restore
+    /// until enough time has passed. Call from the restore callsite right
+    /// before invoking the registered handler.
+    public func recordPiPRestoreFired() {
+        lastPiPRestoreAt = Date()
     }
 
     // MARK: - Playback Control
@@ -322,8 +329,7 @@ public final class PlayerManager: NSObject {
             playingFromCache = true
         }
 
-        let vlcBackend = VLCPlayerBackend()
-        let newBackend: any PlayerBackend = vlcBackend
+        let newBackend: any PlayerBackend = PlaybackServiceBackend()
         setupBackendCallbacks(newBackend)
         // Assign `backend` BEFORE `load` so the seeded resume position
         // (and any state callbacks fired synchronously inside `load`)
@@ -534,33 +540,31 @@ public final class PlayerManager: NSObject {
     #endif
 
     #if !os(tvOS)
+    /// PiP entry points — wired to `PlaybackService.togglePictureInPicture`
+    /// which uses VLCKit's iOS-only `VLCPictureInPictureDrawable`. The
+    /// drawable is realized on the first play; if the host hasn't gotten
+    /// that far yet `togglePictureInPicture` is a no-op and we report
+    /// failure so the caller can fall back to the in-app mini player.
     public func startPiP() {
-        if let vlcBackend = backend as? VLCPlayerBackend {
-            vlcBackend.startPiP()
-            isInPiP = true
-        }
+        guard backend is PlaybackServiceBackend else { return }
+        PlaybackService.sharedInstance().togglePictureInPicture()
+        isInPiP = PlaybackService.sharedInstance().isPipEnabled
     }
 
-    /// Attempts to enter system PiP. Returns `true` if the platform actually
-    /// minted a PiP controller and we kicked it off — `false` if PiP isn't
-    /// available (Simulator, unsupported device, controller not yet ready),
-    /// in which case the caller should fall back to the in-app mini player.
     @discardableResult
     public func startPiPIfAvailable() -> Bool {
-        guard let vlcBackend = backend as? VLCPlayerBackend,
-              let controller = vlcBackend.playerView?.pipController else {
-            return false
-        }
-        controller.startPictureInPicture()
-        isInPiP = true
+        guard backend is PlaybackServiceBackend else { return false }
+        let svc = PlaybackService.sharedInstance()
+        svc.togglePictureInPicture()
+        isInPiP = svc.isPipEnabled
         syncPlaybackState()
-        return true
+        return svc.isPipEnabled
     }
 
     public func stopPiP(keepPlayer: Bool = false) {
         guard isInPiP else { return }
-        if let vlcBackend = backend as? VLCPlayerBackend {
-            vlcBackend.stopPiP()
+        if backend is PlaybackServiceBackend {
+            PlaybackService.sharedInstance().togglePictureInPicture()
         }
         isInPiP = false
         activePiPDelegate = nil
@@ -571,19 +575,11 @@ public final class PlayerManager: NSObject {
     // MARK: - Persistent Player Surface
 
     private func installPersistentSurface(for backend: any PlayerBackend) {
-        // Wipe any leftovers from a previous video.
         teardownPersistentSurface()
-        // VLCUI's `UIVLCVideoPlayerView` is now the persistent surface and
-        // is owned by `VLCPlayerBackend`. There's nothing extra to install
-        // here — the host views read it back via `persistentVLCPlayerView`.
         _ = backend
     }
 
     private func teardownPersistentSurface() {
-        // The backend owns the `UIVLCVideoPlayerView` lifecycle; it's torn
-        // down inside `VLCPlayerBackend.stop()` (called from
-        // `PlayerManager.stop()`). Detach from any current host so SwiftUI
-        // hosts don't keep a dangling subview around.
         #if canImport(VLCKit) && !os(watchOS)
         persistentVLCPlayerView?.removeFromSuperview()
         #endif

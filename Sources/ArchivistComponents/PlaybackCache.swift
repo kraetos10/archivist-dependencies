@@ -62,7 +62,7 @@ public final class PlaybackCache {
         5_000_000_000,
         10_000_000_000,
         20_000_000_000,
-        unlimitedCacheSizeBytes,
+        unlimitedCacheSizeBytes
     ]
 
     /// True when caching `expectedSize` bytes on top of what's already on

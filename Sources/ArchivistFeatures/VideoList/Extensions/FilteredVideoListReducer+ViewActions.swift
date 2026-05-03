@@ -18,6 +18,18 @@ extension FilteredVideoListReducer {
             return .send(.delegate(.videoSelected(video)))
         case .sortOrderChanged(let sort):
             return handleSortOrderChanged(sort, state: &state)
+        case .playNextTapped(let video):
+            return .send(.delegate(.playNextRequested(video)))
+        case .addToPlaylistTapped(let video):
+            return .send(.delegate(.addToPlaylistRequested(video)))
+        case .downloadToDeviceTapped(let video):
+            return .send(.delegate(.downloadToDeviceRequested(video)))
+        case .deleteFromDeviceTapped(let video):
+            return .send(.delegate(.deleteFromDeviceRequested(video)))
+        case .markAsWatchedTapped(let video):
+            return .send(.delegate(.markAsWatchedRequested(video)))
+        case .deleteFromServerTapped(let video):
+            return .send(.delegate(.deleteFromServerRequested(video)))
         }
     }
 

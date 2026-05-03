@@ -124,14 +124,8 @@ public struct iPhoneSettingsScreen: View {
                         title: String.localised("video.cache.row", table: .videos)
                     )
                 }
-                Toggle(
-                    String.localised("video.forceHTTP", table: .videos),
-                    isOn: $store.forceHTTPPlayback
-                )
             } header: {
                 Text(String.localised("video.playback", table: .videos))
-            } footer: {
-                Text(String.localised("video.forceHTTP.footer", table: .videos))
             }
 
             if let supportURL = store.supportURL {
@@ -163,6 +157,32 @@ public struct iPhoneSettingsScreen: View {
                 }
             } header: {
                 Text(String.localised("settings.about", table: .settings))
+            }
+
+            Section {
+                if VLCLogManager.shared.hasLogs {
+                    ShareLink(item: VLCLogManager.shared.logFileURL) {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                                .foregroundStyle(Color.Accent.dark)
+                            Text("Share VLC playback logs")
+                                .foregroundStyle(Color.Text.primary)
+                            Spacer()
+                        }
+                    }
+                }
+                Button(role: .destructive) {
+                    VLCLogManager.shared.clearLogs()
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("Clear VLC logs")
+                    }
+                }
+            } header: {
+                Text("Diagnostics")
+            } footer: {
+                Text("Logs capture libvlc output for the most recent playback. Export when reporting choppy or stalled video.")
             }
 
             Section {

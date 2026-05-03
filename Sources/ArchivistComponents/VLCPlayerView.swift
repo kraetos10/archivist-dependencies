@@ -36,14 +36,16 @@ public struct VLCPlayerView: View {
                 .allowsHitTesting(false)
 
             if !isInitialLoad {
+                // Single layer that handles both: double-tap on left/right
+                // halves skips ±15s; single tap toggles control visibility.
+                // SwiftUI's `onTapGesture(count:2)` listed first lets the
+                // gesture system resolve the double-tap before falling
+                // back to single-tap, so the show/hide doesn't eat the
+                // skip when the user double-taps.
+                tapAreas
+
                 if playerManager.vlcControlsVisible {
                     controlsOverlay
-                } else {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            playerManager.showVLCControls()
-                        }
                 }
             }
 
@@ -69,15 +71,18 @@ public struct VLCPlayerView: View {
         // would push the controls into the middle of the player.
         let fs = playerManager.isVLCFullscreen
         let safeArea = fs ? Self.windowSafeAreaInsets : .zero
+        // Dim layer behind the buttons. Single-tap hides the controls;
+        // double-tap on either half still triggers a ±15s skip so the
+        // gesture works regardless of whether controls are visible.
         return Color.black.opacity(0.35)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                playerManager.hideVLCControls()
-            }
-            .overlay(alignment: .topLeading) {
-                titleRow
-                    .padding(.leading, 16 + safeArea.left)
-                    .padding(.top, 16 + safeArea.top)
+            .overlay {
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        tapHalf(skip: { playerManager.skipBackward(15) })
+                        tapHalf(skip: { playerManager.skipForward(15) })
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                }
             }
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 12) {
@@ -103,10 +108,42 @@ public struct VLCPlayerView: View {
                 .padding(.trailing, 16 + safeArea.right)
                 .padding(.top, 16 + safeArea.top)
             }
-            .overlay { centerTransportControls }
             .overlay(alignment: .bottom) {
                 bottomInfoAndSeek
                     .padding(.bottom, safeArea.bottom)
+            }
+    }
+
+    // MARK: - Tap areas
+
+    /// Two equal-width halves overlaying the player. Each half handles
+    /// both gestures: double-tap skips ±15s; single tap toggles control
+    /// visibility. Both modifiers attached to the same view so SwiftUI's
+    /// gesture disambiguation routes a double-tap to the count:2 handler
+    /// without firing the single-tap first.
+    private var tapAreas: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                tapHalf(skip: { playerManager.skipBackward(15) })
+                tapHalf(skip: { playerManager.skipForward(15) })
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+
+    private func tapHalf(skip: @escaping () -> Void) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                skip()
+                HapticFeedback.light.play()
+            }
+            .onTapGesture {
+                if playerManager.vlcControlsVisible {
+                    playerManager.hideVLCControls()
+                } else {
+                    playerManager.showVLCControls()
+                }
             }
     }
 
@@ -119,40 +156,6 @@ public struct VLCPlayerView: View {
             .flatMap(\.windows)
             .first(where: \.isKeyWindow) else { return .zero }
         return window.safeAreaInsets
-    }
-
-    // MARK: - Center transport
-
-    private var centerTransportControls: some View {
-        HStack(spacing: 36) {
-            roundedControlButton(
-                systemImage: "backward.end.fill",
-                iconSize: 24,
-                padding: 18,
-                isEnabled: playerManager.canGoPrevious
-            ) {
-                playerManager.onPreviousRequested?()
-                playerManager.scheduleHideVLCControls()
-            }
-
-            roundedControlButton(
-                systemImage: playerManager.isPlaying ? "pause.fill" : "play.fill",
-                iconSize: 34,
-                padding: 22
-            ) {
-                playerManager.togglePlayPause()
-                playerManager.scheduleHideVLCControls()
-            }
-
-            roundedControlButton(
-                systemImage: "forward.end.fill",
-                iconSize: 24,
-                padding: 18
-            ) {
-                playerManager.onNextRequested?()
-                playerManager.scheduleHideVLCControls()
-            }
-        }
     }
 
     private func roundedControlButton(
@@ -179,16 +182,33 @@ public struct VLCPlayerView: View {
     // MARK: - Bottom info + seek bar
 
     private var bottomInfoAndSeek: some View {
+        // Title above, transport+seek+time below. Title was previously
+        // pinned top-leading where it collided with the PiP/fullscreen
+        // buttons on long channel/video names.
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(playerManager.currentTimeDisplay)
-                    .font(.subheadline.weight(.semibold))
+            titleRow
+            transportRow
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 16)
+    }
+
+    private var transportRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                playerManager.togglePlayPause()
+                playerManager.scheduleHideVLCControls()
+            } label: {
+                Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
-                Spacer()
-                Text(playerManager.durationDisplay)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
             SeekBar(
                 progress: playerManager.duration > 0
@@ -203,12 +223,12 @@ public struct VLCPlayerView: View {
                     playerManager.scheduleHideVLCControls()
                 }
             )
+
+            Text("\(playerManager.currentTimeDisplay) / \(playerManager.durationDisplay)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .monospacedDigit()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 16)
     }
 
     @ViewBuilder
@@ -239,17 +259,14 @@ public struct VLCPlayerView: View {
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.black.opacity(0.55), in: Capsule())
         }
     }
 }
 
 // MARK: - VLC Video Render View
 
-/// Hosts the persistent `UIVLCVideoPlayerView` owned by `VLCPlayerBackend`
-/// for a specific role. Only the host whose role matches
+/// Hosts the persistent video output `UIView` owned by
+/// `PlaybackServiceBackend` for a specific role. Only the host whose role matches
 /// `PlayerManager.activePlayerSurfaceRole` adopts the player view; the
 /// other shows nothing. Same anti-race pattern as
 /// `AVPlayerViewControllerWrapper`.
@@ -302,10 +319,11 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
     }
 }
 
-/// Container UIView that adopts the persistent `UIVLCVideoPlayerView`
+/// Container UIView that adopts the persistent video output view
 /// vended by `PlayerManager` as a pinned subview. Reparenting the
-/// VLCUI-owned view between hosts is what makes the mini player ↔ full
-/// transition seamless: the underlying `VLCMediaPlayer` is never recreated.
+/// `PlaybackServiceBackend`-owned view between hosts is what makes the
+/// mini ↔ full transition seamless: the underlying `VLCMediaPlayer`
+/// is never recreated.
 public final class VLCPlayerHostView: UIView {
     func adoptPlayerView() {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
@@ -325,11 +343,6 @@ public final class VLCPlayerHostView: UIView {
             playerView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
 
-        // Explicit kick so we don't depend solely on `didMoveToWindow`
-        // timing — `fullScreenCover`'s window setup is async and the
-        // notification can land after we expect playback to have begun.
-        // `activatePlayback` is idempotent.
-        playerView.activatePlayback()
     }
 
     func detachPlayerView() {

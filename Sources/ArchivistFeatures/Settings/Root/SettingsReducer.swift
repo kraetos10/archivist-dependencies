@@ -16,7 +16,6 @@ public struct SettingsReducer {
         var supportURL: URL?
         @Shared(.appStorage("autoPlayEnabled")) public var autoPlayEnabled = true
         @Shared(.appStorage("autoPlayPlaylist")) public var autoPlayPlaylist = true
-        @Shared(.appStorage("forceHTTPPlayback")) public var forceHTTPPlayback = true
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 

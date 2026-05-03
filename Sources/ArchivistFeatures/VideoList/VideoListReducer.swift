@@ -345,6 +345,18 @@ public struct VideoListReducer {
                 state.videoDetail = detailState
                 #endif
                 return .none
+            case .path(.element(_, action: .filteredList(.delegate(.playNextRequested(let video))))):
+                return .send(.view(.playNextTapped(video)))
+            case .path(.element(_, action: .filteredList(.delegate(.addToPlaylistRequested(let video))))):
+                return .send(.view(.addToPlaylistTapped(video)))
+            case .path(.element(_, action: .filteredList(.delegate(.downloadToDeviceRequested(let video))))):
+                return .send(.view(.downloadToDeviceTapped(video)))
+            case .path(.element(_, action: .filteredList(.delegate(.deleteFromDeviceRequested(let video))))):
+                return .send(.view(.deleteFromDeviceTapped(video)))
+            case .path(.element(_, action: .filteredList(.delegate(.markAsWatchedRequested(let video))))):
+                return .send(.view(.markAsWatchedTapped(video)))
+            case .path(.element(_, action: .filteredList(.delegate(.deleteFromServerRequested(let video))))):
+                return .send(.view(.deleteFromServerTapped(video)))
             case .path:
                 return .none
             case .playlistPicker:

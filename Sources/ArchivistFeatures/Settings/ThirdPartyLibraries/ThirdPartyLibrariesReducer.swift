@@ -48,6 +48,41 @@ public struct ThirdPartyLibrary: Equatable, Sendable, Identifiable {
             name: "VLCKit",
             license: "LGPL-2.1",
             url: URL(string: "https://code.videolan.org/videolan/VLCKit")
+        ),
+        ThirdPartyLibrary(
+            name: "VLC for iOS (player UI)",
+            license: "GPL-2.0-or-later",
+            url: URL(string: "https://code.videolan.org/videolan/vlc-ios")
+        ),
+        ThirdPartyLibrary(
+            name: "swift-composable-architecture",
+            license: "MIT",
+            url: URL(string: "https://github.com/pointfreeco/swift-composable-architecture")
+        ),
+        ThirdPartyLibrary(
+            name: "swift-dependencies",
+            license: "MIT",
+            url: URL(string: "https://github.com/pointfreeco/swift-dependencies")
+        ),
+        ThirdPartyLibrary(
+            name: "swift-identified-collections",
+            license: "MIT",
+            url: URL(string: "https://github.com/pointfreeco/swift-identified-collections")
+        ),
+        ThirdPartyLibrary(
+            name: "sqlite-data",
+            license: "MIT",
+            url: URL(string: "https://github.com/pointfreeco/sqlite-data")
+        ),
+        ThirdPartyLibrary(
+            name: "Lottie",
+            license: "Apache-2.0",
+            url: URL(string: "https://github.com/airbnb/lottie-ios")
+        ),
+        ThirdPartyLibrary(
+            name: "KeychainAccess",
+            license: "MIT",
+            url: URL(string: "https://github.com/kishikawakatsumi/KeychainAccess")
         )
     ]
 }

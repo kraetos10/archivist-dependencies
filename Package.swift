@@ -14,7 +14,8 @@ let package = Package(
         .library(name: "ArchivistNetworking", targets: ["ArchivistNetworking"]),
         .library(name: "ArchivistComponents", targets: ["ArchivistComponents"]),
         .library(name: "ArchivistFeatures", targets: ["ArchivistFeatures"]),
-        .library(name: "ArchivistWatch", targets: ["ArchivistWatch"])
+        .library(name: "ArchivistWatch", targets: ["ArchivistWatch"]),
+        .library(name: "VLCPlayerCore", targets: ["VLCPlayerCore"])
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.20.2"),
@@ -43,7 +44,8 @@ let package = Package(
                 "ArchivistNetworking",
                 .product(name: "Lottie", package: "lottie-ios"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
-                .target(name: "VLCKit", condition: .when(platforms: [.iOS, .tvOS]))
+                .target(name: "VLCKit", condition: .when(platforms: [.iOS, .tvOS])),
+                .target(name: "VLCPlayerCore", condition: .when(platforms: [.iOS, .tvOS]))
             ],
             resources: [
                 .process("Resources")
@@ -80,6 +82,17 @@ let package = Package(
         .binaryTarget(
             name: "VLCKit",
             path: "VLCKit.xcframework"
+        ),
+        // Lifted verbatim from videolan/vlc-ios. UIKit-only; we slim
+        // PlaybackService to URL-driven playback (keeps the queue layer)
+        // and stub the media-library / theming / coordinator pieces so
+        // the player VC can mount standalone against a TA media URL.
+        // No SwiftLint — third-party source we don't own style for.
+        .target(
+            name: "VLCPlayerCore",
+            dependencies: [
+                .target(name: "VLCKit", condition: .when(platforms: [.iOS, .tvOS]))
+            ]
         )
     ]
 )
