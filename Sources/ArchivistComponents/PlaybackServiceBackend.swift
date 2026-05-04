@@ -30,6 +30,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     public var onTimeUpdate: ((Double) -> Void)?
     public var onStateChange: (() -> Void)?
     public var onPlaybackEnd: (() -> Void)?
+    public var onPiPStateChanged: ((Bool) -> Void)?
 
     private var playbackEndContinuation: AsyncStream<Void>.Continuation?
     /// Resume position in seconds applied once libvlc reports the
@@ -158,6 +159,10 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         for playbackService: PlaybackService
     ) {
         Task { @MainActor in self.handleStateChange(currentState) }
+    }
+
+    nonisolated public func pictureInPictureStateDidChange(enabled: Bool) {
+        Task { @MainActor in self.onPiPStateChanged?(enabled) }
     }
 
     private func handlePositionUpdate() {

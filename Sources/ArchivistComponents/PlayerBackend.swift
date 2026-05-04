@@ -35,6 +35,11 @@ public protocol PlayerBackend: AnyObject {
     var onTimeUpdate: ((Double) -> Void)? { get set }
     var onStateChange: (() -> Void)? { get set }
     var onPlaybackEnd: (() -> Void)? { get set }
+    /// Fires when the underlying engine reports a PiP state transition.
+    /// `true` on entry, `false` on exit (whether the user dismissed PiP
+    /// from system controls or it ended via our `stopPiP` path). Backends
+    /// without PiP support never call this.
+    var onPiPStateChanged: ((Bool) -> Void)? { get set }
 }
 
 public extension PlayerBackend {

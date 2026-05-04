@@ -630,6 +630,18 @@ public final class PlayerManager: NSObject {
             }
         }
 
+        backend.onPiPStateChanged = { [weak self] enabled in
+            guard let self else { return }
+            self.isInPiP = enabled
+            // PiP ended — apply any cache swap we deferred while in PiP.
+            // Doing this mid-PiP would tear the rendering pipeline down
+            // and visibly restart the video; now that PiP is off, the
+            // swap-restart is just a normal source change.
+            if !enabled {
+                self.applyPendingCacheSwap()
+            }
+        }
+
         backend.onPlaybackEnd = { [weak self] in
             // Begin a background task immediately (on main thread) so iOS
             // doesn't suspend the app before the next video can start.

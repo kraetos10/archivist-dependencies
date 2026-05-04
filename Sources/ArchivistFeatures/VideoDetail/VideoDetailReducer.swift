@@ -28,7 +28,7 @@ public struct AutoPlayCountdown: Equatable, Sendable {
 public struct VideoDetailReducer {
     public init() {}
     /// Seconds the auto-advance overlay counts down before firing.
-    static let autoPlayCountdownSeconds = 5
+    public static let autoPlayCountdownSeconds = 5
 
     @ObservableState
     public struct State: Equatable, Sendable, Identifiable {

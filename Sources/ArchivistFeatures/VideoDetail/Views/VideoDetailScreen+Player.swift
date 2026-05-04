@@ -98,11 +98,17 @@ struct AutoPlayCountdownOverlay: View {
         return serverConfig.fullURL(for: path)
     }
 
+    private var progress: CGFloat {
+        let total = CGFloat(VideoDetailReducer.autoPlayCountdownSeconds)
+        guard total > 0 else { return 0 }
+        return CGFloat(countdown.remainingSeconds) / total
+    }
+
     var body: some View {
         ZStack {
-            Color.black.opacity(0.75)
+            Color.black.opacity(0.85)
 
-            HStack(spacing: 16) {
+            HStack(spacing: 20) {
                 AsyncImage(url: thumbnailURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -111,62 +117,72 @@ struct AutoPlayCountdownOverlay: View {
                         Rectangle().fill(Color.Brand.secondary.opacity(0.3))
                     }
                 }
-                .frame(width: 128, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(width: 200, height: 113)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(String.localised("video.upNext", table: .videos))
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                        .font(.caption.weight(.bold))
+                        .tracking(1.5)
                         .foregroundStyle(.white.opacity(0.7))
+                        .textCase(.uppercase)
 
                     Text(countdown.nextVideo.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.headline)
                         .foregroundStyle(.white)
                         .lineLimit(2)
 
-                    Text(
-                        String(
-                            format: String.localised(
-                                "video.autoPlayCountdown",
-                                table: .videos
-                            ),
-                            countdown.remainingSeconds
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .monospacedDigit()
+                    HStack(spacing: 10) {
+                        Button(action: onPlayNow) {
+                            Label(
+                                String.localised("video.autoPlayPlayNow", table: .videos),
+                                systemImage: "play.fill"
+                            )
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(.white, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: onCancel) {
+                            Text(String.localised("generic.cancel", table: .generic))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(.white.opacity(0.2), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(spacing: 8) {
-                    Button(action: onPlayNow) {
-                        Label(
-                            String.localised("video.autoPlayPlayNow", table: .videos),
-                            systemImage: "play.fill"
-                        )
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.white, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
+                ZStack {
+                    Circle()
+                        .stroke(.white.opacity(0.2), lineWidth: 6)
 
-                    Button(action: onCancel) {
-                        Text(String.localised("generic.cancel", table: .generic))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.white.opacity(0.2), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(
+                            .white,
+                            style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1.0), value: progress)
+
+                    Text("\(countdown.remainingSeconds)")
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .contentTransition(.numericText(countsDown: true))
+                        .animation(.easeOut(duration: 0.25), value: countdown.remainingSeconds)
                 }
+                .frame(width: 88, height: 88)
             }
-            .padding(20)
+            .padding(24)
         }
     }
 }
