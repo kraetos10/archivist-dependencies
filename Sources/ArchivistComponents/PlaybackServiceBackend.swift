@@ -143,6 +143,10 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         service.playMediaList(list, firstIndex: 0, subtitlesFilePath: nil)
     }
 
+    public func setPlaybackRate(_ rate: Float) {
+        service.playbackRate = rate
+    }
+
     public func playbackEndEvents() -> AsyncStream<Void> {
         playbackEndContinuation?.finish()
         playbackEndContinuation = nil

@@ -23,6 +23,12 @@ public protocol PlayerBackend: AnyObject {
     /// subsequent seeks read from disk.
     func swapToLocalFile(_ fileURL: URL)
 
+    /// Apply a playback-rate multiplier (1.0 = normal, 4.0 = 4x fast
+    /// forward, 0.5 = half speed). Used by the tvOS player to
+    /// fast-forward while the user holds the right arrow on the Siri
+    /// Remote. Default is a no-op for backends that don't support it.
+    func setPlaybackRate(_ rate: Float)
+
     /// Re-bind the rendering pipeline to its current host view. Called
     /// after device rotation / foreground transitions where the layer's
     /// drawable can stop receiving frames even though the host view is
@@ -50,6 +56,10 @@ public extension PlayerBackend {
     func refreshDrawable() {
         // Default no-op — backends with a stable drawable binding don't
         // need to do anything on rotation / foreground transitions.
+    }
+
+    func setPlaybackRate(_ rate: Float) {
+        // Default no-op — backends without rate control ignore the call.
     }
 }
 #endif

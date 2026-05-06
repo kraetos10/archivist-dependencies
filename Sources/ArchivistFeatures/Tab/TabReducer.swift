@@ -117,6 +117,12 @@ public struct TabReducer {
                     action: .downloads(.downloadDetail(.presented(.downloadResult(.success))))
                  ))),
                  .queue(.downloadDetail(.presented(.downloadResult(.success)))),
+                 // tvOS bumps a queue item by tapping the alert's
+                 // "Download Now" — there's no `downloadDetail` screen
+                 // in that flow, so the iOS path above never matches.
+                 // Without this case the `ActiveTaskView` row in tvOS
+                 // settings stays empty even while the server is busy.
+                 .queue(.alert(.presented(.confirmDownload))),
                  .channels(.channelDetail(.presented(.downloadDetail(.presented(.downloadResult(.success)))))),
                  .channels(.path(.element(
                     _,

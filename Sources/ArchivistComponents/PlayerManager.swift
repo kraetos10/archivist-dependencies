@@ -465,7 +465,17 @@ public final class PlayerManager: NSObject {
     }
 
     public func skipForward(_ seconds: Double = 10) {
-        let target = min(currentTime + seconds, duration)
+        // Leave a 2s buffer at the end. Without this, rapid taps on the
+        // skip-forward button accumulate past the end of the media —
+        // libvlc reports the seek as a natural .stopped event, the
+        // backend fires `onPlaybackEnd → onPlaybackCompleted`, and the
+        // video gets marked watched + auto-advances. Letting playback
+        // run into the end naturally still completes the video the
+        // intended way.
+        guard duration > 0 else { return }
+        let safeEnd = max(currentTime, duration - 2)
+        let target = min(currentTime + seconds, safeEnd)
+        guard target > currentTime else { return }
         seekTo(target)
     }
 
@@ -476,6 +486,13 @@ public final class PlayerManager: NSObject {
 
     public func togglePlayPause() {
         if isPlaying { pause() } else { resume() }
+    }
+
+    /// Apply a playback-rate multiplier to the active backend. Used by
+    /// the tvOS fast-forward press-and-hold: rate 4.0 while held, back
+    /// to 1.0 on release. Safe no-op when no backend is mounted.
+    public func setPlaybackRate(_ rate: Float) {
+        backend?.setPlaybackRate(rate)
     }
 
     public var currentTimeDisplay: String {

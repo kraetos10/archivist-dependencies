@@ -17,9 +17,8 @@ public struct TVVLCPlayerView: View {
             TVVLCVideoRenderView()
                 .ignoresSafeArea()
                 // Stop the embedded VLC host UIView from intercepting
-                // tvOS focus / remote events — without this the
-                // `onPlayPauseCommand` / `onMoveCommand` modifiers below
-                // never receive callbacks.
+                // tvOS focus / remote events — without this the press
+                // events captured below never reach our handler.
                 .allowsHitTesting(false)
 
             if playerManager.isBuffering {
@@ -32,32 +31,63 @@ public struct TVVLCPlayerView: View {
                 controlsOverlay
                     .transition(.opacity)
             }
-        }
-        // Make the SwiftUI view itself the focus target so the Siri Remote
-        // commands route here. Without `.focusable` tvOS routes nothing
-        // because the body has no buttons / focusable subviews.
-        .focusable(true)
-        .onPlayPauseCommand {
-            playerManager.togglePlayPause()
-            poke()
-        }
-        .onMoveCommand { direction in
-            switch direction {
-            case .left:
-                playerManager.skipBackward(10)
-                poke()
-            case .right:
-                playerManager.skipForward(10)
-                poke()
-            default:
-                poke()
-            }
-        }
-        .onExitCommand {
-            dismiss()
+
+            // Press-event capture: `.onMoveCommand` only fires once per
+            // press cycle so it can't distinguish a quick tap from a
+            // hold. Routing the right/left arrow through UIPress lets
+            // us treat a sub-300ms press as a discrete skip and a
+            // longer hold as a 4× fast-forward via `setPlaybackRate`.
+            TVPlayerPressView(
+                onTap: { type in handleTap(type) },
+                onHoldBegan: { type in handleHoldBegan(type) },
+                onHoldEnded: { type in handleHoldEnded(type) }
+            )
         }
         .onAppear { poke() }
-        .onDisappear { hideTask?.cancel() }
+        .onDisappear {
+            hideTask?.cancel()
+            // Restore the rate in case the view is dismissed mid-hold,
+            // otherwise the next playback session inherits 4× speed.
+            playerManager.setPlaybackRate(1.0)
+        }
+    }
+
+    private func handleTap(_ type: UIPress.PressType) {
+        switch type {
+        case .leftArrow:
+            playerManager.skipBackward(10)
+            poke()
+        case .rightArrow:
+            playerManager.skipForward(10)
+            poke()
+        case .playPause, .select:
+            playerManager.togglePlayPause()
+            poke()
+        case .menu:
+            dismiss()
+        default:
+            poke()
+        }
+    }
+
+    private func handleHoldBegan(_ type: UIPress.PressType) {
+        switch type {
+        case .rightArrow:
+            playerManager.setPlaybackRate(4.0)
+            poke()
+        default:
+            break
+        }
+    }
+
+    private func handleHoldEnded(_ type: UIPress.PressType) {
+        switch type {
+        case .rightArrow:
+            playerManager.setPlaybackRate(1.0)
+            poke()
+        default:
+            break
+        }
     }
 
     @ViewBuilder
@@ -162,6 +192,110 @@ public struct TVVLCPlayerView: View {
             return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         }
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+/// Captures raw UIPress events from the Siri Remote so the player can
+/// distinguish a quick tap from a press-and-hold. Discrete arrow taps
+/// dispatch as `onTap`; presses still active after `holdThreshold`
+/// dispatch `onHoldBegan` and matching `onHoldEnded` on release.
+private struct TVPlayerPressView: UIViewRepresentable {
+    let onTap: (UIPress.PressType) -> Void
+    let onHoldBegan: (UIPress.PressType) -> Void
+    let onHoldEnded: (UIPress.PressType) -> Void
+
+    func makeUIView(context: Context) -> TVPressTrackingView {
+        let view = TVPressTrackingView()
+        view.onTap = onTap
+        view.onHoldBegan = onHoldBegan
+        view.onHoldEnded = onHoldEnded
+        return view
+    }
+
+    func updateUIView(_ uiView: TVPressTrackingView, context: Context) {
+        uiView.onTap = onTap
+        uiView.onHoldBegan = onHoldBegan
+        uiView.onHoldEnded = onHoldEnded
+    }
+}
+
+private final class TVPressTrackingView: UIView {
+    var onTap: ((UIPress.PressType) -> Void)?
+    var onHoldBegan: ((UIPress.PressType) -> Void)?
+    var onHoldEnded: ((UIPress.PressType) -> Void)?
+
+    /// Threshold above which a press is treated as a hold rather than
+    /// a discrete tap.
+    private let holdThreshold: Duration = .milliseconds(300)
+
+    private var holdTimers: [UIPress.PressType: Task<Void, Never>] = [:]
+    private var heldPresses: Set<UIPress.PressType> = []
+
+    override var canBecomeFocused: Bool { true }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        for press in presses {
+            switch press.type {
+            case .leftArrow, .rightArrow, .playPause, .select, .menu:
+                schedule(press.type)
+            default:
+                unhandled.insert(press)
+            }
+        }
+        if !unhandled.isEmpty {
+            super.pressesBegan(unhandled, with: event)
+        }
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        for press in presses {
+            switch press.type {
+            case .leftArrow, .rightArrow, .playPause, .select, .menu:
+                resolve(press.type)
+            default:
+                unhandled.insert(press)
+            }
+        }
+        if !unhandled.isEmpty {
+            super.pressesEnded(unhandled, with: event)
+        }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses {
+            cancel(press.type)
+        }
+        super.pressesCancelled(presses, with: event)
+    }
+
+    private func schedule(_ type: UIPress.PressType) {
+        holdTimers[type]?.cancel()
+        holdTimers[type] = Task { @MainActor [weak self, holdThreshold] in
+            try? await Task.sleep(for: holdThreshold)
+            guard let self, !Task.isCancelled else { return }
+            self.heldPresses.insert(type)
+            self.onHoldBegan?(type)
+        }
+    }
+
+    private func resolve(_ type: UIPress.PressType) {
+        holdTimers[type]?.cancel()
+        holdTimers[type] = nil
+        if heldPresses.remove(type) != nil {
+            onHoldEnded?(type)
+        } else {
+            onTap?(type)
+        }
+    }
+
+    private func cancel(_ type: UIPress.PressType) {
+        holdTimers[type]?.cancel()
+        holdTimers[type] = nil
+        if heldPresses.remove(type) != nil {
+            onHoldEnded?(type)
+        }
     }
 }
 
