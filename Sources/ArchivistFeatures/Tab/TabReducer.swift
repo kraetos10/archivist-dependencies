@@ -26,6 +26,12 @@ public struct TabReducer {
         public var settings: SettingsReducer.State
         #if os(tvOS)
         public var search: TVSearchReducer.State
+        /// True when the "View All" channels destination is presented as a
+        /// full-screen cover from the tvOS home screen. tvOS doesn't expose
+        /// a Channels tab, so this reuses the existing `TVChannelsScreen`
+        /// inside a cover instead of switching tabs.
+        public var presentingAllChannels: Bool = false
+        public var presentingAllPlaylists: Bool = false
         #endif
 
         var hasVideoDetailPresented: Bool {
@@ -72,6 +78,8 @@ public struct TabReducer {
         case settings(SettingsReducer.Action)
         #if os(tvOS)
         case search(TVSearchReducer.Action)
+        case setPresentingAllChannels(Bool)
+        case setPresentingAllPlaylists(Bool)
         #endif
     }
 
@@ -132,6 +140,12 @@ public struct TabReducer {
             case .search(.delegate(.showPlaylist(let playlist))):
                 return .send(.homePlaylistTapped(playlist))
             case .search:
+                return .none
+            case .setPresentingAllChannels(let presenting):
+                state.presentingAllChannels = presenting
+                return .none
+            case .setPresentingAllPlaylists(let presenting):
+                state.presentingAllPlaylists = presenting
                 return .none
             #endif
             }

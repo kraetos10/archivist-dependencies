@@ -127,6 +127,12 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         guard fileURL.isFileURL else { return }
         let resumeSec = max(currentTime, 0)
         pendingResumeSec = resumeSec
+        // The new media has to re-prove it's playing before we trust any
+        // position updates — without this, libvlc's transient `playbackTime`
+        // and `mediaDuration` readings during the transition can drive the
+        // deferred seek against the wrong divisor and land playback past the
+        // resume point.
+        hasReachedPlaying = false
 
         let media = VLCMedia(url: fileURL)!
         if resumeSec > 0 {
@@ -170,6 +176,15 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         if lengthMs > 0 {
             duration = Double(lengthMs) / 1000.0
         }
+
+        // Suppress position propagation until the new media has reached
+        // `.playing`. libvlc can emit transient `playbackTime` values
+        // during the load/swap window — either stale from the prior media
+        // or zero before `:start-time=` is honoured — and pairing them
+        // with an unstable `mediaDuration` made the deferred seek land
+        // ahead of the intended resume point.
+        guard hasReachedPlaying else { return }
+
         let timeMs = service.playbackTime.intValue
         currentTime = Double(timeMs) / 1000.0
         onTimeUpdate?(currentTime)

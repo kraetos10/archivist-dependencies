@@ -5,17 +5,13 @@ import SwiftUI
 
 struct TVHomeVideoRowPlaceholder: View {
     let title: String
+    let icon: String
     let serverConfig: ServerConfig
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.leading, 48)
-
+        TVHomeSectionContainer(title: title, icon: icon) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 40) {
+                LazyHStack(spacing: 48) {
                     ForEach(VideoResponse.placeholders.prefix(5)) { video in
                         TVVideoCardView(
                             video: video,
@@ -26,8 +22,9 @@ struct TVHomeVideoRowPlaceholder: View {
                     }
                 }
                 .padding(.horizontal, 48)
-                .padding(.vertical, 20)
+                .padding(.vertical, 30)
             }
+            .scrollClipDisabled()
         }
     }
 }
@@ -36,14 +33,12 @@ struct TVHomeChannelsRowPlaceholder: View {
     let serverConfig: ServerConfig
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String(localized: "Channels"))
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.leading, 48)
-
+        TVHomeSectionContainer(
+            title: String(localized: "Channels"),
+            icon: "antenna.radiowaves.left.and.right"
+        ) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 40) {
+                LazyHStack(spacing: 48) {
                     ForEach(ChannelResponse.placeholders) { channel in
                         TVChannelCardView(
                             channel: channel,
@@ -53,8 +48,9 @@ struct TVHomeChannelsRowPlaceholder: View {
                     }
                 }
                 .padding(.horizontal, 48)
-                .padding(.vertical, 20)
+                .padding(.vertical, 30)
             }
+            .scrollClipDisabled()
         }
     }
 }

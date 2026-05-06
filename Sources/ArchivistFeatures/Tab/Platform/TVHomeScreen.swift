@@ -42,42 +42,58 @@ public struct TVHomeScreen: View {
                 LazyVStack(alignment: .leading, spacing: 48) {
                     if store.videoList.isLoading && store.videoList.videos.isEmpty {
                         TVHomeVideoRowPlaceholder(
-                            title: String(localized: "Continue Watching"),
+                            title: WatchFilter.continueWatching.label,
+                            icon: WatchFilter.continueWatching.icon,
                             serverConfig: store.videoList.serverConfig
                         )
                         TVHomeVideoRowPlaceholder(
-                            title: String(localized: "Unwatched"),
+                            title: WatchFilter.unwatched.label,
+                            icon: WatchFilter.unwatched.icon,
                             serverConfig: store.videoList.serverConfig
                         )
                     } else {
                         if !continueWatchingVideos.isEmpty {
                             TVHomeVideoRow(
-                                title: String(localized: "Continue Watching"),
+                                title: WatchFilter.continueWatching.label,
+                                icon: WatchFilter.continueWatching.icon,
                                 videos: continueWatchingVideos,
-                                serverConfig: store.videoList.serverConfig
-                            ) { video in
-                                store.send(.videoList(.view(.videoTapped(video))))
-                            }
+                                serverConfig: store.videoList.serverConfig,
+                                onVideoTapped: { video in
+                                    store.send(.videoList(.view(.videoTapped(video))))
+                                },
+                                onViewAll: {
+                                    store.send(.videoList(.view(.viewAllTapped(.continueWatching))))
+                                }
+                            )
                         }
 
                         if !unwatchedVideos.isEmpty {
                             TVHomeVideoRow(
-                                title: String(localized: "Unwatched"),
+                                title: WatchFilter.unwatched.label,
+                                icon: WatchFilter.unwatched.icon,
                                 videos: unwatchedVideos,
-                                serverConfig: store.videoList.serverConfig
-                            ) { video in
-                                store.send(.videoList(.view(.videoTapped(video))))
-                            }
+                                serverConfig: store.videoList.serverConfig,
+                                onVideoTapped: { video in
+                                    store.send(.videoList(.view(.videoTapped(video))))
+                                },
+                                onViewAll: {
+                                    store.send(.videoList(.view(.viewAllTapped(.unwatched))))
+                                }
+                            )
                         }
                     }
 
                     if !store.channels.channels.isEmpty {
                         TVHomeChannelsRow(
                             channels: Array(store.channels.channels),
-                            serverConfig: store.channels.serverConfig
-                        ) { channel in
-                            store.send(.homeChannelTapped(channel))
-                        }
+                            serverConfig: store.channels.serverConfig,
+                            onChannelTapped: { channel in
+                                store.send(.homeChannelTapped(channel))
+                            },
+                            onViewAll: {
+                                store.send(.setPresentingAllChannels(true))
+                            }
+                        )
                     } else if store.channels.isLoading {
                         TVHomeChannelsRowPlaceholder(
                             serverConfig: store.channels.serverConfig
@@ -87,20 +103,29 @@ public struct TVHomeScreen: View {
                     if !allVideos.isEmpty {
                         TVHomeVideoRow(
                             title: String(localized: "All Videos"),
+                            icon: WatchFilter.all.icon,
                             videos: allVideos,
-                            serverConfig: store.videoList.serverConfig
-                        ) { video in
-                            store.send(.videoList(.view(.videoTapped(video))))
-                        }
+                            serverConfig: store.videoList.serverConfig,
+                            onVideoTapped: { video in
+                                store.send(.videoList(.view(.videoTapped(video))))
+                            },
+                            onViewAll: {
+                                store.send(.videoList(.view(.viewAllTapped(.all))))
+                            }
+                        )
                     }
 
                     if !store.playlists.playlists.isEmpty {
                         TVHomePlaylistsRow(
                             playlists: Array(store.playlists.playlists),
-                            serverConfig: store.playlists.serverConfig
-                        ) { playlist in
-                            store.send(.homePlaylistTapped(playlist))
-                        }
+                            serverConfig: store.playlists.serverConfig,
+                            onPlaylistTapped: { playlist in
+                                store.send(.homePlaylistTapped(playlist))
+                            },
+                            onViewAll: {
+                                store.send(.setPresentingAllPlaylists(true))
+                            }
+                        )
                     }
                 }
                 .padding(.vertical, 48)
@@ -126,10 +151,27 @@ public struct TVHomeScreen: View {
             switch store.case {
             case .videoDetail(let detailStore):
                 TVVideoDetailScreen(store: detailStore)
-            case .filteredList:
-                // tvOS home keeps the flat grid — per-filter lists are iOS-only.
-                EmptyView()
+            case .filteredList(let listStore):
+                TVFilteredVideoListScreen(store: listStore)
             }
+        }
+        .fullScreenCover(
+            isPresented: $store.presentingAllChannels.sending(\.setPresentingAllChannels)
+        ) {
+            NavigationStack {
+                TVChannelsScreen(store: store.scope(state: \.channels, action: \.channels))
+                    .background(Color.Brand.primary)
+            }
+            .background(Color.Brand.primary)
+        }
+        .fullScreenCover(
+            isPresented: $store.presentingAllPlaylists.sending(\.setPresentingAllPlaylists)
+        ) {
+            NavigationStack {
+                TVPlaylistsScreen(store: store.scope(state: \.playlists, action: \.playlists))
+                    .background(Color.Brand.primary)
+            }
+            .background(Color.Brand.primary)
         }
         .fullScreenCover(
             item: $store.scope(state: \.channels.selectedChannel, action: \.channels.channelDetail)

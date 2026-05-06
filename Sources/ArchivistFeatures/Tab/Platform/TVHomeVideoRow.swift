@@ -4,21 +4,24 @@ import ArchivistNetworking
 import SwiftUI
 
 struct TVHomeVideoRow: View {
+    static let maxItems = 10
+
     let title: String
+    let icon: String
     let videos: [VideoResponse]
     let serverConfig: ServerConfig
     let onVideoTapped: (VideoResponse) -> Void
+    let onViewAll: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.leading, 48)
-
+        TVHomeSectionContainer(
+            title: title,
+            icon: icon,
+            onViewAll: onViewAll
+        ) {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 48) {
-                    ForEach(videos, id: \.videoId) { video in
+                    ForEach(videos.prefix(Self.maxItems), id: \.videoId) { video in
                         TVVideoCardView(
                             video: video,
                             serverConfig: serverConfig
@@ -27,13 +30,16 @@ struct TVHomeVideoRow: View {
                         }
                         .frame(width: 400)
                     }
+
+                    if videos.count > 0 {
+                        TVHomeViewAllCard(action: onViewAll)
+                    }
                 }
                 .padding(.horizontal, 48)
                 .padding(.vertical, 30)
             }
             .scrollClipDisabled()
         }
-        .focusSection()
     }
 }
 #endif

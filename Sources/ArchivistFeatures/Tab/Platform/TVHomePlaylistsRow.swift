@@ -4,20 +4,22 @@ import ArchivistNetworking
 import SwiftUI
 
 struct TVHomePlaylistsRow: View {
+    static let maxItems = 10
+
     let playlists: [PlaylistResponse]
     let serverConfig: ServerConfig
     let onPlaylistTapped: (PlaylistResponse) -> Void
+    let onViewAll: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String(localized: "Playlists"))
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.leading, 48)
-
+        TVHomeSectionContainer(
+            title: String(localized: "Playlists"),
+            icon: "music.note.list",
+            onViewAll: onViewAll
+        ) {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 48) {
-                    ForEach(playlists) { playlist in
+                    ForEach(playlists.prefix(Self.maxItems)) { playlist in
                         TVPlaylistCardView(
                             playlist: playlist,
                             serverConfig: serverConfig
@@ -26,13 +28,16 @@ struct TVHomePlaylistsRow: View {
                         }
                         .frame(width: 400)
                     }
+
+                    if playlists.count > 0 {
+                        TVHomeViewAllCard(action: onViewAll)
+                    }
                 }
                 .padding(.horizontal, 48)
                 .padding(.vertical, 30)
             }
             .scrollClipDisabled()
         }
-        .focusSection()
     }
 }
 

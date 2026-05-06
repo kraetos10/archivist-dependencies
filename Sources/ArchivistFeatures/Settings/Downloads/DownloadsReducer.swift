@@ -111,6 +111,9 @@ public struct DownloadsReducer {
                 return .none
             case .alert(.presented(.confirmDownload(let videoId))):
                 let config = state.serverConfig
+                anchorScrollBeforeRemoval(of: videoId, state: &state)
+                state.downloads.remove(id: videoId)
+                state.searchResults.remove(id: videoId)
                 return .run { [downloadService] _ in
                     try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
                 }
