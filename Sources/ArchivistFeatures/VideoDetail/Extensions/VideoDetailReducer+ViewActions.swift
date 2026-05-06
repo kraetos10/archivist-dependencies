@@ -239,6 +239,12 @@ extension VideoDetailReducer {
                 )
                 return PlayerManager.shared.playbackEndEvents()
             }
+            let saveTask = VideoDetailReducer.periodicProgressSaveTask(
+                config: config,
+                videoId: videoId,
+                videoService: videoService
+            )
+            defer { saveTask.cancel() }
             for await _ in stream {
                 await send(.view(.videoPlaybackDidEnd))
             }
@@ -306,6 +312,42 @@ extension VideoDetailReducer {
             let position = await Int(PlayerManager.shared.currentTime)
             guard position > 0 else { return }
             try? await videoService.setProgress(config: config, videoId: videoId, position: position)
+        }
+    }
+
+    /// Heartbeat that saves playback progress to the server every
+    /// `periodicProgressSaveInterval` seconds while playback is active for
+    /// `videoId`. Spawned from inside each play-start `.run` so its
+    /// lifetime tracks the parent Task — when playback ends (stream
+    /// finishes) or the parent effect is cancelled the heartbeat is
+    /// cancelled too. Without this the server only learns the position on
+    /// pause/dismiss, so a force-quit mid-play loses the run-up.
+    ///
+    /// Static so the parent `.run` closure (a `@Sendable` block) doesn't
+    /// have to capture the non-Sendable reducer struct.
+    static func periodicProgressSaveTask(
+        config: ServerConfig,
+        videoId: String,
+        videoService: VideoServiceType
+    ) -> Task<Void, Never> {
+        Task { [videoService] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(VideoDetailReducer.periodicProgressSaveInterval))
+                if Task.isCancelled { break }
+                let snapshot = await MainActor.run {
+                    (
+                        isActive: PlayerManager.shared.isPlaying
+                            && PlayerManager.shared.currentVideoID == videoId,
+                        position: Int(PlayerManager.shared.currentTime)
+                    )
+                }
+                guard snapshot.isActive, snapshot.position > 0 else { continue }
+                try? await videoService.setProgress(
+                    config: config,
+                    videoId: videoId,
+                    position: snapshot.position
+                )
+            }
         }
     }
 

@@ -27,8 +27,18 @@ extension DownloadsReducer {
     // MARK: - Private Handlers
 
     private func handleOnAppear(state: inout State) -> Effect<Action> {
-        guard state.downloads.isEmpty, !state.isLoading else { return .none }
+        // Always re-fetch on screen entry. Previously this guarded on
+        // `state.downloads.isEmpty` to avoid redundant fetches when the
+        // user navigated back to the queue, but that left tvOS users
+        // stranded — tvOS has no pull-to-refresh, and the optimistic
+        // removal we do on download-confirm can leave the list empty
+        // even when the server has more pending items. Treat every
+        // appearance as a refresh; the downloaded array is replaced
+        // wholesale so SwiftUI handles the diff cleanly.
+        guard !state.isLoading else { return .none }
         state.isLoading = true
+        state.currentPage = 1
+        state.lastPage = 1
         return fetchDownloads(config: state.serverConfig, page: 1)
     }
 

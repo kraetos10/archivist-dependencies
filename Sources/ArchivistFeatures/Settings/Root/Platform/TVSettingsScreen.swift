@@ -43,14 +43,6 @@ public struct TVSettingsScreen: View {
             ActiveTaskView(store: store.scope(state: \.activeTask, action: \.activeTask))
 
             Section {
-                Button { send(.downloadsTapped) } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "arrow.down.circle")
-                        Text(String.localised("settings.queue", table: .settings))
-                    }
-                    .padding(.vertical, 8)
-                }
-
                 Button { send(.statsTapped) } label: {
                     HStack(spacing: 16) {
                         Image(systemName: "chart.bar")

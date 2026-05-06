@@ -236,6 +236,12 @@ extension VideoDetailReducer {
                     return PlayerManager.shared.playbackEndEvents()
                 }
                 guard let stream else { return }
+                let saveTask = VideoDetailReducer.periodicProgressSaveTask(
+                    config: config,
+                    videoId: videoId,
+                    videoService: videoService
+                )
+                defer { saveTask.cancel() }
                 for await _ in stream {
                     await send(.view(.videoPlaybackDidEnd))
                 }
@@ -289,6 +295,12 @@ extension VideoDetailReducer {
                     return PlayerManager.shared.playbackEndEvents()
                 }
                 guard let stream else { return }
+                let saveTask = VideoDetailReducer.periodicProgressSaveTask(
+                    config: config,
+                    videoId: videoId,
+                    videoService: videoService
+                )
+                defer { saveTask.cancel() }
                 for await _ in stream {
                     await send(.view(.videoPlaybackDidEnd))
                 }

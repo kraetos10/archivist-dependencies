@@ -114,8 +114,14 @@ public struct DownloadsReducer {
                 anchorScrollBeforeRemoval(of: videoId, state: &state)
                 state.downloads.remove(id: videoId)
                 state.searchResults.remove(id: videoId)
-                return .run { [downloadService] _ in
-                    try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
+                return .run { [downloadService] send in
+                    try? await downloadService.updateDownload(config: config, id: videoId, status: "priority")
+                    // Reconcile with the server. Optimistic removal alone
+                    // empties the visible queue when the user bulk-bumps
+                    // items, and tvOS has no pull-to-refresh — without
+                    // this the user sees an empty list even when more
+                    // pending items still exist server-side.
+                    await send(.view(.pullToRefreshTriggered))
                 }
             case .alert:
                 return .none

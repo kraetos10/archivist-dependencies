@@ -39,11 +39,7 @@ struct TVHomeSectionContainer<Content: View>: View {
             content()
                 .padding(.bottom, 8)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.Surface.highlight)
-        )
-        .padding(.horizontal, 48)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .focusSection()
     }
 }

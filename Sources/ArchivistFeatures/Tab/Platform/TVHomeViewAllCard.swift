@@ -20,9 +20,16 @@ struct TVHomeViewAllCard: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Text.primary)
             }
-            .frame(width: 200, height: 200)
+            // Match the typical TV video card footprint (16:9 thumb at
+            // 400 wide ≈ 225 high, plus title + meta lines). Without an
+            // explicit height the 200×200 tile sat well above the card's
+            // visual center; sizing it to the card's full extent and
+            // letting the inner VStack center its content lands the
+            // icon + label aligned with the cards.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.card)
+        .frame(width: 280, height: 280)
     }
 }
 #endif

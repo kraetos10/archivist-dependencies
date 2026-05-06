@@ -336,6 +336,8 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
 /// mini ↔ full transition seamless: the underlying `VLCMediaPlayer`
 /// is never recreated.
 public final class VLCPlayerHostView: UIView {
+    private var lastBounds: CGRect = .zero
+
     func adoptPlayerView() {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
 
@@ -360,6 +362,19 @@ public final class VLCPlayerHostView: UIView {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView,
               playerView.superview === self else { return }
         playerView.removeFromSuperview()
+    }
+
+    /// Catches bounds changes that aren't covered by `orientationDidChange`
+    /// — e.g., iPad split view, slide-over, scene-resize. The first layout
+    /// pass after a real size change nudges libvlc to re-bind its drawable
+    /// against the new geometry; without this the rendering layer keeps
+    /// its old window size and the picture goes black.
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        if lastBounds != .zero, lastBounds.size != bounds.size {
+            PlayerManager.shared.refreshVideoOutput()
+        }
+        lastBounds = bounds
     }
 }
 

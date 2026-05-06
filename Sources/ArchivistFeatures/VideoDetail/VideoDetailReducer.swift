@@ -29,6 +29,10 @@ public struct VideoDetailReducer {
     public init() {}
     /// Seconds the auto-advance overlay counts down before firing.
     public static let autoPlayCountdownSeconds = 5
+    /// Seconds between periodic progress saves to the server while
+    /// playback is active. Bridges the gap between pause/dismiss saves
+    /// so a force-quit mid-play doesn't lose the run-up.
+    public static let periodicProgressSaveInterval: Int = 15
 
     @ObservableState
     public struct State: Equatable, Sendable, Identifiable {
