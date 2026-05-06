@@ -812,14 +812,6 @@ public final class PlaybackService: NSObject, @unchecked Sendable {
                 }
                 self._actualVideoOutputView?.frame = CGRect(origin: .zero, size: videoOutputView.frame.size)
                 if let actual = self._actualVideoOutputView {
-                    // Pin via autoresizing so the libvlc render layer tracks
-                    // the host's bounds when the device rotates or split-view
-                    // resizes. Without this the outer wrapper resizes (it's
-                    // pinned with NSLayoutConstraints by the SwiftUI host),
-                    // but `_actualVideoOutputView` keeps its initial frame
-                    // and libvlc renders off-screen — audio plays, picture
-                    // goes black.
-                    actual.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                     videoOutputView.addSubview(actual)
                     actual.layoutSubviews()
                     actual.updateConstraints()
@@ -948,6 +940,13 @@ extension PlaybackService: VLCDrawable {
     public func addSubview(_ view: UIView) {
         _actualVideoOutputView?.addSubview(view)
         view.frame = _actualVideoOutputView?.bounds ?? .zero
+        // Without this the libvlc render view is added at the parent's
+        // initial frame and stays there forever — the parent
+        // (`_actualVideoOutputView`) resizes via its own autoresizing
+        // mask on rotation, but its libvlc child keeps the portrait
+        // frame and renders off-screen, so audio continues while the
+        // picture goes black.
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     }
 
     public func bounds() -> CGRect {
