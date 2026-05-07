@@ -16,6 +16,16 @@ extension AddChannelReducer {
     private func handleAddButtonTapped(state: inout State) -> Effect<Action> {
         let input = state.channelInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return .none }
+        if state.childModeEnabled, !state.childModePin.isEmpty {
+            state.isPresentingPin = true
+            return .none
+        }
+        return performSubscribe(state: &state)
+    }
+
+    func performSubscribe(state: inout State) -> Effect<Action> {
+        let input = state.channelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return .none }
         state.isSubscribing = true
         let config = state.serverConfig
         let item = ChannelSubscribeItem(channelId: input, channelSubscribed: true)

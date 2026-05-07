@@ -24,6 +24,10 @@ public struct TabReducer {
         public var playlists: PlaylistsReducer.State
         public var queue: DownloadsReducer.State
         public var settings: SettingsReducer.State
+        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
+        public var settingsUnlocked: Bool = false
+        public var isPresentingSettingsPin: Bool = false
         #if os(tvOS)
         public var search: TVSearchReducer.State
         /// True when the "View All" channels destination is presented as a
@@ -65,8 +69,11 @@ public struct TabReducer {
         }
     }
 
-    public enum Action {
+    public enum Action: BindableAction {
+        case binding(BindingAction<State>)
         case selectTab(AppTab?)
+        case settingsPinSucceeded
+        case settingsPinDismissed
         case appeared
         case scenePhaseChanged(ScenePhase)
         case homeChannelTapped(ChannelResponse)
@@ -87,10 +94,39 @@ public struct TabReducer {
     @Dependency(\.videoService) var videoService
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding(\.isPresentingSettingsPin):
+                if !state.isPresentingSettingsPin, !state.settingsUnlocked {
+                    state.selectedTab = .home
+                }
+                return .none
+            case .binding:
+                return .none
             case .selectTab(let tab):
+                if tab != .settings {
+                    state.settingsUnlocked = false
+                }
+                if tab == .settings,
+                   state.childModeEnabled,
+                   !state.childModePin.isEmpty,
+                   !state.settingsUnlocked {
+                    state.isPresentingSettingsPin = true
+                    state.selectedTab = tab
+                    return .none
+                }
                 state.selectedTab = tab
+                return .none
+            case .settingsPinSucceeded:
+                state.settingsUnlocked = true
+                state.isPresentingSettingsPin = false
+                return .none
+            case .settingsPinDismissed:
+                state.isPresentingSettingsPin = false
+                if !state.settingsUnlocked {
+                    state.selectedTab = .home
+                }
                 return .none
             case .appeared:
                 return handleAppeared(state: &state)

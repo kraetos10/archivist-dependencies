@@ -25,6 +25,7 @@ public struct VideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
     @Bindable private var playerManager = PlayerManager.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
 
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
@@ -45,6 +46,15 @@ public struct VideoDetailScreen: View {
     }
 
     public var body: some View {
+        if childModeEnabled {
+            ChildVideoPlayerScreen(store: store)
+        } else {
+            standardBody
+        }
+    }
+
+    @ViewBuilder
+    private var standardBody: some View {
         GeometryReader { geo in
             let leftColumnWidth = isCompact ? geo.size.width : geo.size.width * 0.65
             let inlineHeight = leftColumnWidth * 9 / 16

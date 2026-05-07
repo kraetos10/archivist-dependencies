@@ -68,7 +68,7 @@ extension DownloadsReducer {
         state: inout State
     ) -> Effect<Action> {
         guard order != state.sortOrder else { return .none }
-        state.sortOrder = order
+        state.$sortOrder.withLock { $0 = order }
         state.downloads = []
         state.currentPage = 1
         state.lastPage = 1

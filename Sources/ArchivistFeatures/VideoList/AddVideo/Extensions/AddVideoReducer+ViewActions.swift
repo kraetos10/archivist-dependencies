@@ -18,6 +18,16 @@ extension AddVideoReducer {
     private func handleAddButtonTapped(state: inout State) -> Effect<Action> {
         let input = state.videoInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return .none }
+        if state.childModeEnabled, !state.childModePin.isEmpty {
+            state.isPresentingPin = true
+            return .none
+        }
+        return performAdd(state: &state)
+    }
+
+    func performAdd(state: inout State) -> Effect<Action> {
+        let input = state.videoInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return .none }
         state.isAdding = true
         let config = state.serverConfig
         let videoIds = input

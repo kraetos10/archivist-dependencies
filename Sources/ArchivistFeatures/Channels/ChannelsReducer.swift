@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -26,6 +27,7 @@ public struct ChannelsReducer {
         var channelIdsWithUnwatchedVideos: Set<String> = []
         var isLoadingUnwatchedIds = false
         @Shared(.appStorage("channelsFilter")) var filter: ChannelListFilter = .all
+        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
 
         @Presents var alert: AlertState<AlertAction>?
         @Presents var addChannel: AddChannelReducer.State?

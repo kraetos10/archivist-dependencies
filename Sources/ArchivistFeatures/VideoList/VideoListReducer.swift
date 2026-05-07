@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -79,6 +80,7 @@ public struct VideoListReducer {
         var isLoadingMore = false
         var hasLoaded = false
         @Shared(.appStorage("videoListWatchFilter")) var watchFilter: WatchFilter = .unwatched
+        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
         /// Home page always fetches by published date; per-filter sort is
         /// owned by the "View All" detail view now.
         let sortOrder: VideoSortOrder = .published

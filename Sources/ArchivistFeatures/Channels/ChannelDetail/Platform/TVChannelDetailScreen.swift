@@ -176,8 +176,8 @@ public struct TVChannelDetailScreen: View {
                         .font(.caption)
                     Text(
                         store.showNewestDownloadsFirst
-                            ? String(localized: "Newest")
-                            : String(localized: "Oldest")
+                            ? String.localised("generic.descending", table: .generic)
+                            : String.localised("generic.ascending", table: .generic)
                     )
                 }
                 .font(.headline)

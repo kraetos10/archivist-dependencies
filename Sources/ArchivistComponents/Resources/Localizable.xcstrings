@@ -32,6 +32,33 @@
     "%lld videos" : {
 
     },
+    "childMode.pinEntry.invalid" : {
+
+    },
+    "childMode.pinEntry.subtitle" : {
+
+    },
+    "childMode.pinEntry.title" : {
+
+    },
+    "childMode.pinSetup.confirmPin" : {
+
+    },
+    "childMode.pinSetup.mismatch" : {
+
+    },
+    "childMode.pinSetup.newPin" : {
+
+    },
+    "childMode.pinSetup.subtitle" : {
+
+    },
+    "childMode.pinSetup.title" : {
+
+    },
+    "generic.cancel" : {
+
+    },
     "generic.comments" : {
 
     },
@@ -39,6 +66,9 @@
 
     },
     "generic.remove" : {
+
+    },
+    "generic.save" : {
 
     },
     "generic.share" : {

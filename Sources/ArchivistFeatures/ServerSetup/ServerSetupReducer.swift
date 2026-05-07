@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -12,6 +13,10 @@ public struct ServerSetupReducer {
         var path = StackState<ServerSetupPath.State>()
         @Shared var registrationDetails: RegistrationDetails
         var isLoading = false
+        var childModeToggle = false
+        var isPresentingPinSetup = false
+        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
         @Presents var alert: AlertState<AlertAction>?
 
         public init() {
@@ -31,6 +36,8 @@ public struct ServerSetupReducer {
         case loginCompleted
         case path(StackActionOf<ServerSetupPath>)
         case serverValidated
+        case childPinConfirmed(String)
+        case childPinCancelled
 
         @CasePathable
         public enum View {
@@ -55,6 +62,23 @@ public struct ServerSetupReducer {
                 return .none
             case .path(.element(_, action: .login(.loginSucceeded(let token)))):
                 return handleLoginSucceeded(token: token, state: &state)
+            case .binding(\.childModeToggle):
+                if state.childModeToggle {
+                    state.isPresentingPinSetup = true
+                } else {
+                    state.$childModeEnabled.withLock { $0 = false }
+                    state.$childModePin.withLock { $0 = "" }
+                }
+                return .none
+            case .childPinConfirmed(let pin):
+                state.isPresentingPinSetup = false
+                state.$childModeEnabled.withLock { $0 = true }
+                state.$childModePin.withLock { $0 = pin }
+                return .none
+            case .childPinCancelled:
+                state.childModeToggle = false
+                state.isPresentingPinSetup = false
+                return .none
             case .alert, .binding, .loginCompleted, .path:
                 return .none
             default:

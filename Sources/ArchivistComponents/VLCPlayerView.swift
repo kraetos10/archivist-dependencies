@@ -103,6 +103,16 @@ public struct VLCPlayerView: View {
                         ) {
                             OrientationLock.shared.rotateFullscreen()
                             playerManager.scheduleHideVLCControls()
+                            // Programmatic rotation via requestGeometryUpdate
+                            // doesn't fire UIDevice.orientationDidChangeNotification,
+                            // so the normal rotation→refresh path is skipped.
+                            // VLCKit's drawable won't rebind to the new host
+                            // bounds without this — audio keeps playing while
+                            // the picture goes black.
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(100))
+                                PlayerManager.shared.refreshVideoOutput()
+                            }
                         }
                     }
 

@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -12,6 +13,9 @@ public struct DownloadDetailReducer {
         var isDownloading = false
         var downloadTriggered = false
         var isDeleting = false
+        var isPresentingDownloadPin = false
+        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
 
         var thumbURL: URL? {
             download.thumbURL(config: serverConfig)
@@ -22,11 +26,14 @@ public struct DownloadDetailReducer {
         }
     }
 
-    public enum Action: ViewAction {
+    public enum Action: ViewAction, BindableAction {
         case view(View)
+        case binding(BindingAction<State>)
         case downloadResult(Result<Void, Error>)
         case performDelete
         case deleteResult(Result<Void, Error>)
+        case pinDownloadConfirmed
+        case pinDownloadCancelled
 
         @CasePathable
         public enum View {
@@ -40,10 +47,19 @@ public struct DownloadDetailReducer {
     @Dependency(\.downloadService) var downloadService
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding:
+                return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .pinDownloadConfirmed:
+                state.isPresentingDownloadPin = false
+                return performDownload(state: &state)
+            case .pinDownloadCancelled:
+                state.isPresentingDownloadPin = false
+                return .none
             default:
                 return handleInternalAction(action, state: &state)
             }

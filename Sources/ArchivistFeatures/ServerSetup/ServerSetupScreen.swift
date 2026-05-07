@@ -23,6 +23,12 @@ public struct ServerSetupScreen: View {
             }
         }
         .interactiveDismissDisabled()
+        .sheet(isPresented: $store.isPresentingPinSetup) {
+            PinSetupSheet(
+                onConfirmed: { pin in store.send(.childPinConfirmed(pin)) },
+                onCancelled: { store.send(.childPinCancelled) }
+            )
+        }
     }
 }
 
@@ -82,6 +88,19 @@ private struct ServerSetupContentView: View {
                 Toggle(String.localised("login.useHttp", table: .login), isOn: $store.registrationDetails.useHTTP)
                     .foregroundStyle(Color.Text.primary)
                     .tint(Color.Accent.dark)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(
+                        String.localised("childMode.toggle", table: .login),
+                        isOn: $store.childModeToggle
+                    )
+                    .foregroundStyle(Color.Text.primary)
+                    .tint(Color.Accent.dark)
+
+                    Text(String.localised("childMode.toggle.subtitle", table: .login))
+                        .font(.caption)
+                        .foregroundStyle(Color.Brand.secondary)
+                }
             }
 
             Spacer()

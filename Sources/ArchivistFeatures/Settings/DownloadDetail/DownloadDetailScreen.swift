@@ -6,7 +6,7 @@ import ArchivistComponents
 
 @ViewAction(for: DownloadDetailReducer.self)
 public struct DownloadDetailScreen: View {
-    public let store: StoreOf<DownloadDetailReducer>
+    @Bindable public var store: StoreOf<DownloadDetailReducer>
 
     public init(store: StoreOf<DownloadDetailReducer>) {
         self.store = store
@@ -74,6 +74,14 @@ public struct DownloadDetailScreen: View {
         .navigationTitle(store.download.title ?? store.download.youtubeId)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { send(.viewDidAppear) }
+        .sheet(isPresented: $store.isPresentingDownloadPin) {
+            PinEntrySheet(
+                expectedPin: store.childModePin,
+                subtitle: String.localised("childMode.pinEntry.download.subtitle", table: .login),
+                onSuccess: { store.send(.pinDownloadConfirmed) },
+                onCancel: { store.send(.pinDownloadCancelled) }
+            )
+        }
     }
 
     private var thumbnailView: some View {

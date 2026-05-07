@@ -23,6 +23,15 @@ extension DownloadDetailReducer {
 
     private func handleDownloadTapped(state: inout State) -> Effect<Action> {
         guard !state.isDownloading, !state.downloadTriggered else { return .none }
+        if state.childModeEnabled, !state.childModePin.isEmpty {
+            state.isPresentingDownloadPin = true
+            return .none
+        }
+        return performDownload(state: &state)
+    }
+
+    func performDownload(state: inout State) -> Effect<Action> {
+        guard !state.isDownloading, !state.downloadTriggered else { return .none }
         state.isDownloading = true
         let config = state.serverConfig
         let videoId = state.download.youtubeId

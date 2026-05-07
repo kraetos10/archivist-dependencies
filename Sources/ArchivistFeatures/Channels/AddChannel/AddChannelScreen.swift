@@ -77,6 +77,14 @@ public struct AddChannelScreen: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $store.isPresentingPin) {
+            PinEntrySheet(
+                expectedPin: store.childModePin,
+                subtitle: String.localised("childMode.pinEntry.addChannel.subtitle", table: .login),
+                onSuccess: { store.send(.pinConfirmed) },
+                onCancel: { store.send(.pinCancelled) }
+            )
+        }
     }
 }
 #endif

@@ -252,8 +252,8 @@ public struct ChannelDetailScreen: View {
                     Image(systemName: "arrow.up.arrow.down")
                         .font(.caption2)
                     Text(store.showNewestDownloadsFirst
-                         ? String.localised("generic.recentlyAdded", table: .generic)
-                         : String.localised("generic.oldestAdded", table: .generic))
+                         ? String.localised("generic.descending", table: .generic)
+                         : String.localised("generic.ascending", table: .generic))
                         .font(.caption)
                         .fontWeight(.medium)
                 }

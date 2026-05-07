@@ -55,6 +55,31 @@ public struct TabScreen: View {
             }
             .tag(AppTab.queue)
 
+            settingsTab
+        }
+        .tint(Color.Accent.dark)
+        .onAppear { store.send(.appeared) }
+        .onChange(of: scenePhase) {
+            store.send(.scenePhaseChanged(scenePhase))
+        }
+        .sheet(isPresented: $store.isPresentingSettingsPin) {
+            PinEntrySheet(
+                expectedPin: store.childModePin,
+                onSuccess: { store.send(.settingsPinSucceeded) },
+                onCancel: { store.send(.settingsPinDismissed) }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var settingsTab: some View {
+        if store.childModeEnabled, !store.settingsUnlocked {
+            PinLockedSettingsPlaceholder()
+                .tabItem {
+                    Label(String.localised("generic.settings", table: .generic), systemImage: "gearshape")
+                }
+                .tag(AppTab.settings)
+        } else {
             SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
                 .tabItem {
                     Label(String.localised("generic.settings", table: .generic), systemImage: "gearshape")
@@ -62,11 +87,23 @@ public struct TabScreen: View {
                 .tag(AppTab.settings)
                 .badge(store.activeDownload != nil ? 1 : 0)
         }
-        .tint(Color.Accent.dark)
-        .onAppear { store.send(.appeared) }
-        .onChange(of: scenePhase) {
-            store.send(.scenePhaseChanged(scenePhase))
+    }
+}
+
+private struct PinLockedSettingsPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(Color.Accent.dark)
+            Text(String.localised("childMode.pinEntry.subtitle", table: .login))
+                .font(.subheadline)
+                .foregroundStyle(Color.Brand.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.Brand.primary)
     }
 }
 

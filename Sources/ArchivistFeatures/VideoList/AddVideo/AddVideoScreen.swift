@@ -94,6 +94,14 @@ public struct AddVideoScreen: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $store.isPresentingPin) {
+            PinEntrySheet(
+                expectedPin: store.childModePin,
+                subtitle: String.localised("childMode.pinEntry.addVideo.subtitle", table: .login),
+                onSuccess: { store.send(.pinConfirmed) },
+                onCancel: { store.send(.pinCancelled) }
+            )
+        }
     }
 }
 #endif

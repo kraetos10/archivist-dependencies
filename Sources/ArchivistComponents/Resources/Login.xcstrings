@@ -1,6 +1,149 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "childMode.toggle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Child User"
+          }
+        }
+      }
+    },
+    "childMode.toggle.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hides the queue, adding new content, and locks Settings behind a PIN."
+          }
+        }
+      }
+    },
+    "childMode.pinSetup.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set a PIN"
+          }
+        }
+      }
+    },
+    "childMode.pinSetup.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a 4-digit PIN. You'll need it to open Settings while Child Mode is on."
+          }
+        }
+      }
+    },
+    "childMode.pinSetup.newPin" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New PIN"
+          }
+        }
+      }
+    },
+    "childMode.pinSetup.confirmPin" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm PIN"
+          }
+        }
+      }
+    },
+    "childMode.pinSetup.mismatch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PINs don't match. Try again."
+          }
+        }
+      }
+    },
+    "childMode.pinEntry.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter PIN"
+          }
+        }
+      }
+    },
+    "childMode.pinEntry.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the parent PIN to open Settings."
+          }
+        }
+      }
+    },
+    "childMode.pinEntry.invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incorrect PIN. Try again."
+          }
+        }
+      }
+    },
+    "childMode.pinEntry.download.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the parent PIN to start this download."
+          }
+        }
+      }
+    },
+    "childMode.pinEntry.addVideo.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the parent PIN to add this video."
+          }
+        }
+      }
+    },
+    "childMode.pinEntry.addChannel.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the parent PIN to subscribe to this channel."
+          }
+        }
+      }
+    },
     "login.addChannel" : {
       "extractionState" : "manual",
       "localizations" : {

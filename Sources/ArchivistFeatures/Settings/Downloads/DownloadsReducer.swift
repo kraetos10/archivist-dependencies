@@ -2,7 +2,7 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
-public enum DownloadSortOrder: Sendable, Equatable {
+public enum DownloadSortOrder: String, Sendable, Equatable {
     case newestFirst
     case oldestFirst
 }
@@ -19,7 +19,7 @@ public struct DownloadsReducer {
         var isLoading = false
         var isLoadingMore = false
         var hasLoaded = false
-        var sortOrder: DownloadSortOrder = .newestFirst
+        @Shared(.appStorage("downloadsSortOrder")) var sortOrder: DownloadSortOrder = .newestFirst
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<DownloadResponse> = []
         var isSearching = false
