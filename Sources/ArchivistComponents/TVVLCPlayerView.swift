@@ -27,14 +27,6 @@ public struct TVVLCPlayerView: View {
                     .tint(.white)
             }
 
-            // Centered play/pause icon — appears when paused, and
-            // fades in/out briefly when toggling state.
-            if !controlsVisible || !playerManager.isPlaying {
-                playPauseIcon
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.3), value: playerManager.isPlaying)
-            }
-
             if controlsVisible {
                 controlsOverlay
                     .transition(.opacity)
@@ -100,24 +92,6 @@ public struct TVVLCPlayerView: View {
         }
     }
 
-    // MARK: - Play / Pause indicator
-
-    @ViewBuilder
-    private var playPauseIcon: some View {
-        ZStack {
-            // Subtle dim behind the icon so it's visible on any background
-            Circle()
-                .fill(.black.opacity(0.6))
-                .frame(width: 100, height: 100)
-
-            Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 48, weight: .bold))
-                .foregroundStyle(.white)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-    }
-
     @ViewBuilder
     private var controlsOverlay: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -161,7 +135,11 @@ public struct TVVLCPlayerView: View {
                         : 0
                 )
 
-                HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.9))
+
                     Text(formatTime(playerManager.currentTime))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))

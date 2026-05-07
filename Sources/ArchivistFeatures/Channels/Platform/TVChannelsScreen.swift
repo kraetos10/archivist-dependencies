@@ -17,11 +17,24 @@ public struct TVChannelsScreen: View {
     public var body: some View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
-                if store.hasLoaded && store.channels.isEmpty {
+                // Segmented filter picker
+                Picker("", selection: $store.filter.animation()) {
+                    Text(String.localised("generic.all", table: .generic))
+                        .tag(ChannelListFilter.all)
+                    Text(String.localised("generic.unwatched", table: .generic))
+                        .tag(ChannelListFilter.withUnwatched)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 48)
+                .padding(.top, 24)
+
+                if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
+                    emptyUnwatchedView
+                } else if store.hasLoaded && store.filteredChannels.isEmpty {
                     emptyStateView
                 } else {
                     LazyVGrid(columns: columns, spacing: 48) {
-                        if store.isLoading && store.channels.isEmpty {
+                        if store.isLoading && store.filteredChannels.isEmpty {
                             ForEach(ChannelResponse.placeholders) { channel in
                                 TVChannelCardView(
                                     channel: channel,
@@ -30,13 +43,15 @@ public struct TVChannelsScreen: View {
                                 .redacted(reason: .placeholder)
                             }
                         } else {
-                            ForEach(store.channels) { channel in
+                            ForEach(store.filteredChannels) { channel in
                                 TVChannelCardView(
                                     channel: channel,
                                     serverConfig: store.serverConfig
                                 ) {
                                     send(.channelTapped(channel))
                                 }
+                                // Paginate on the unfiltered list so additional
+                                // pages are fetched regardless of the active filter.
                                 .onAppear {
                                     if channel.id == store.channels.last?.id {
                                         send(.lastItemAppeared)
@@ -70,6 +85,8 @@ public struct TVChannelsScreen: View {
         }
     }
 
+    // MARK: - Empty states
+
     private var emptyStateView: some View {
         VStack(spacing: 24) {
             Spacer()
@@ -80,6 +97,23 @@ public struct TVChannelsScreen: View {
             Text(String.localised("login.noChannels", table: .login))
                 .font(.title2)
             Text(String.localised("login.subscribeChannelsDescription", table: .login))
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var emptyUnwatchedView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+                .frame(height: 120)
+            Image(systemName: "eye.slash")
+                .font(.system(size: 64))
+                .foregroundStyle(.secondary)
+            Text(String.localised("video.empty.noUnwatched", table: .videos))
+                .font(.title2)
+            Text(String.localised("generic.noNewVideosDescription", table: .generic))
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
