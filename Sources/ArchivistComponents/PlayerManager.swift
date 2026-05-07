@@ -556,6 +556,15 @@ public final class PlayerManager: NSObject {
             OrientationLock.shared.lockPortrait()
         }
         scheduleHideVLCControls()
+        // VLC's drawable doesn't auto-rebind when the host UIView
+        // changes size via a SwiftUI layout animation — audio keeps
+        // playing while the picture goes black. Wait for the layout
+        // pass to settle, then force a drawable reattachment against
+        // the current bounds (same pattern as the rotation handler).
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            self?.refreshVideoOutput()
+        }
     }
     #endif
 

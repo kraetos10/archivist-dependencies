@@ -27,6 +27,14 @@ public struct TVVLCPlayerView: View {
                     .tint(.white)
             }
 
+            // Centered play/pause icon — appears when paused, and
+            // fades in/out briefly when toggling state.
+            if !controlsVisible || !playerManager.isPlaying {
+                playPauseIcon
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: playerManager.isPlaying)
+            }
+
             if controlsVisible {
                 controlsOverlay
                     .transition(.opacity)
@@ -60,6 +68,8 @@ public struct TVVLCPlayerView: View {
         case .rightArrow:
             playerManager.skipForward(10)
             poke()
+        case .upArrow:
+            poke()
         case .playPause, .select:
             playerManager.togglePlayPause()
             poke()
@@ -88,6 +98,24 @@ public struct TVVLCPlayerView: View {
         default:
             break
         }
+    }
+
+    // MARK: - Play / Pause indicator
+
+    @ViewBuilder
+    private var playPauseIcon: some View {
+        ZStack {
+            // Subtle dim behind the icon so it's visible on any background
+            Circle()
+                .fill(.black.opacity(0.6))
+                .frame(width: 100, height: 100)
+
+            Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 48, weight: .bold))
+                .foregroundStyle(.white)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -119,6 +147,9 @@ public struct TVVLCPlayerView: View {
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
             Spacer()
@@ -140,6 +171,9 @@ public struct TVVLCPlayerView: View {
                         .foregroundStyle(.white.opacity(0.8))
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .padding(.horizontal, 80)
         .padding(.vertical, 40)
@@ -237,7 +271,7 @@ private final class TVPressTrackingView: UIView {
         var unhandled = Set<UIPress>()
         for press in presses {
             switch press.type {
-            case .leftArrow, .rightArrow, .playPause, .select, .menu:
+            case .leftArrow, .rightArrow, .upArrow, .playPause, .select, .menu:
                 schedule(press.type)
             default:
                 unhandled.insert(press)
@@ -252,7 +286,7 @@ private final class TVPressTrackingView: UIView {
         var unhandled = Set<UIPress>()
         for press in presses {
             switch press.type {
-            case .leftArrow, .rightArrow, .playPause, .select, .menu:
+            case .leftArrow, .rightArrow, .upArrow, .playPause, .select, .menu:
                 resolve(press.type)
             default:
                 unhandled.insert(press)
