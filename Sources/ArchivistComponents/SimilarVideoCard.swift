@@ -5,13 +5,19 @@ import SwiftUI
 public struct SimilarVideoCard: View {
     public let video: VideoResponse
     public let serverConfig: ServerConfig
+    /// When false, hides the duration / view-count line under the
+    /// title — used by the child-mode player rail where the metadata
+    /// adds noise the kid can't action on.
+    public let showsStats: Bool
 
     public init(
         video: VideoResponse,
-        serverConfig: ServerConfig
+        serverConfig: ServerConfig,
+        showsStats: Bool = true
     ) {
         self.video = video
         self.serverConfig = serverConfig
+        self.showsStats = showsStats
     }
 
     public var body: some View {
@@ -32,18 +38,20 @@ public struct SimilarVideoCard: View {
                     .foregroundStyle(Color.Brand.secondary)
                     .lineLimit(1)
 
-                HStack(spacing: 4) {
-                    if let duration = video.durationStr {
-                        Text(duration)
-                    }
+                if showsStats {
+                    HStack(spacing: 4) {
+                        if let duration = video.durationStr {
+                            Text(duration)
+                        }
 
-                    if let views = video.formattedViewCount {
-                        Text("· \(views) views")
+                        if let views = video.formattedViewCount {
+                            Text("· \(views) views")
+                        }
                     }
+                    .font(.caption2)
+                    .foregroundStyle(Color.Brand.secondary)
+                    .lineLimit(1)
                 }
-                .font(.caption2)
-                .foregroundStyle(Color.Brand.secondary)
-                .lineLimit(1)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 8)

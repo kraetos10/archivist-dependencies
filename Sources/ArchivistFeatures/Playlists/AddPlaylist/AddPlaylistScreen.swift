@@ -66,6 +66,14 @@ public struct AddPlaylistScreen: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $store.isPresentingPin) {
+            PinEntrySheet(
+                expectedPin: store.childModePin,
+                subtitle: String.localised("childMode.pinEntry.addPlaylist.subtitle", table: .login),
+                onSuccess: { store.send(.pinConfirmed) },
+                onCancel: { store.send(.pinCancelled) }
+            )
+        }
     }
 
     private var subscribeTextField: some View {

@@ -5,6 +5,7 @@ import VLCKit
 
 public struct VLCPlayerView: View {
     @Bindable private var playerManager = PlayerManager.shared
+    @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
 
     public init() {}
 
@@ -19,7 +20,12 @@ public struct VLCPlayerView: View {
         }
         .clipped()
         .onAppear {
-            playerManager.scheduleHideVLCControls()
+            // Child mode runs its own always-visible chrome from
+            // `ChildVideoPlayerScreen`; don't kick off the VLC auto-hide
+            // timer in that case — it'd just race our overlay state.
+            if !childModeEnabled {
+                playerManager.scheduleHideVLCControls()
+            }
         }
     }
 
@@ -35,7 +41,11 @@ public struct VLCPlayerView: View {
             VLCVideoRenderView()
                 .allowsHitTesting(false)
 
-            if !isInitialLoad {
+            // Child mode wraps the player in `ChildVideoPlayerScreen`
+            // which renders its own close button, transport, and similar
+            // videos rail — suppress VLC's built-in controls here so the
+            // two layers don't fight over taps and z-order.
+            if !childModeEnabled, !isInitialLoad {
                 // Single layer that handles both: double-tap on left/right
                 // halves skips ±15s; single tap toggles control visibility.
                 // SwiftUI's `onTapGesture(count:2)` listed first lets the
@@ -116,14 +126,19 @@ public struct VLCPlayerView: View {
                         }
                     }
 
-                    roundedControlButton(
-                        systemImage: playerManager.isVLCFullscreen
-                            ? "arrow.down.right.and.arrow.up.left"
-                            : "arrow.up.left.and.arrow.down.right",
-                        iconSize: 18,
-                        padding: 12
-                    ) {
-                        playerManager.toggleVLCFullscreen()
+                    // Child mode runs the player permanently fullscreen,
+                    // so the toggle would be a no-op visual control —
+                    // hide it.
+                    if !childModeEnabled {
+                        roundedControlButton(
+                            systemImage: playerManager.isVLCFullscreen
+                                ? "arrow.down.right.and.arrow.up.left"
+                                : "arrow.up.left.and.arrow.down.right",
+                            iconSize: 18,
+                            padding: 12
+                        ) {
+                            playerManager.toggleVLCFullscreen()
+                        }
                     }
                 }
                 .padding(.trailing, 16 + safeArea.right)
@@ -346,6 +361,9 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
 /// mini ↔ full transition seamless: the underlying `VLCMediaPlayer`
 /// is never recreated.
 public final class VLCPlayerHostView: UIView {
+    private var lastBoundsSize: CGSize = .zero
+    private var pendingRefresh: DispatchWorkItem?
+
     func adoptPlayerView() {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
 
@@ -370,6 +388,37 @@ public final class VLCPlayerHostView: UIView {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView,
               playerView.superview === self else { return }
         playerView.removeFromSuperview()
+    }
+
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        // Drive the VLC drawable refresh from the actual bounds change
+        // instead of `UIDevice.orientationDidChangeNotification` + a
+        // fixed 100 ms delay. The notification fires partway through
+        // the rotation animation, before SwiftUI has applied the final
+        // frame — refreshing then captures a mid-rotation size and the
+        // picture stays black even though audio keeps going.
+        //
+        // Debounce so multiple intermediate `layoutSubviews` calls
+        // during the animation collapse into a single refresh once the
+        // bounds settle. Skip the very first layout (initial mount)
+        // and any zero size — VLCKit doesn't need a refresh until it
+        // already has a real drawable.
+        let size = bounds.size
+        guard size != .zero else { return }
+        if lastBoundsSize == .zero {
+            lastBoundsSize = size
+            return
+        }
+        guard size != lastBoundsSize else { return }
+        lastBoundsSize = size
+
+        pendingRefresh?.cancel()
+        let work = DispatchWorkItem {
+            PlayerManager.shared.refreshVideoOutput()
+        }
+        pendingRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
     }
 }
 

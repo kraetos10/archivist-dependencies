@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -17,6 +18,9 @@ public struct AddPlaylistReducer {
         var playlistInput: String = ""
         var customName: String = ""
         var isSubscribing: Bool = false
+        var isPresentingPin: Bool = false
+        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -24,6 +28,8 @@ public struct AddPlaylistReducer {
         case binding(BindingAction<State>)
         case subscribeResult(Result<Void, Error>)
         case createCustomResult(Result<Void, Error>)
+        case pinConfirmed
+        case pinCancelled
 
         @CasePathable
         public enum View {
@@ -42,6 +48,12 @@ public struct AddPlaylistReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .pinConfirmed:
+                state.isPresentingPin = false
+                return performSubscribe(state: &state)
+            case .pinCancelled:
+                state.isPresentingPin = false
+                return .none
             default:
                 return handleInternalAction(action, state: &state)
             }

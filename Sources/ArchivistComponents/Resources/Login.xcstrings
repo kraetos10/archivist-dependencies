@@ -144,6 +144,17 @@
         }
       }
     },
+    "childMode.pinEntry.addPlaylist.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the parent PIN to subscribe to this playlist."
+          }
+        }
+      }
+    },
     "login.addChannel" : {
       "extractionState" : "manual",
       "localizations" : {

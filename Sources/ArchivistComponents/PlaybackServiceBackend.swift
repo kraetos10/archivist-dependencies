@@ -121,6 +121,25 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         let host = playerView
         service.videoOutputView = nil
         service.videoOutputView = host
+        // `setVideoOutputView` runs on the next main-queue tick, so
+        // schedule the layout sweep after it. Autoresizing propagates
+        // frames down the chain but doesn't reliably invoke
+        // `layoutSubviews` on VLCKit's CAMetalLayer-backed render view —
+        // when that's skipped, the layer keeps its old `drawableSize`
+        // and renders off-screen even though every UIView in the
+        // hierarchy reports the new bounds.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            Self.forceLayoutSweep(self.playerView)
+        }
+    }
+
+    private static func forceLayoutSweep(_ view: UIView) {
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        for sub in view.subviews {
+            forceLayoutSweep(sub)
+        }
     }
 
     public func swapToLocalFile(_ fileURL: URL) {
