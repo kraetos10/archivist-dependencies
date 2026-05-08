@@ -245,6 +245,7 @@ public struct VideoDetailScreen: View {
                     where: { $0.videoId == store.video.videoId }
                 ),
                 youtubeURL: store.youtubeURL,
+                tubeArchivistURL: store.tubeArchivistURL,
                 isDownloading: store.isDownloading,
                 isDownloaded: store.isDownloaded,
                 downloadProgress: store.downloadProgress,

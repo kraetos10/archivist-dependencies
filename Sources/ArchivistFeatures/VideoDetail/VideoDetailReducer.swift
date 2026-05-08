@@ -68,6 +68,9 @@ public struct VideoDetailReducer {
         @Presents var alert: AlertState<AlertAction>?
 
         var youtubeURL: URL? { video.youtubeURL }
+        var tubeArchivistURL: URL? {
+            serverConfig.fullURL(for: "/video/\(video.videoId)/")
+        }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
         var effectiveWatchProgress: Double { localWatchProgress ?? video.watchProgress }
         var channelThumbURL: URL? {

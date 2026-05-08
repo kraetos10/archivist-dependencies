@@ -1,6 +1,28 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "video.share.youtube": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share YouTube link"
+          }
+        }
+      }
+    },
+    "video.share.tubeArchivist": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share TubeArchivist link"
+          }
+        }
+      }
+    },
     "video.autoPlayCountdown": {
       "extractionState": "manual",
       "localizations": {

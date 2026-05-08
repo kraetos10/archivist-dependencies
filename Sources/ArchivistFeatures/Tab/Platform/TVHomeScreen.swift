@@ -11,6 +11,28 @@ public struct TVHomeScreen: View {
         self.store = store
     }
 
+    /// Kick off a fresh fetch for every home-screen row. `viewDidAppear`
+    /// is used on the first run (rows still empty); `pullToRefreshTriggered`
+    /// otherwise so existing content stays on screen while the network
+    /// round-trip lands.
+    private func refreshHome() {
+        if store.videoList.videos.isEmpty {
+            store.send(.videoList(.view(.viewDidAppear)))
+        } else {
+            store.send(.videoList(.view(.pullToRefreshTriggered)))
+        }
+        if store.channels.channels.isEmpty {
+            store.send(.channels(.view(.viewDidAppear)))
+        } else {
+            store.send(.channels(.view(.pullToRefreshTriggered)))
+        }
+        if store.playlists.playlists.isEmpty {
+            store.send(.playlists(.view(.viewDidAppear)))
+        } else {
+            store.send(.playlists(.view(.pullToRefreshTriggered)))
+        }
+    }
+
     private var continueWatchingVideos: [VideoResponse] {
         store.videoList.videos.filter { $0.isPartiallyWatched }
     }
@@ -130,22 +152,28 @@ public struct TVHomeScreen: View {
                 }
                 .padding(.vertical, 48)
             }
-            .onAppear {
-                if store.videoList.videos.isEmpty {
-                    store.send(.videoList(.view(.viewDidAppear)))
-                } else {
-                    store.send(.videoList(.view(.pullToRefreshTriggered)))
-                }
-                if store.channels.channels.isEmpty {
-                    store.send(.channels(.view(.viewDidAppear)))
-                } else {
-                    store.send(.channels(.view(.pullToRefreshTriggered)))
-                }
-                if store.playlists.playlists.isEmpty {
-                    store.send(.playlists(.view(.viewDidAppear)))
-                } else {
-                    store.send(.playlists(.view(.pullToRefreshTriggered)))
-                }
+            .onAppear { refreshHome() }
+            // SwiftUI doesn't reliably fire `.onAppear` on the
+            // underlying view when a `fullScreenCover` dismisses on
+            // tvOS, so the home rows would otherwise stay stale every
+            // time the user came back from a channel / playlist /
+            // detail / view-all screen. Watch each cover/path piece of
+            // state and re-refresh as it returns to the empty/inactive
+            // value.
+            .onChange(of: store.presentingAllChannels) { _, presenting in
+                if !presenting { refreshHome() }
+            }
+            .onChange(of: store.presentingAllPlaylists) { _, presenting in
+                if !presenting { refreshHome() }
+            }
+            .onChange(of: store.channels.selectedChannel?.channel.channelId) { _, id in
+                if id == nil { refreshHome() }
+            }
+            .onChange(of: store.playlists.selectedPlaylist?.playlist.playlistId) { _, id in
+                if id == nil { refreshHome() }
+            }
+            .onChange(of: store.videoList.path.count) { oldCount, newCount in
+                if oldCount > 0, newCount == 0 { refreshHome() }
             }
         } destination: { store in
             switch store.case {

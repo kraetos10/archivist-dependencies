@@ -126,6 +126,7 @@ public struct ActionButtonsRow: View {
     let showPlayNext: Bool
     let isInPlayNext: Bool
     let youtubeURL: URL?
+    let tubeArchivistURL: URL?
     let isDownloading: Bool
     let isDownloaded: Bool
     let downloadProgress: CGFloat
@@ -143,6 +144,7 @@ public struct ActionButtonsRow: View {
         showPlayNext: Bool,
         isInPlayNext: Bool,
         youtubeURL: URL?,
+        tubeArchivistURL: URL? = nil,
         isDownloading: Bool,
         isDownloaded: Bool,
         downloadProgress: CGFloat,
@@ -159,6 +161,7 @@ public struct ActionButtonsRow: View {
         self.showPlayNext = showPlayNext
         self.isInPlayNext = isInPlayNext
         self.youtubeURL = youtubeURL
+        self.tubeArchivistURL = tubeArchivistURL
         self.isDownloading = isDownloading
         self.isDownloaded = isDownloaded
         self.downloadProgress = downloadProgress
@@ -219,8 +222,25 @@ public struct ActionButtonsRow: View {
                 }
 
                 #if !os(tvOS)
-                if let youtubeURL {
-                    ShareLink(item: youtubeURL) {
+                if youtubeURL != nil || tubeArchivistURL != nil {
+                    Menu {
+                        if let youtubeURL {
+                            ShareLink(item: youtubeURL) {
+                                Label(
+                                    String.localised("video.share.youtube", table: .videos),
+                                    systemImage: "play.rectangle"
+                                )
+                            }
+                        }
+                        if let tubeArchivistURL {
+                            ShareLink(item: tubeArchivistURL) {
+                                Label(
+                                    String.localised("video.share.tubeArchivist", table: .videos),
+                                    systemImage: "server.rack"
+                                )
+                            }
+                        }
+                    } label: {
                         ActionPillLabel(
                             systemImage: "arrowshape.turn.up.right",
                             label: String.localised("generic.share", table: .generic)
