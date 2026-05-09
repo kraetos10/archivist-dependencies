@@ -29,6 +29,13 @@ extension FilteredVideoListReducer {
         case .markAsWatchedTapped(let video):
             return .send(.delegate(.markAsWatchedRequested(video)))
         case .deleteFromServerTapped(let video):
+            // Optimistically remove from this screen's local list. The
+            // parent `VideoListReducer` performs the actual server delete
+            // (and updates its own cached home sections on success), but
+            // never propagates the result back down — without this local
+            // removal the deleted item kept showing up in the View All
+            // grid until the user pulled to refresh.
+            state.videos.remove(id: video.id)
             return .send(.delegate(.deleteFromServerRequested(video)))
         }
     }

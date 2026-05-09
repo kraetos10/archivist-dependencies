@@ -233,6 +233,20 @@ extension VideoDetailReducer {
                         }
                     }
                     PlayerManager.shared.currentVideoID = videoId
+                    // Refresh now-playing metadata so the title/channel
+                    // row in the player overlay (and Control Center
+                    // now-playing) reflect the auto-played video.
+                    // Without this, the overlay sticks on the previous
+                    // video's title until the user opens detail manually.
+                    PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
+                        title: currentVideo.title,
+                        artist: currentVideo.channelName,
+                        duration: Double(currentVideo.player?.duration ?? 0),
+                        artworkURL: config.fullURL(for: currentVideo.vidThumbUrl ?? ""),
+                        channelThumbURL: currentVideo.channel.channelThumbUrl
+                            .flatMap { config.fullURL(for: $0) },
+                        authHeaders: config.authHeaders
+                    )
                     return PlayerManager.shared.playbackEndEvents()
                 }
                 guard let stream else { return }

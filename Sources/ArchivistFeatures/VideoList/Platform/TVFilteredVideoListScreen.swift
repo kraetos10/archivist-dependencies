@@ -47,6 +47,26 @@ public struct TVFilteredVideoListScreen: View {
                                 ) {
                                     send(.videoTapped(item.video))
                                 }
+                                .contextMenu {
+                                    Button {
+                                        send(.markAsWatchedTapped(item.video))
+                                    } label: {
+                                        Label(
+                                            item.video.isWatched
+                                                ? String.localised("video.markAsUnwatched", table: .videos)
+                                                : String.localised("video.markAsWatched", table: .videos),
+                                            systemImage: item.video.isWatched ? "eye.slash" : "eye"
+                                        )
+                                    }
+                                    Button(role: .destructive) {
+                                        send(.deleteFromServerTapped(item.video))
+                                    } label: {
+                                        Label(
+                                            String.localised("video.deleteFromServer", table: .videos),
+                                            systemImage: "trash"
+                                        )
+                                    }
+                                }
                                 .onAppear {
                                     if item.video.id == store.videos.last?.id {
                                         send(.lastItemAppeared)

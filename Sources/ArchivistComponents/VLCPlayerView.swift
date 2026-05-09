@@ -119,8 +119,21 @@ public struct VLCPlayerView: View {
                             // VLCKit's drawable won't rebind to the new host
                             // bounds without this — audio keeps playing while
                             // the picture goes black.
+                            //
+                            // iOS interface rotation duration varies widely
+                            // by device (~250 ms on newer hardware, 500+ ms
+                            // on older devices or Low Power Mode). Fire a
+                            // sequence of refreshes so at least one lands
+                            // after the host bounds have settled — the
+                            // single 100 ms refresh used to leave the
+                            // picture black on slower devices because the
+                            // rebind captured pre-rotation bounds.
                             Task { @MainActor in
                                 try? await Task.sleep(for: .milliseconds(100))
+                                PlayerManager.shared.refreshVideoOutput()
+                                try? await Task.sleep(for: .milliseconds(300))
+                                PlayerManager.shared.refreshVideoOutput()
+                                try? await Task.sleep(for: .milliseconds(400))
                                 PlayerManager.shared.refreshVideoOutput()
                             }
                         }
@@ -363,6 +376,7 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
 public final class VLCPlayerHostView: UIView {
     private var lastBoundsSize: CGSize = .zero
     private var pendingRefresh: DispatchWorkItem?
+    private var pendingBackstopRefresh: DispatchWorkItem?
 
     func adoptPlayerView() {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
@@ -413,12 +427,25 @@ public final class VLCPlayerHostView: UIView {
         guard size != lastBoundsSize else { return }
         lastBoundsSize = size
 
+        // Two-stage refresh: 180 ms catches fast devices where the rotation
+        // animation finishes quickly; 700 ms is a backstop for slower
+        // devices (older iPads, Low Power Mode) where the rotation
+        // animation can run 500+ ms and a single early refresh ends up
+        // re-binding VLC's drawable against still-mid-animation bounds —
+        // picture stays black even though audio keeps playing. Both work
+        // items are cancelled if another bounds change comes in.
         pendingRefresh?.cancel()
+        pendingBackstopRefresh?.cancel()
         let work = DispatchWorkItem {
             PlayerManager.shared.refreshVideoOutput()
         }
+        let backstop = DispatchWorkItem {
+            PlayerManager.shared.refreshVideoOutput()
+        }
         pendingRefresh = work
+        pendingBackstopRefresh = backstop
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: backstop)
     }
 }
 
