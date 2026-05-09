@@ -1,5 +1,6 @@
 #if os(iOS) || os(tvOS)
 import Foundation
+import QuartzCore
 import UIKit
 import VLCKit
 import VLCPlayerCore
@@ -137,6 +138,26 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     private static func forceLayoutSweep(_ view: UIView) {
         view.setNeedsLayout()
         view.layoutIfNeeded()
+        // VLCKit renders into a `CAMetalLayer` somewhere inside this
+        // hierarchy. Autoresizing propagates the UIView frame on rotation
+        // but `CAMetalLayer.drawableSize` does NOT auto-update from
+        // `bounds` changes — the layer keeps rendering into a surface
+        // sized for the previous orientation, which composites as black
+        // (or a tiny tile) inside the new bounds. Pause+play doesn't
+        // recover it because the stale drawable size is what the vout
+        // module is configured for. Explicitly retarget the drawable
+        // size for any Metal layer in the subtree so the next frame
+        // renders at the correct resolution.
+        if let metalLayer = view.layer as? CAMetalLayer {
+            let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
+            let target = CGSize(
+                width: view.bounds.width * scale,
+                height: view.bounds.height * scale
+            )
+            if target.width > 0, target.height > 0, metalLayer.drawableSize != target {
+                metalLayer.drawableSize = target
+            }
+        }
         for sub in view.subviews {
             forceLayoutSweep(sub)
         }

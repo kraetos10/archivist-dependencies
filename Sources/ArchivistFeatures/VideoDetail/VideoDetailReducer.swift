@@ -68,8 +68,15 @@ public struct VideoDetailReducer {
         @Presents var alert: AlertState<AlertAction>?
 
         var youtubeURL: URL? { video.youtubeURL }
+        /// Used for the TubeArchivist Share option. Points at the streaming
+        /// media file rather than the `/video/{id}/` web UI page — the web
+        /// UI requires a logged-in session, so a recipient opening the
+        /// shared link in another app/browser would just hit the login wall.
+        /// The media URL is served as a static file by the underlying
+        /// webserver and doesn't require API auth.
         var tubeArchivistURL: URL? {
-            serverConfig.fullURL(for: "/video/\(video.videoId)/")
+            guard let mediaPath = video.mediaUrl else { return nil }
+            return serverConfig.fullURL(for: mediaPath)
         }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
         var effectiveWatchProgress: Double { localWatchProgress ?? video.watchProgress }
