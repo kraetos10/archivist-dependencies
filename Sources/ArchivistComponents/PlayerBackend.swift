@@ -36,6 +36,14 @@ public protocol PlayerBackend: AnyObject {
     /// no-op for backends that don't need the nudge.
     func refreshDrawable()
 
+    /// Hard-reload the current source at the current playback position.
+    /// Heavier than `refreshDrawable` (audio glitches and the network
+    /// stream re-buffers) but rebuilds the underlying vout entirely —
+    /// the only reliable recovery on devices where rotation leaves VLC's
+    /// drawable permanently black even after pause+play. Default is a
+    /// no-op for backends that don't need it.
+    func reloadAtCurrentPosition()
+
     func playbackEndEvents() -> AsyncStream<Void>
 
     var onTimeUpdate: ((Double) -> Void)? { get set }
@@ -56,6 +64,11 @@ public extension PlayerBackend {
     func refreshDrawable() {
         // Default no-op — backends with a stable drawable binding don't
         // need to do anything on rotation / foreground transitions.
+    }
+
+    func reloadAtCurrentPosition() {
+        // Default no-op — backends without a vout-rebind problem don't
+        // need the heavy hammer.
     }
 
     func setPlaybackRate(_ rate: Float) {

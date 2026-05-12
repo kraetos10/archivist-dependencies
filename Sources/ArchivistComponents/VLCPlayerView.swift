@@ -113,28 +113,20 @@ public struct VLCPlayerView: View {
                         ) {
                             OrientationLock.shared.rotateFullscreen()
                             playerManager.scheduleHideVLCControls()
-                            // Programmatic rotation via requestGeometryUpdate
-                            // doesn't fire UIDevice.orientationDidChangeNotification,
-                            // so the normal rotation→refresh path is skipped.
-                            // VLCKit's drawable won't rebind to the new host
-                            // bounds without this — audio keeps playing while
-                            // the picture goes black.
-                            //
-                            // iOS interface rotation duration varies widely
-                            // by device (~250 ms on newer hardware, 500+ ms
-                            // on older devices or Low Power Mode). Fire a
-                            // sequence of refreshes so at least one lands
-                            // after the host bounds have settled — the
-                            // single 100 ms refresh used to leave the
-                            // picture black on slower devices because the
-                            // rebind captured pre-rotation bounds.
+                            // The soft `refreshVideoOutput` rebind isn't
+                            // enough on some phones — VLC's vout stays
+                            // permanently bound to the pre-rotation
+                            // configuration and the picture is black even
+                            // after pause+play. Replay the same URL at the
+                            // current position once the rotation animation
+                            // has settled so libvlc rebuilds the vout
+                            // entirely against the new host bounds. Costs a
+                            // brief audio glitch / re-buffer, which is the
+                            // trade for guaranteed video recovery on every
+                            // device.
                             Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(100))
-                                PlayerManager.shared.refreshVideoOutput()
-                                try? await Task.sleep(for: .milliseconds(300))
-                                PlayerManager.shared.refreshVideoOutput()
-                                try? await Task.sleep(for: .milliseconds(400))
-                                PlayerManager.shared.refreshVideoOutput()
+                                try? await Task.sleep(for: .milliseconds(700))
+                                PlayerManager.shared.reloadVideoAtCurrentPosition()
                             }
                         }
                     }

@@ -252,6 +252,15 @@ public final class PlayerManager: NSObject {
     func refreshVideoOutput() {
         backend?.refreshDrawable()
     }
+
+    /// Heavy hammer — wired to the in-app rotate button. Replays the
+    /// current URL at the current position to fully rebuild VLC's vout.
+    /// Used in place of `refreshVideoOutput` on phones where the soft
+    /// rebind (or even pause+play) leaves the picture permanently black
+    /// after a programmatic rotation.
+    func reloadVideoAtCurrentPosition() {
+        backend?.reloadAtCurrentPosition()
+    }
     #endif
 
     /// Pull `isPlaying` / `isBuffering` directly from the active backend.

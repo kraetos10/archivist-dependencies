@@ -163,6 +163,34 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         }
     }
 
+    /// Force a full re-init of libvlc's vout by replaying the current URL
+    /// at the current position. The soft `refreshDrawable` rebind only
+    /// reparents `_actualVideoOutputView` under the host — it leaves the
+    /// vout module bound to its original (pre-rotation) configuration.
+    /// On some phones that vout is non-recoverable after a programmatic
+    /// rotation: the picture stays black, and even pause+play doesn't
+    /// bring it back because libvlc's clock toggling doesn't recreate the
+    /// vout. `playMediaList` with the same URL does, at the cost of a
+    /// brief audio glitch and network re-buffer.
+    public func reloadAtCurrentPosition() {
+        guard let media = service.currentlyPlayingMedia,
+              let url = media.url else { return }
+
+        let resumeSec = max(currentTime, 0)
+        pendingResumeSec = resumeSec
+        hasReachedPlaying = false
+        isBuffering = true
+        onStateChange?()
+
+        let newMedia = VLCMedia(url: url)!
+        if resumeSec > 0 {
+            newMedia.addOption(":start-time=\(Int(resumeSec))")
+        }
+        let list = VLCMediaList()
+        list.add(newMedia)
+        service.playMediaList(list, firstIndex: 0, subtitlesFilePath: nil)
+    }
+
     public func swapToLocalFile(_ fileURL: URL) {
         guard fileURL.isFileURL else { return }
         let resumeSec = max(currentTime, 0)
