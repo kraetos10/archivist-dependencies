@@ -119,6 +119,15 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     /// current host bounds.
     public func refreshDrawable() {
         guard service.videoOutputView != nil else { return }
+        // Skip during PiP — VLCKit's PiP path renders through its own
+        // window/drawable, and tearing down the host binding mid-PiP stalls
+        // the pipeline (visible as lag/freezes when entering or living in
+        // PiP). The host's bounds-change debounce in `VLCPlayerHostView`
+        // fires while the detail screen dismisses to PiP, so this is a
+        // hot path. PiP is iOS-only in PlaybackService.
+        #if os(iOS)
+        if service.isPipEnabled { return }
+        #endif
         let host = playerView
         service.videoOutputView = nil
         service.videoOutputView = host

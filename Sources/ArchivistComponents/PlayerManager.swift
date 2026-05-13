@@ -250,6 +250,10 @@ public final class PlayerManager: NSObject {
     /// keeps playing, picture goes black). The backend's implementation
     /// nudges libvlc into rebinding to the current host.
     func refreshVideoOutput() {
+        // Drawable churn during PiP causes visible lag/freezes — PiP's
+        // own drawable does its own thing, and our host binding doesn't
+        // need refreshing until PiP ends and the host comes back on-screen.
+        if isInPiP { return }
         backend?.refreshDrawable()
     }
 
@@ -668,6 +672,11 @@ public final class PlayerManager: NSObject {
         backend.onPiPStateChanged = { [weak self] enabled in
             guard let self else { return }
             self.isInPiP = enabled
+            // Pull fresh play/buffer state from the backend — VLCKit's
+            // state callbacks can land mid-transition while the host view
+            // is between containers and get missed, leaving the controls
+            // showing the wrong state after PiP enter/exit.
+            self.syncPlaybackState()
             // PiP ended — apply any cache swap we deferred while in PiP.
             // Doing this mid-PiP would tear the rendering pipeline down
             // and visibly restart the video; now that PiP is off, the
