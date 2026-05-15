@@ -235,11 +235,28 @@ public final class PlayerManager: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            // Tiny delay so the bounds change has fully propagated
-            // through the SwiftUI layout pass before we hit VLC.
             Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(100))
-                self?.refreshVideoOutput()
+                guard let self else { return }
+                if self.isVLCFullscreen {
+                    // Soft rebind is insufficient when rotating during
+                    // fullscreen playback — VLC's vout stays bound to
+                    // the pre-rotation surface and the picture stays
+                    // black even after pause+play. Mirror the in-app
+                    // rotate button: hard reload at current position
+                    // once the rotation animation has settled. Ignore
+                    // face-up/face-down — those don't change the
+                    // interface orientation, so no recovery needed.
+                    let orientation = UIDevice.current.orientation
+                    guard orientation.isValidInterfaceOrientation else { return }
+                    try? await Task.sleep(for: .milliseconds(700))
+                    self.reloadVideoAtCurrentPosition()
+                } else {
+                    // Outside fullscreen the UI is locked portrait so
+                    // there's no real bounds change to recover from,
+                    // but keep the soft rebind as a cheap safety net.
+                    try? await Task.sleep(for: .milliseconds(100))
+                    self.refreshVideoOutput()
+                }
             }
         }
     }
