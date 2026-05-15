@@ -107,8 +107,8 @@ public struct TVSettingsScreen: View {
             }
 
             Section {
-                Toggle(String.localised("video.autoplay", table: .videos), isOn: $store.autoPlayEnabled)
-                Toggle(String.localised("video.autoplayPlaylist", table: .videos), isOn: $store.autoPlayPlaylist)
+                Toggle(String.localised("video.autoplay", table: .videos), isOn: Binding(store.withState { $0.$autoPlayEnabled }))
+                Toggle(String.localised("video.autoplayPlaylist", table: .videos), isOn: Binding(store.withState { $0.$autoPlayPlaylist }))
             } header: {
                 Text(String.localised("video.autoplaySection", table: .videos))
             }

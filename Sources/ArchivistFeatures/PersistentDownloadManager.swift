@@ -64,6 +64,11 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
         let task = Task { [weak self] in
             guard let self else { return }
             @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
+            // Bind to an immutable local so the KVO/progress closures
+            // capture a `let` rather than the `@Dependency`-backed mutable
+            // var — capturing the mutable var trips strict-concurrency's
+            // 'sending' closure data-race diagnostic.
+            let database = deviceDownloadDatabase
 
             let progress = Progress(totalUnitCount: 100)
             let manager = VideoDownloadManager(progress: progress)
@@ -75,7 +80,7 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
                     await self.handleProgress(
                         videoId: videoId,
                         value: value,
-                        database: deviceDownloadDatabase
+                        database: database
                     )
                 }
             }
@@ -93,11 +98,11 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
                 let fileSize = (try? FileManager.default.attributesOfItem(
                     atPath: savedURL.path
                 )[.size] as? Int) ?? nil
-                try? deviceDownloadDatabase.markCompleted(videoId, fileSize)
+                try? database.markCompleted(videoId, fileSize)
                 await self.broadcast(videoId: videoId, event: .completed)
             } catch {
                 observation.invalidate()
-                try? deviceDownloadDatabase.markFailed(videoId)
+                try? database.markFailed(videoId)
                 await self.broadcast(videoId: videoId, event: .failed(error.localizedDescription))
             }
             await self.cleanUp(videoId: videoId)

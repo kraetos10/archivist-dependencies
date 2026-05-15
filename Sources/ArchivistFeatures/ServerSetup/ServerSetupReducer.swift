@@ -11,7 +11,7 @@ public struct ServerSetupReducer {
     @ObservableState
     public struct State: Sendable {
         var path = StackState<ServerSetupPath.State>()
-        @Shared var registrationDetails: RegistrationDetails
+        var registrationDetails = RegistrationDetails()
         var isLoading = false
         var childModeToggle = false
         var isPresentingPinSetup = false
@@ -19,9 +19,7 @@ public struct ServerSetupReducer {
         @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
         @Presents var alert: AlertState<AlertAction>?
 
-        public init() {
-            _registrationDetails = Shared(value: RegistrationDetails())
-        }
+        public init() {}
     }
 
     public enum AlertAction: Equatable, Sendable {
@@ -57,7 +55,7 @@ public struct ServerSetupReducer {
                 return handleViewAction(viewAction, state: &state)
             case .serverValidated:
                 state.path.append(.login(LoginReducer.State(
-                    registrationDetails: state.$registrationDetails
+                    registrationDetails: Shared(value: state.registrationDetails)
                 )))
                 return .none
             case .path(.element(_, action: .login(.loginSucceeded(let token)))):

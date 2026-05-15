@@ -25,7 +25,7 @@ public struct PlaybackCacheScreen: View {
     private var iOSBody: some View {
         List {
             Section {
-                Toggle(isOn: $store.prebufferEnabled) {
+                Toggle(isOn: Binding(store.withState { $0.$prebufferEnabled })) {
                     Text(String.localised("video.vlcPrebuffer", table: .videos))
                     Text(String.localised("video.vlcPrebufferSubtitle", table: .videos))
                         .font(.caption)
@@ -33,7 +33,7 @@ public struct PlaybackCacheScreen: View {
                 }
 
                 if store.prebufferEnabled {
-                    Toggle(isOn: $store.prebufferWifiOnly) {
+                    Toggle(isOn: Binding(store.withState { $0.$prebufferWifiOnly })) {
                         Text(String.localised("video.prebuffer.wifiOnly", table: .videos))
                         Text(String.localised("video.prebuffer.wifiOnlySubtitle", table: .videos))
                             .font(.caption)
@@ -49,7 +49,7 @@ public struct PlaybackCacheScreen: View {
             Section {
                 Picker(
                     String.localised("video.cache.sizeLimit", table: .videos),
-                    selection: $store.cacheSizeLimitBytes
+                    selection: Binding(store.withState { $0.$cacheSizeLimitBytes })
                 ) {
                     ForEach(PlaybackCache.cacheSizeLimitPresetsBytes, id: \.self) { value in
                         Text(Self.cacheLimitLabel(for: value)).tag(value)
@@ -112,7 +112,7 @@ public struct PlaybackCacheScreen: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Toggle(isOn: $store.prebufferEnabled) {
+            Toggle(isOn: Binding(store.withState { $0.$prebufferEnabled })) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(String.localised("video.prebuffer.tv.title", table: .videos))
                     Text(String.localised("video.prebuffer.tv.subtitle", table: .videos))
@@ -135,7 +135,7 @@ public struct PlaybackCacheScreen: View {
 
             Picker(
                 String.localised("video.cache.sizeLimit", table: .videos),
-                selection: $store.cacheSizeLimitBytes
+                selection: Binding(store.withState { $0.$cacheSizeLimitBytes })
             ) {
                 ForEach(PlaybackCache.cacheSizeLimitPresetsBytes, id: \.self) { value in
                     Text(Self.cacheLimitLabel(for: value)).tag(value)
