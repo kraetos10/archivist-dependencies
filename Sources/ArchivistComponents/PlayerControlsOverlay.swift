@@ -37,7 +37,15 @@ public struct PlayerControlsOverlay: View {
                     tapAreas
 
                     if playerManager.vlcControlsVisible {
-                        controlsOverlay(safeArea: geo.safeAreaInsets)
+                        // Only the fullscreen player extends under the
+                        // device safe area — inline, the parent already
+                        // places us below the chrome, so applying insets
+                        // would shove the controls inward off the edge.
+                        controlsOverlay(
+                            safeArea: playerManager.isVLCFullscreen
+                                ? geo.safeAreaInsets
+                                : EdgeInsets()
+                        )
                     }
                 }
 
