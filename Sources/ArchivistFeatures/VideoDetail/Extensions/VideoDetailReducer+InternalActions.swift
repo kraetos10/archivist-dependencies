@@ -134,9 +134,28 @@ extension VideoDetailReducer {
         return .merge(
             .cancel(id: CancelID.playback),
             .run { _ in
-                await MainActor.run { PlayerManager.shared.stop() }
+                // Keep any presented fullscreen player up — the countdown
+                // card is surfaced inside it.
+                await MainActor.run {
+                    PlayerManager.shared.stop(dismissFullscreen: false)
+                }
             },
             .run { send in
+                // Wire the countdown card's buttons for the lifetime of
+                // this countdown so the fullscreen player VC (which can't
+                // see the store) can drive play-now / cancel.
+                await MainActor.run {
+                    PlayerManager.shared.onAutoPlayPlayNow = {
+                        Task { @MainActor in
+                            await send(.view(.autoPlayCountdownPlayNowTapped))
+                        }
+                    }
+                    PlayerManager.shared.onAutoPlayCancel = {
+                        Task { @MainActor in
+                            await send(.view(.autoPlayCountdownCancelTapped))
+                        }
+                    }
+                }
                 for _ in 0..<Self.autoPlayCountdownSeconds {
                     try? await Task.sleep(for: .seconds(1))
                     await send(.autoPlayCountdownTick)
@@ -190,7 +209,9 @@ extension VideoDetailReducer {
         return .merge(
             .run { [videoService] send in
                 let stream = await MainActor.run {
-                    PlayerManager.shared.stop()
+                    // Auto-advance: keep the fullscreen player up so the
+                    // next video plays fullscreen without a flash.
+                    PlayerManager.shared.stop(dismissFullscreen: false)
                     PlayerManager.shared.canGoPrevious = hasPrevious
                     guard let url else { return nil as AsyncStream<Void>? }
                     PlayerManager.shared.load(
@@ -278,7 +299,9 @@ extension VideoDetailReducer {
         return .merge(
             .run { [videoService] send in
                 let stream = await MainActor.run {
-                    PlayerManager.shared.stop()
+                    // Loading the next video — keep the fullscreen player
+                    // up so playback continues fullscreen seamlessly.
+                    PlayerManager.shared.stop(dismissFullscreen: false)
                     guard let url else { return nil as AsyncStream<Void>? }
                     PlayerManager.shared.load(
                         url: url,

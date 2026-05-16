@@ -220,5 +220,31 @@ public struct VideoDetailReducer {
             PlaylistPickerReducer()
         }
         .ifLet(\.$alert, action: \.alert)
+        .onChange(of: \.autoPlayCountdown) { _, countdown in
+            // Mirror the auto-play countdown into `PlayerManager` so the
+            // fullscreen player VC — which has no access to this store —
+            // can render the "up next" card. Clearing it also drops the
+            // card's button callbacks wired in `handleAutoPlayCountdownStarted`.
+            Reduce { state, _ in
+                let config = state.serverConfig
+                return .run { _ in
+                    await MainActor.run {
+                        if let countdown {
+                            PlayerManager.shared.autoPlayCountdown = AutoPlayCountdownInfo(
+                                title: countdown.nextVideo.title,
+                                thumbnailURL: countdown.nextVideo.vidThumbUrl
+                                    .flatMap { config.fullURL(for: $0) },
+                                remainingSeconds: countdown.remainingSeconds,
+                                totalSeconds: VideoDetailReducer.autoPlayCountdownSeconds
+                            )
+                        } else {
+                            PlayerManager.shared.autoPlayCountdown = nil
+                            PlayerManager.shared.onAutoPlayPlayNow = nil
+                            PlayerManager.shared.onAutoPlayCancel = nil
+                        }
+                    }
+                }
+            }
+        }
     }
 }

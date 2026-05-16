@@ -3,314 +3,31 @@ import SwiftUI
 import UIKit
 import VLCKit
 
+/// The inline (in-detail) VLC player. A single, persistent VLC surface is
+/// hosted here; fullscreen is a *separate* `UIViewController`
+/// (`FullscreenPlayerViewController`) presented modally, so this view
+/// never reshapes itself for fullscreen — it only ever renders inline.
 public struct VLCPlayerView: View {
-    @Bindable private var playerManager = PlayerManager.shared
-    @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
-
     public init() {}
 
     public var body: some View {
-        // Single-instance, no fullScreenCover. Fullscreen is driven by the
-        // host (`VideoDetailScreen`) reshaping its layout — keeps the same
-        // SwiftUI identity across the toggle so the persistent VLC UIView
-        // doesn't get reparented (which is what was producing the black
-        // frame on every fullscreen flip).
         ZStack {
-            playerContent
-        }
-        .clipped()
-        .onAppear {
-            // Child mode runs its own always-visible chrome from
-            // `ChildVideoPlayerScreen`; don't kick off the VLC auto-hide
-            // timer in that case — it'd just race our overlay state.
-            if !childModeEnabled {
-                playerManager.scheduleHideVLCControls()
-            }
-        }
-    }
-
-    private var playerContent: some View {
-        // True only on the first load, before VLC has produced a single
-        // tick. We treat this as "stream is being resolved" — full dim
-        // and no controls. After we've seen any time, we're in
-        // mid-playback territory: any subsequent buffering is a rebuffer,
-        // so we keep the controls live and just overlay a spinner.
-        let isInitialLoad = playerManager.isBuffering && playerManager.currentTime == 0
-
-        return ZStack {
             VLCVideoRenderView()
                 .allowsHitTesting(false)
 
-            // Child mode wraps the player in `ChildVideoPlayerScreen`
-            // which renders its own close button, transport, and similar
-            // videos rail — suppress VLC's built-in controls here so the
-            // two layers don't fight over taps and z-order.
-            if !childModeEnabled, !isInitialLoad {
-                // Single layer that handles both: double-tap on left/right
-                // halves skips ±15s; single tap toggles control visibility.
-                // SwiftUI's `onTapGesture(count:2)` listed first lets the
-                // gesture system resolve the double-tap before falling
-                // back to single-tap, so the show/hide doesn't eat the
-                // skip when the user double-taps.
-                tapAreas
-
-                if playerManager.vlcControlsVisible {
-                    controlsOverlay
-                }
-            }
-
-            if playerManager.isBuffering {
-                if isInitialLoad {
-                    Color.black.opacity(0.4)
-                        .allowsHitTesting(false)
-                }
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(.white)
-                    .allowsHitTesting(false)
-            }
+            PlayerControlsOverlay()
         }
-    }
-
-    private var controlsOverlay: some View {
-        // Pad the controls outside the device's safe area only when we're
-        // in fullscreen — that's the only mode where the host
-        // (`VideoDetailScreen`) ignores safe-area, so the player extends
-        // under the dynamic island / home indicator. In inline mode the
-        // parent already places us below the chrome, so any extra offset
-        // would push the controls into the middle of the player.
-        let fs = playerManager.isVLCFullscreen
-        let safeArea = fs ? Self.windowSafeAreaInsets : .zero
-        // Dim layer behind the buttons. Single-tap hides the controls;
-        // double-tap on either half still triggers a ±15s skip so the
-        // gesture works regardless of whether controls are visible.
-        return Color.black.opacity(0.35)
-            .overlay {
-                GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        tapHalf(skip: { playerManager.skipBackward(15) })
-                        tapHalf(skip: { playerManager.skipForward(15) })
-                    }
-                    .frame(width: geo.size.width, height: geo.size.height)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                HStack(spacing: 12) {
-                    roundedControlButton(
-                        systemImage: "pip.enter",
-                        iconSize: 16,
-                        padding: 12
-                    ) {
-                        playerManager.startPiPIfAvailable()
-                        playerManager.scheduleHideVLCControls()
-                    }
-
-                    if playerManager.isVLCFullscreen {
-                        roundedControlButton(
-                            systemImage: "rotate.right",
-                            iconSize: 18,
-                            padding: 12
-                        ) {
-                            OrientationLock.shared.rotateFullscreen()
-                            playerManager.scheduleHideVLCControls()
-                            // The soft `refreshVideoOutput` rebind isn't
-                            // enough on some phones — VLC's vout stays
-                            // permanently bound to the pre-rotation
-                            // configuration and the picture is black even
-                            // after pause+play. Replay the same URL at the
-                            // current position once the rotation animation
-                            // has settled so libvlc rebuilds the vout
-                            // entirely against the new host bounds. Costs a
-                            // brief audio glitch / re-buffer, which is the
-                            // trade for guaranteed video recovery on every
-                            // device.
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(700))
-                                PlayerManager.shared.reloadVideoAtCurrentPosition()
-                            }
-                        }
-                    }
-
-                    // Child mode runs the player permanently fullscreen,
-                    // so the toggle would be a no-op visual control —
-                    // hide it.
-                    if !childModeEnabled {
-                        roundedControlButton(
-                            systemImage: playerManager.isVLCFullscreen
-                                ? "arrow.down.right.and.arrow.up.left"
-                                : "arrow.up.left.and.arrow.down.right",
-                            iconSize: 18,
-                            padding: 12
-                        ) {
-                            playerManager.toggleVLCFullscreen()
-                        }
-                    }
-                }
-                .padding(.trailing, 16 + safeArea.right)
-                .padding(.top, 16 + safeArea.top)
-            }
-            .overlay(alignment: .bottom) {
-                bottomInfoAndSeek
-                    .padding(.bottom, safeArea.bottom)
-            }
-    }
-
-    // MARK: - Tap areas
-
-    /// Two equal-width halves overlaying the player. Each half handles
-    /// both gestures: double-tap skips ±15s; single tap toggles control
-    /// visibility. Both modifiers attached to the same view so SwiftUI's
-    /// gesture disambiguation routes a double-tap to the count:2 handler
-    /// without firing the single-tap first.
-    private var tapAreas: some View {
-        GeometryReader { geo in
-            HStack(spacing: 0) {
-                tapHalf(skip: { playerManager.skipBackward(15) })
-                tapHalf(skip: { playerManager.skipForward(15) })
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-    }
-
-    private func tapHalf(skip: @escaping () -> Void) -> some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                skip()
-                HapticFeedback.light.play()
-            }
-            .onTapGesture {
-                if playerManager.vlcControlsVisible {
-                    playerManager.hideVLCControls()
-                } else {
-                    playerManager.showVLCControls()
-                }
-            }
-    }
-
-    /// Snapshot of the foreground window's safe area insets. Used when
-    /// the host applies `.ignoresSafeArea` so the controls overlay can
-    /// still keep clear of the dynamic island / home indicator.
-    private static var windowSafeAreaInsets: UIEdgeInsets {
-        guard let window = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow) else { return .zero }
-        return window.safeAreaInsets
-    }
-
-    private func roundedControlButton(
-        systemImage: String,
-        iconSize: CGFloat,
-        padding: CGFloat,
-        isEnabled: Bool = true,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: iconSize, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: iconSize + padding * 2, height: iconSize + padding * 2)
-                .background(.black.opacity(0.45))
-                .background(.ultraThinMaterial.opacity(0.6))
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.35)
-    }
-
-    // MARK: - Bottom info + seek bar
-
-    private var bottomInfoAndSeek: some View {
-        // Title above, transport+seek+time below. Title was previously
-        // pinned top-leading where it collided with the PiP/fullscreen
-        // buttons on long channel/video names.
-        VStack(alignment: .leading, spacing: 10) {
-            titleRow
-            transportRow
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 16)
-    }
-
-    private var transportRow: some View {
-        HStack(spacing: 12) {
-            Button {
-                playerManager.togglePlayPause()
-                playerManager.scheduleHideVLCControls()
-            } label: {
-                Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            SeekBar(
-                progress: playerManager.duration > 0
-                    ? playerManager.currentTime / playerManager.duration
-                    : 0,
-                onDragStarted: {
-                    playerManager.cancelVLCHideControls()
-                },
-                onSeek: { value in
-                    let target = value * playerManager.duration
-                    playerManager.seekTo(target)
-                    playerManager.scheduleHideVLCControls()
-                }
-            )
-
-            Text("\(playerManager.currentTimeDisplay) / \(playerManager.durationDisplay)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-                .monospacedDigit()
-        }
-    }
-
-    @ViewBuilder
-    private var titleRow: some View {
-        if let metadata = playerManager.currentMetadata {
-            HStack(spacing: 10) {
-                if let thumbURL = metadata.channelThumbURL {
-                    AsyncImage(url: thumbURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        default:
-                            Circle().fill(.white.opacity(0.2))
-                        }
-                    }
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
-                }
-                Text(metadata.artist)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text("·")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
-                Text(metadata.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-            }
-        }
+        .clipped()
     }
 }
 
 // MARK: - VLC Video Render View
 
 /// Hosts the persistent video output `UIView` owned by
-/// `PlaybackServiceBackend` for a specific role. Only the host whose role matches
-/// `PlayerManager.activePlayerSurfaceRole` adopts the player view; the
-/// other shows nothing. Same anti-race pattern as
-/// `AVPlayerViewControllerWrapper`.
+/// `PlaybackServiceBackend` for a specific role. Only the host whose role
+/// matches `PlayerManager.activePlayerSurfaceRole` adopts the player view
+/// — and only while the fullscreen player VC is *not* presented, since
+/// that VC owns the surface directly while it's up.
 public struct VLCVideoRenderView: View {
     public var role: PlayerSurfaceRole
 
@@ -322,11 +39,11 @@ public struct VLCVideoRenderView: View {
         let manager = PlayerManager.shared
         _ = manager.persistentVLCPlayerView
         // Passing `isVLCFullscreen` as a property forces SwiftUI to call
-        // `updateUIView` on both hosts when the fullscreen cover toggles —
-        // otherwise the underlying host keeps its stale "I don't own the
-        // player view" state after the cover dismisses and renders black.
+        // `updateUIView` when the fullscreen VC presents/dismisses — so
+        // the inline host re-adopts the surface the moment fullscreen ends.
         return VLCPlayerHostRepresentable(
-            shouldAdopt: manager.activePlayerSurfaceRole == role,
+            shouldAdopt: manager.activePlayerSurfaceRole == role
+                && !manager.isVLCFullscreen,
             fullscreenToken: manager.isVLCFullscreen
         )
     }
@@ -343,13 +60,12 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ host: VLCPlayerHostView, context: Context) {
-        // Only the adopting host actively grabs the player view.
-        // The non-adopting host MUST NOT call `removeFromSuperview` here
-        // — `addSubview` on the adopting host already reparents, and the
+        // Only the adopting host actively grabs the player view. The
+        // non-adopting host MUST NOT call `removeFromSuperview` here —
+        // `addSubview` on the adopting host already reparents, and the
         // intermediate "orphaned, no window" state in between makes VLC
-        // pause its video output. Detach is reserved for `dismantleUIView`
-        // (host going away) so SwiftUI doesn't leave the view dangling
-        // inside a destroyed host.
+        // pause its video output. While the fullscreen VC is presented
+        // `shouldAdopt` is false, so this host leaves the surface alone.
         if shouldAdopt {
             host.adoptPlayerView()
         }
@@ -360,15 +76,14 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
     }
 }
 
-/// Container UIView that adopts the persistent video output view
-/// vended by `PlayerManager` as a pinned subview. Reparenting the
+/// Container UIView that adopts the persistent video output view vended by
+/// `PlayerManager` as a pinned subview. Reparenting the
 /// `PlaybackServiceBackend`-owned view between hosts is what makes the
-/// mini ↔ full transition seamless: the underlying `VLCMediaPlayer`
-/// is never recreated.
+/// inline ↔ fullscreen transition seamless: the underlying
+/// `VLCMediaPlayer` is never recreated.
 public final class VLCPlayerHostView: UIView {
     private var lastBoundsSize: CGSize = .zero
     private var pendingRefresh: DispatchWorkItem?
-    private var pendingBackstopRefresh: DispatchWorkItem?
 
     func adoptPlayerView() {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
@@ -387,7 +102,6 @@ public final class VLCPlayerHostView: UIView {
             playerView.leadingAnchor.constraint(equalTo: leadingAnchor),
             playerView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
-
     }
 
     func detachPlayerView() {
@@ -398,18 +112,11 @@ public final class VLCPlayerHostView: UIView {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        // Drive the VLC drawable refresh from the actual bounds change
-        // instead of `UIDevice.orientationDidChangeNotification` + a
-        // fixed 100 ms delay. The notification fires partway through
-        // the rotation animation, before SwiftUI has applied the final
-        // frame — refreshing then captures a mid-rotation size and the
-        // picture stays black even though audio keeps going.
-        //
-        // Debounce so multiple intermediate `layoutSubviews` calls
-        // during the animation collapse into a single refresh once the
-        // bounds settle. Skip the very first layout (initial mount)
-        // and any zero size — VLCKit doesn't need a refresh until it
-        // already has a real drawable.
+        // The inline player lives in a portrait-locked screen, so this is
+        // effectively dormant — but keep a single debounced drawable
+        // rebind as a safety net for any unexpected inline bounds change
+        // (split-view resize, etc.). Fullscreen rotation is handled by
+        // `FullscreenPlayerViewController`, not here.
         let size = bounds.size
         guard size != .zero else { return }
         if lastBoundsSize == .zero {
@@ -419,88 +126,12 @@ public final class VLCPlayerHostView: UIView {
         guard size != lastBoundsSize else { return }
         lastBoundsSize = size
 
-        // Two-stage refresh: 180 ms catches fast devices where the rotation
-        // animation finishes quickly; 700 ms is a backstop for slower
-        // devices (older iPads, Low Power Mode) where the rotation
-        // animation can run 500+ ms and a single early refresh ends up
-        // re-binding VLC's drawable against still-mid-animation bounds —
-        // picture stays black even though audio keeps playing. Both work
-        // items are cancelled if another bounds change comes in.
         pendingRefresh?.cancel()
-        pendingBackstopRefresh?.cancel()
         let work = DispatchWorkItem {
             PlayerManager.shared.refreshVideoOutput()
         }
-        let backstop = DispatchWorkItem {
-            PlayerManager.shared.refreshVideoOutput()
-        }
         pendingRefresh = work
-        pendingBackstopRefresh = backstop
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: backstop)
-    }
-}
-
-// MARK: - Seek Bar
-
-private struct SeekBar: View {
-    let progress: Double
-    var onDragStarted: (() -> Void)?
-    let onSeek: (Double) -> Void
-
-    @State private var isDragging = false
-    @State private var dragProgress: Double = 0
-
-    private var displayProgress: Double {
-        isDragging ? dragProgress : progress
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.white.opacity(0.3))
-                    .frame(height: 6)
-
-                Capsule()
-                    .fill(.white)
-                    .frame(
-                        width: max(0, geometry.size.width * displayProgress),
-                        height: 6
-                    )
-
-                Circle()
-                    .fill(.white)
-                    .frame(width: 18, height: 18)
-                    .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
-                    .offset(
-                        x: max(0, min(
-                            geometry.size.width * displayProgress - 9,
-                            geometry.size.width - 18
-                        ))
-                    )
-            }
-            .frame(maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if !isDragging {
-                            isDragging = true
-                            onDragStarted?()
-                        }
-                        let ratio = value.location.x / geometry.size.width
-                        dragProgress = min(max(ratio, 0), 1)
-                    }
-                    .onEnded { value in
-                        let ratio = value.location.x / geometry.size.width
-                        let clamped = min(max(ratio, 0), 1)
-                        onSeek(clamped)
-                        isDragging = false
-                    }
-            )
-        }
-        .frame(height: 36)
     }
 }
 #endif

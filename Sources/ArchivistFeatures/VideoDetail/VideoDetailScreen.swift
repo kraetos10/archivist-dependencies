@@ -23,7 +23,6 @@ import SwiftUI
 @ViewAction(for: VideoDetailReducer.self)
 public struct VideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
-    @Bindable private var playerManager = PlayerManager.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
     @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
 
@@ -33,16 +32,6 @@ public struct VideoDetailScreen: View {
 
     var isCompact: Bool {
         sizeClass == .compact
-    }
-
-    /// True when the player should occupy the entire screen — driven by the
-    /// fullscreen toggle on `VLCPlayerView`'s controls. Intentionally NOT
-    /// gated on `store.isPlaying`: during a device rotation VLC briefly
-    /// reports `isPlaying = false` while the rendering pipeline rebinds
-    /// to the resized window, and using that here would yank the user
-    /// out of fullscreen mid-rotation.
-    private var isFullscreen: Bool {
-        playerManager.isVLCFullscreen
     }
 
     public var body: some View {
@@ -61,99 +50,89 @@ public struct VideoDetailScreen: View {
             let useCompactSidebar = geo.size.width < geo.size.height
 
             ZStack(alignment: .topLeading) {
-                if !isFullscreen {
-                    HStack(alignment: .top, spacing: 0) {
-                        VStack(spacing: 0) {
-                            Color.clear
-                                .frame(height: inlineHeight)
-                                .padding(.bottom, isCompact ? 0 : 8)
-
-                            if !isCompact {
-                                Divider()
-                                    .padding(.bottom, 8)
-                            }
-
-                            ScrollViewReader { scrollProxy in
-                                ScrollView(showsIndicators: false) {
-                                    VStack(spacing: 0) {
-                                        contentView(descriptionFont: isCompact ? .subheadline : .body)
-                                            .padding(.top, 8)
-
-                                        if !store.comments.isEmpty || store.isLoadingComments {
-                                            commentsSection
-                                                .padding(.vertical, isCompact ? 8 : 0)
-                                        }
-
-                                        if isCompact {
-                                            compactPlayNextSection
-                                                .padding(.vertical, 8)
-
-                                            if !store.nextVideos.isEmpty {
-                                                compactNextUpSection
-                                                    .padding(.vertical, 8)
-                                            }
-
-                                            compactSimilarSection
-                                                .padding(.vertical, 16)
-                                        }
-                                    }
-                                    .id("scrollTop")
-                                }
-                                .onChange(of: store.video.videoId) {
-                                    send(.videoChanged)
-                                    scrollProxy.scrollTo("scrollTop", anchor: .top)
-                                }
-                            }
-                        }
-                        .frame(width: isCompact ? nil : leftColumnWidth)
-                        .padding(.trailing, isCompact ? 0 : 8)
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: inlineHeight)
+                            .padding(.bottom, isCompact ? 0 : 8)
 
                         if !isCompact {
                             Divider()
-                                .padding(.horizontal, 4)
+                                .padding(.bottom, 8)
+                        }
 
+                        ScrollViewReader { scrollProxy in
                             ScrollView(showsIndicators: false) {
                                 VStack(spacing: 0) {
-                                    if !store.playNextItems.isEmpty {
-                                        sidebarPlayNextSection(
-                                            compact: useCompactSidebar
-                                        )
+                                    contentView(descriptionFont: isCompact ? .subheadline : .body)
+                                        .padding(.top, 8)
+
+                                    if !store.comments.isEmpty || store.isLoadingComments {
+                                        commentsSection
+                                            .padding(.vertical, isCompact ? 8 : 0)
                                     }
-                                    if !store.nextVideos.isEmpty {
-                                        sidebarNextUpSection(
-                                            compact: useCompactSidebar
-                                        )
+
+                                    if isCompact {
+                                        compactPlayNextSection
+                                            .padding(.vertical, 8)
+
+                                        if !store.nextVideos.isEmpty {
+                                            compactNextUpSection
+                                                .padding(.vertical, 8)
+                                        }
+
+                                        compactSimilarSection
+                                            .padding(.vertical, 16)
                                     }
-                                    sidebarSimilarSection(
-                                        compact: useCompactSidebar
-                                    )
                                 }
+                                .id("scrollTop")
+                            }
+                            .onChange(of: store.video.videoId) {
+                                send(.videoChanged)
+                                scrollProxy.scrollTo("scrollTop", anchor: .top)
                             }
                         }
                     }
-                    .transition(.opacity)
+                    .frame(width: isCompact ? nil : leftColumnWidth)
+                    .padding(.trailing, isCompact ? 0 : 8)
+
+                    if !isCompact {
+                        Divider()
+                            .padding(.horizontal, 4)
+
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 0) {
+                                if !store.playNextItems.isEmpty {
+                                    sidebarPlayNextSection(
+                                        compact: useCompactSidebar
+                                    )
+                                }
+                                if !store.nextVideos.isEmpty {
+                                    sidebarNextUpSection(
+                                        compact: useCompactSidebar
+                                    )
+                                }
+                                sidebarSimilarSection(
+                                    compact: useCompactSidebar
+                                )
+                            }
+                        }
+                    }
                 }
 
-                // Player — always at the same SwiftUI structural position.
-                // Only its frame + safe-area treatment changes. SwiftUI
-                // animates the frame change without re-mounting the player
-                // surface, so the persistent VLC view stays bound to the
-                // same window-backed layer through the transition.
-                playerOrThumbnail(height: isFullscreen ? geo.size.height : inlineHeight)
+                // Player — pinned at the top-leading inline slot, overlaying
+                // the `Color.clear` placeholder reserved above. Fullscreen
+                // is a separate modally-presented `UIViewController`, so
+                // this view only ever lays the player out inline.
+                playerOrThumbnail(height: inlineHeight)
                     .frame(
-                        width: isFullscreen ? geo.size.width : (isCompact ? geo.size.width : leftColumnWidth),
-                        height: isFullscreen ? geo.size.height : inlineHeight
+                        width: isCompact ? geo.size.width : leftColumnWidth,
+                        height: inlineHeight
                     )
-                    .background(isFullscreen ? Color.black : .clear)
             }
         }
         .background(Color.Brand.primary.ignoresSafeArea())
-        .ignoresSafeArea(isFullscreen ? .all : [])
         .toolbar(.hidden, for: .bottomBar)
-        .toolbar(isFullscreen ? .hidden : .visible, for: .navigationBar)
-        .navigationBarBackButtonHidden(isFullscreen)
-        .statusBarHidden(isFullscreen)
-        .persistentSystemOverlays(isFullscreen ? .hidden : .automatic)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
@@ -165,7 +144,6 @@ public struct VideoDetailScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .animation(.easeInOut(duration: 0.25), value: isFullscreen)
         .onAppear {
             send(.viewDidAppear)
             if isCompact {

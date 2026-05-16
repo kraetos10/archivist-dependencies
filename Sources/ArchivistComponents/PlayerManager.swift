@@ -25,6 +25,29 @@ public enum PlayerSurfaceRole: Sendable, Equatable {
     case mini
 }
 
+/// Display data for the auto-play "up next" countdown card. The
+/// `VideoDetail` reducer owns the countdown lifecycle and mirrors it here
+/// so player chrome — including the fullscreen player VC, which has no
+/// access to the reducer's store — can render the card.
+public struct AutoPlayCountdownInfo: Sendable, Equatable {
+    public var title: String
+    public var thumbnailURL: URL?
+    public var remainingSeconds: Int
+    public var totalSeconds: Int
+
+    public init(
+        title: String,
+        thumbnailURL: URL?,
+        remainingSeconds: Int,
+        totalSeconds: Int
+    ) {
+        self.title = title
+        self.thumbnailURL = thumbnailURL
+        self.remainingSeconds = remainingSeconds
+        self.totalSeconds = totalSeconds
+    }
+}
+
 #if !os(watchOS)
 @Observable
 @MainActor
@@ -131,6 +154,17 @@ public final class PlayerManager: NSObject {
     /// True when a history of previously-played videos exists, so the
     /// "previous" transport button should be enabled.
     public var canGoPrevious: Bool = false
+
+    /// Auto-play "up next" countdown, mirrored from the `VideoDetail`
+    /// reducer. Non-nil while the countdown card should be shown. Lets the
+    /// fullscreen player VC render the card even though it can't see the
+    /// reducer's store.
+    public var autoPlayCountdown: AutoPlayCountdownInfo?
+    /// User tapped "play now" on the countdown card. Wired by the
+    /// `VideoDetail` reducer for the lifetime of each countdown.
+    public var onAutoPlayPlayNow: (() -> Void)?
+    /// User tapped "cancel" on the countdown card.
+    public var onAutoPlayCancel: (() -> Void)?
     /// Fires when the user taps "restore from PiP" but the source detail
     /// screen has already been dismissed. Wired at app start to push the
     /// VideoDetail screen back onto the navigation stack so the player
@@ -237,26 +271,14 @@ public final class PlayerManager: NSObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if self.isVLCFullscreen {
-                    // Soft rebind is insufficient when rotating during
-                    // fullscreen playback — VLC's vout stays bound to
-                    // the pre-rotation surface and the picture stays
-                    // black even after pause+play. Mirror the in-app
-                    // rotate button: hard reload at current position
-                    // once the rotation animation has settled. Ignore
-                    // face-up/face-down — those don't change the
-                    // interface orientation, so no recovery needed.
-                    let orientation = UIDevice.current.orientation
-                    guard orientation.isValidInterfaceOrientation else { return }
-                    try? await Task.sleep(for: .milliseconds(700))
-                    self.reloadVideoAtCurrentPosition()
-                } else {
-                    // Outside fullscreen the UI is locked portrait so
-                    // there's no real bounds change to recover from,
-                    // but keep the soft rebind as a cheap safety net.
-                    try? await Task.sleep(for: .milliseconds(100))
-                    self.refreshVideoOutput()
-                }
+                // Fullscreen rotation is handled natively by
+                // `FullscreenPlayerViewController.viewWillTransition` —
+                // there's nothing to recover here. Outside fullscreen the
+                // UI is locked portrait, so this is only a cheap safety-net
+                // rebind for the rare external bounds change.
+                if self.isVLCFullscreen { return }
+                try? await Task.sleep(for: .milliseconds(100))
+                self.refreshVideoOutput()
             }
         }
     }
@@ -272,15 +294,6 @@ public final class PlayerManager: NSObject {
         // need refreshing until PiP ends and the host comes back on-screen.
         if isInPiP { return }
         backend?.refreshDrawable()
-    }
-
-    /// Heavy hammer — wired to the in-app rotate button. Replays the
-    /// current URL at the current position to fully rebuild VLC's vout.
-    /// Used in place of `refreshVideoOutput` on phones where the soft
-    /// rebind (or even pause+play) leaves the picture permanently black
-    /// after a programmatic rotation.
-    func reloadVideoAtCurrentPosition() {
-        backend?.reloadAtCurrentPosition()
     }
     #endif
 
@@ -325,7 +338,10 @@ public final class PlayerManager: NSObject {
         videoId: String? = nil,
         expectedSize: Int64? = nil
     ) {
-        stop()
+        // Auto-advance routes through `load()`; keep any presented
+        // fullscreen player up so the next video keeps playing fullscreen
+        // rather than dropping back to the inline detail screen.
+        stop(dismissFullscreen: false)
 
         // End the background transition task — new audio is about to start.
         #if !os(tvOS) && !os(watchOS)
@@ -381,6 +397,13 @@ public final class PlayerManager: NSObject {
 
         installPersistentSurface(for: newBackend)
 
+        #if os(iOS)
+        // On auto-advance the new backend vends a fresh `playerView`; if
+        // the fullscreen player is presented, hand the new surface to it
+        // so the next video keeps rendering there instead of going black.
+        activeFullscreenViewController?.adoptCurrentPlayerView()
+        #endif
+
         // Parallel download + swap: if the user opted in and we're not already
         // playing from cache or from an offline downloaded file, fetch the
         // full file to disk while playback streams. On completion the backend
@@ -425,7 +448,12 @@ public final class PlayerManager: NSObject {
         backend?.swapToLocalFile(fileURL)
     }
 
-    public func stop() {
+    /// - Parameter dismissFullscreen: When true (the default — external
+    ///   "stop" callers), any presented fullscreen player VC is dismissed
+    ///   so we never strand the user on a black fullscreen surface. The
+    ///   internal `load()` call passes false so auto-advance stays
+    ///   fullscreen.
+    public func stop(dismissFullscreen: Bool = true) {
         #if !os(tvOS)
         if isInPiP {
             stopPiP()
@@ -450,7 +478,19 @@ public final class PlayerManager: NSObject {
         duration = 0
         onPause = nil
         onPlaybackCompleted = nil
-        isVLCFullscreen = false
+        if dismissFullscreen {
+            #if os(iOS)
+            if activeFullscreenViewController != nil {
+                // The VC's `viewDidDisappear` clears `isVLCFullscreen`
+                // and restores the portrait lock.
+                FullscreenPlayerPresenter.dismiss()
+            } else {
+                isVLCFullscreen = false
+            }
+            #else
+            isVLCFullscreen = false
+            #endif
+        }
         currentVideoID = nil
         currentMetadata = nil
         isInPiP = false
@@ -578,23 +618,61 @@ public final class PlayerManager: NSObject {
         vlcHideControlsTask?.cancel()
     }
 
+    #if os(iOS)
+    /// Weak handle to the presented fullscreen player VC. Lets
+    /// `exitFullscreen` dismiss it, `enterFullscreen` avoid presenting
+    /// twice, and `load()` hand a freshly-created surface to it on
+    /// auto-advance.
+    @ObservationIgnored public weak var activeFullscreenViewController: FullscreenPlayerViewController?
+
+    func setActiveFullscreenViewController(_ controller: FullscreenPlayerViewController) {
+        activeFullscreenViewController = controller
+    }
+
+    func clearActiveFullscreenViewController(_ controller: FullscreenPlayerViewController) {
+        if activeFullscreenViewController === controller {
+            activeFullscreenViewController = nil
+        }
+    }
+    #endif
+
     public func toggleVLCFullscreen() {
-        isVLCFullscreen.toggle()
         if isVLCFullscreen {
-            OrientationLock.shared.unlock()
+            exitFullscreen()
         } else {
-            OrientationLock.shared.lockPortrait()
+            enterFullscreen()
         }
+    }
+
+    /// Present the dedicated fullscreen player view controller. UIKit then
+    /// owns the rotation transition — no SwiftUI layout reshaping, no
+    /// timer-based drawable recovery. Mirrors vlc-ios' approach of hosting
+    /// the player in a real `UIViewController`.
+    public func enterFullscreen() {
+        guard !isVLCFullscreen else { return }
+        isVLCFullscreen = true
+        OrientationLock.shared.unlock()
         scheduleHideVLCControls()
-        // VLC's drawable doesn't auto-rebind when the host UIView
-        // changes size via a SwiftUI layout animation — audio keeps
-        // playing while the picture goes black. Wait for the layout
-        // pass to settle, then force a drawable reattachment against
-        // the current bounds (same pattern as the rotation handler).
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(100))
-            self?.refreshVideoOutput()
+        #if os(iOS)
+        FullscreenPlayerPresenter.present()
+        #endif
+    }
+
+    /// Dismiss the fullscreen player. `isVLCFullscreen` is cleared and
+    /// portrait lock restored from the VC's `viewDidDisappear` so the
+    /// state flips only once the dismissal has fully committed.
+    public func exitFullscreen() {
+        guard isVLCFullscreen else { return }
+        #if os(iOS)
+        if activeFullscreenViewController != nil {
+            FullscreenPlayerPresenter.dismiss()
+            return
         }
+        #endif
+        // No VC on record — recover the state directly so we can't get
+        // stuck reporting fullscreen with nothing presented.
+        isVLCFullscreen = false
+        OrientationLock.shared.lockPortrait()
     }
     #endif
 
