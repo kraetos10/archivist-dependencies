@@ -54,6 +54,17 @@ public struct TVVideoDetailScreen: View {
                                 Text("·")
                                 Text(duration)
                             }
+
+                            if let quality = store.video.qualityLabel {
+                                Text(quality)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.Text.primary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(Color.Surface.highlight)
+                                    .clipShape(Capsule())
+                            }
                         }
                         .font(.headline)
                         .foregroundStyle(.secondary)

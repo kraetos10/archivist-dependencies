@@ -126,6 +126,7 @@ public final class PlayerManager: NSObject {
     private var interruptionObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
     private var orientationObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -228,17 +229,47 @@ public final class PlayerManager: NSObject {
 
                 switch type {
                 case .began:
-                    self.isPlaying = false
+                    // Siri, an incoming call, a timer/alarm, another app's
+                    // audio — actually pause the backend. Just clearing
+                    // `isPlaying` left VLC's video running silently behind
+                    // the interruption.
+                    if self.isPlaying {
+                        self.pause()
+                    }
                 case .ended:
                     if let optionsValue {
                         let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-                        if options.contains(.shouldResume) {
-                            self.backend?.play()
-                            self.isPlaying = true
+                        if options.contains(.shouldResume), self.backend != nil {
+                            self.resume()
                         }
                     }
                 @unknown default:
                     break
+                }
+            }
+        }
+
+        // Pause when an audio output device is removed — unplugging wired
+        // headphones, disconnecting Bluetooth. Without this, iOS reroutes
+        // to the built-in speaker and playback keeps going, blasting audio.
+        // Matches the behaviour of every system media app.
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let reasonValue = notification.userInfo?[
+                AVAudioSessionRouteChangeReasonKey
+            ] as? UInt
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard let reasonValue,
+                      let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue),
+                      reason == .oldDeviceUnavailable else {
+                    return
+                }
+                if self.isPlaying {
+                    self.pause()
                 }
             }
         }

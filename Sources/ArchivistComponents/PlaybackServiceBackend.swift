@@ -185,7 +185,11 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
 
         let media = VLCMedia(url: fileURL)!
         if resumeSec > 0 {
-            media.addOption(":start-time=\(Int(resumeSec))")
+            // Fractional seconds: libvlc accepts a float here. Truncating
+            // to whole seconds nudged the initial landing earlier in time,
+            // which combined with libvlc's keyframe rounding made the
+            // post-swap reconcile seek visibly skip forward.
+            media.addOption(":start-time=\(String(format: "%.3f", resumeSec))")
         }
         let list = VLCMediaList()
         list.add(media)
@@ -244,12 +248,12 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
 
         if pendingResumeSec > 0, service.isSeekable, duration > 0 {
             let target = pendingResumeSec
-            if abs(currentTime - target) <= 2 {
-                pendingResumeSec = 0
-            } else {
-                service.playbackPosition = Float(min(max(target / duration, 0), 1))
-                pendingResumeSec = 0
-            }
+            // Always reconcile — `:start-time` rounds to a keyframe and
+            // can land seconds ahead of the captured position, which on a
+            // cache swap shows up as a visible forward skip. An accurate
+            // seek snaps us back to where the user actually was.
+            service.playbackPosition = Float(min(max(target / duration, 0), 1))
+            pendingResumeSec = 0
         }
     }
 

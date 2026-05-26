@@ -18,7 +18,7 @@ public struct TVChannelsScreen: View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
                 // Segmented filter picker
-                Picker("", selection: $store.filter.animation()) {
+                Picker("", selection: Binding(store.$filter).animation()) {
                     Text(String.localised("generic.all", table: .generic))
                         .tag(ChannelListFilter.all)
                     Text(String.localised("generic.unwatched", table: .generic))

@@ -77,6 +77,9 @@
     "video.addToPlaylist" : {
 
     },
+    "video.autoPlayPlayNow" : {
+
+    },
     "video.cached" : {
 
     },
@@ -132,6 +135,9 @@
 
     },
     "video.playNext" : {
+
+    },
+    "video.upNext" : {
 
     }
   },
