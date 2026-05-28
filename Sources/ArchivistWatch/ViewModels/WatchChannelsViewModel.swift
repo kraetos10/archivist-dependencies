@@ -11,11 +11,11 @@ public final class WatchChannelsViewModel {
     private var currentPage = 1
     private var lastPage = 1
     public let config: ServerConfig
-    private let service: any ChannelServiceType
+    private let service: ChannelService
 
     public init(
         config: ServerConfig,
-        service: any ChannelServiceType = ChannelService()
+        service: ChannelService = .liveValue
     ) {
         self.config = config
         self.service = service

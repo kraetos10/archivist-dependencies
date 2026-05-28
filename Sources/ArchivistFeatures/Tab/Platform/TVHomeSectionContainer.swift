@@ -9,7 +9,7 @@ import SwiftUI
 struct TVHomeSectionContainer<Content: View>: View {
     let title: String
     let icon: String
-    var onViewAll: (() -> Void)? = nil
+    var onViewAll: (() -> Void)?
     @ViewBuilder var content: () -> Content
 
     var body: some View {

@@ -12,7 +12,7 @@ public enum ChannelListFilter: String, Sendable, Equatable {
 public struct ChannelsReducer {
     public init() {}
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         var serverConfig: ServerConfig
         var channels: IdentifiedArrayOf<ChannelResponse> = []
         var currentPage: Int = 1
@@ -28,6 +28,7 @@ public struct ChannelsReducer {
         var isLoadingUnwatchedIds = false
         @Shared(.appStorage("channelsFilter")) var filter: ChannelListFilter = .all
         @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
 
         @Presents var alert: AlertState<AlertAction>?
         @Presents var addChannel: AddChannelReducer.State?
@@ -124,21 +125,19 @@ public struct ChannelsReducer {
                 state.selectedChannel = nil
                 return .none
             case .channelDetail(.presented(.delegate(.videoSelected(let video, let nextVideos)))):
-                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled1 = true
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
                     nextVideos: nextVideos,
-                    shouldAutoPlayNextVideo: autoPlayEnabled1
+                    shouldAutoPlayNextVideo: state.autoPlayEnabled
                 )
                 return .none
             case .path(.element(_, action: .channelDetail(.delegate(.videoSelected(let video, let nextVideos))))):
-                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled2 = true
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
                     nextVideos: nextVideos,
-                    shouldAutoPlayNextVideo: autoPlayEnabled2
+                    shouldAutoPlayNextVideo: state.autoPlayEnabled
                 )
                 return .none
             case .path(.element(_, action: .channelDetail(.unsubscribeResult(.success)))):

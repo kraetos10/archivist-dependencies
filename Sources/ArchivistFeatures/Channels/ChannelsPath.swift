@@ -7,3 +7,4 @@ public enum ChannelsPath {
 }
 
 extension ChannelsPath.State: Sendable {}
+extension ChannelsPath.State: Equatable {}

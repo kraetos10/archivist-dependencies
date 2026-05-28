@@ -31,6 +31,7 @@ let package = Package(
             name: "ArchivistNetworking",
             dependencies: [
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "IdentifiedCollections", package: "swift-identified-collections"),
                 .product(name: "KeychainAccess", package: "KeychainAccess")
             ],
@@ -92,6 +93,13 @@ let package = Package(
             name: "VLCPlayerCore",
             dependencies: [
                 .target(name: "VLCKit", condition: .when(platforms: [.iOS, .tvOS]))
+            ]
+        ),
+        .testTarget(
+            name: "ArchivistFeaturesTests",
+            dependencies: [
+                "ArchivistFeatures",
+                .product(name: "DependenciesTestSupport", package: "swift-dependencies")
             ]
         )
     ]

@@ -11,11 +11,11 @@ public final class WatchPlaylistsViewModel {
     private var currentPage = 1
     private var lastPage = 1
     public let config: ServerConfig
-    private let service: any PlaylistServiceType
+    private let service: PlaylistService
 
     public init(
         config: ServerConfig,
-        service: any PlaylistServiceType = PlaylistService()
+        service: PlaylistService = .liveValue
     ) {
         self.config = config
         self.service = service

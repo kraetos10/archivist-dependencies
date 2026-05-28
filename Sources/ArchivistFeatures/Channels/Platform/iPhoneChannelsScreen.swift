@@ -30,7 +30,6 @@ public struct iPhoneChannelsScreen: View {
                 ChannelDetailScreen(store: detailStore)
             }
         }
-
         .onAppear { send(.viewDidAppear) }
         .alert($store.scope(state: \.alert, action: \.alert))
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in

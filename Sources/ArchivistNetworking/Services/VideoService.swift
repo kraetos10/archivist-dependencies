@@ -1,50 +1,140 @@
+import Dependencies
+import DependenciesMacros
 import Foundation
 
-public nonisolated protocol VideoServiceType: Sendable {
-    func getVideos(
-        config: ServerConfig,
-        page: Int,
-        sort: String?,
-        order: String?,
-        type: String?,
-        watch: String?,
-        channel: String?,
-        playlist: String?
+@DependencyClient
+public struct VideoService: Sendable {
+    public var getVideos: @Sendable (
+        _ config: ServerConfig,
+        _ page: Int,
+        _ sort: String?,
+        _ order: String?,
+        _ type: String?,
+        _ watch: String?,
+        _ channel: String?,
+        _ playlist: String?
     ) async throws -> PaginatedResponse<VideoResponse>
-    func getVideo(
-        config: ServerConfig,
-        id: String
+    public var getVideo: @Sendable (
+        _ config: ServerConfig,
+        _ id: String
     ) async throws -> VideoResponse
-    func deleteVideo(
-        config: ServerConfig,
-        id: String
-    ) async throws
-    func getComments(
-        config: ServerConfig,
-        videoId: String
+    public var deleteVideo: @Sendable (
+        _ config: ServerConfig,
+        _ id: String
+    ) async throws -> Void
+    public var getComments: @Sendable (
+        _ config: ServerConfig,
+        _ videoId: String
     ) async throws -> [VideoComment]
-    func getSimilar(
-        config: ServerConfig,
-        videoId: String
+    public var getSimilar: @Sendable (
+        _ config: ServerConfig,
+        _ videoId: String
     ) async throws -> [VideoResponse]
-    func getNav(
-        config: ServerConfig,
-        videoId: String
+    public var getNav: @Sendable (
+        _ config: ServerConfig,
+        _ videoId: String
     ) async throws -> VideoNavResponse
-    func setProgress(
-        config: ServerConfig,
-        videoId: String,
-        position: Int
-    ) async throws
-    func deleteProgress(
-        config: ServerConfig,
-        videoId: String
-    ) async throws
-    func setWatched(
-        config: ServerConfig,
-        videoId: String,
-        isWatched: Bool
-    ) async throws
+    public var setProgress: @Sendable (
+        _ config: ServerConfig,
+        _ videoId: String,
+        _ position: Int
+    ) async throws -> Void
+    public var deleteProgress: @Sendable (
+        _ config: ServerConfig,
+        _ videoId: String
+    ) async throws -> Void
+    public var setWatched: @Sendable (
+        _ config: ServerConfig,
+        _ videoId: String,
+        _ isWatched: Bool
+    ) async throws -> Void
+}
+
+extension VideoService: DependencyKey {
+    public static let liveValue = VideoService(
+        getVideos: { config, page, sort, order, type, watch, channel, playlist in
+            var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
+            if let sort { queryItems.append(URLQueryItem(name: "sort", value: sort)) }
+            if let order { queryItems.append(URLQueryItem(name: "order", value: order)) }
+            if let type { queryItems.append(URLQueryItem(name: "type", value: type)) }
+            if let watch { queryItems.append(URLQueryItem(name: "watch", value: watch)) }
+            if let channel { queryItems.append(URLQueryItem(name: "channel", value: channel)) }
+            if let playlist { queryItems.append(URLQueryItem(name: "playlist", value: playlist)) }
+
+            let request = NetworkAPIRequest<PaginatedResponse<VideoResponse>>(
+                config: config,
+                path: .videoList,
+                queryItems: queryItems
+            )
+            return try await request.execute().data
+        },
+        getVideo: { config, id in
+            let request = NetworkAPIRequest<VideoResponse>(
+                config: config,
+                path: .video(id: id)
+            )
+            return try await request.execute().data
+        },
+        deleteVideo: { config, id in
+            let request = NetworkAPIRequest<EmptyResponse>(
+                config: config,
+                path: .video(id: id),
+                method: .delete
+            )
+            _ = try await request.execute()
+        },
+        getComments: { config, videoId in
+            let request = NetworkAPIRequest<[VideoComment]>(
+                config: config,
+                path: .videoComments(id: videoId)
+            )
+            return try await request.execute().data
+        },
+        getSimilar: { config, videoId in
+            let request = NetworkAPIRequest<[VideoResponse]>(
+                config: config,
+                path: .videoSimilar(id: videoId)
+            )
+            return try await request.execute().data
+        },
+        getNav: { config, videoId in
+            let request = NetworkAPIRequest<VideoNavResponse>(
+                config: config,
+                path: .videoNav(id: videoId)
+            )
+            return try await request.execute().data
+        },
+        setProgress: { config, videoId, position in
+            let body = try JSONEncoder().encode(VideoProgressRequest(position: position))
+            let request = NetworkAPIRequest<EmptyResponse>(
+                config: config,
+                path: .videoProgress(id: videoId),
+                method: .post,
+                body: body
+            )
+            _ = try await request.execute()
+        },
+        deleteProgress: { config, videoId in
+            let request = NetworkAPIRequest<EmptyResponse>(
+                config: config,
+                path: .videoProgress(id: videoId),
+                method: .delete
+            )
+            _ = try await request.execute()
+        },
+        setWatched: { config, videoId, isWatched in
+            let body = try JSONEncoder().encode(WatchedRequest(id: videoId, isWatched: isWatched))
+            let request = NetworkAPIRequest<EmptyResponse>(
+                config: config,
+                path: .watched,
+                method: .post,
+                body: body
+            )
+            _ = try await request.execute()
+        }
+    )
+
+    public static var testValue: VideoService { VideoService() }
 }
 
 public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
@@ -116,135 +206,6 @@ public nonisolated struct VideoNavResponse: Decodable, Sendable, Equatable {
         self.previous = previous
         self.next = next
     }
-}
-
-public nonisolated struct VideoService: VideoServiceType {
-    public init() {}
-
-    public func getVideos(
-        config: ServerConfig,
-        page: Int = 1,
-        sort: String? = nil,
-        order: String? = nil,
-        type: String? = nil,
-        watch: String? = nil,
-        channel: String? = nil,
-        playlist: String? = nil
-    ) async throws -> PaginatedResponse<VideoResponse> {
-        var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
-        if let sort { queryItems.append(URLQueryItem(name: "sort", value: sort)) }
-        if let order { queryItems.append(URLQueryItem(name: "order", value: order)) }
-        if let type { queryItems.append(URLQueryItem(name: "type", value: type)) }
-        if let watch { queryItems.append(URLQueryItem(name: "watch", value: watch)) }
-        if let channel { queryItems.append(URLQueryItem(name: "channel", value: channel)) }
-        if let playlist { queryItems.append(URLQueryItem(name: "playlist", value: playlist)) }
-
-        let request = NetworkAPIRequest<PaginatedResponse<VideoResponse>>(
-            config: config,
-            path: .videoList,
-            queryItems: queryItems
-        )
-        return try await request.execute().data
-    }
-
-    public func getVideo(
-        config: ServerConfig,
-        id: String
-    ) async throws -> VideoResponse {
-        let request = NetworkAPIRequest<VideoResponse>(
-            config: config,
-            path: .video(id: id)
-        )
-        return try await request.execute().data
-    }
-
-    public func deleteVideo(
-        config: ServerConfig,
-        id: String
-    ) async throws {
-        let request = NetworkAPIRequest<EmptyResponse>(
-            config: config,
-            path: .video(id: id),
-            method: .delete
-        )
-        _ = try await request.execute()
-    }
-
-    public func getComments(
-        config: ServerConfig,
-        videoId: String
-    ) async throws -> [VideoComment] {
-        let request = NetworkAPIRequest<[VideoComment]>(
-            config: config,
-            path: .videoComments(id: videoId)
-        )
-        return try await request.execute().data
-    }
-
-    public func getSimilar(
-        config: ServerConfig,
-        videoId: String
-    ) async throws -> [VideoResponse] {
-        let request = NetworkAPIRequest<[VideoResponse]>(
-            config: config,
-            path: .videoSimilar(id: videoId)
-        )
-        return try await request.execute().data
-    }
-
-    public func getNav(
-        config: ServerConfig,
-        videoId: String
-    ) async throws -> VideoNavResponse {
-        let request = NetworkAPIRequest<VideoNavResponse>(
-            config: config,
-            path: .videoNav(id: videoId)
-        )
-        return try await request.execute().data
-    }
-
-    public func setProgress(
-        config: ServerConfig,
-        videoId: String,
-        position: Int
-    ) async throws {
-        let body = try JSONEncoder().encode(VideoProgressRequest(position: position))
-        let request = NetworkAPIRequest<EmptyResponse>(
-            config: config,
-            path: .videoProgress(id: videoId),
-            method: .post,
-            body: body
-        )
-        _ = try await request.execute()
-    }
-
-    public func deleteProgress(
-        config: ServerConfig,
-        videoId: String
-    ) async throws {
-        let request = NetworkAPIRequest<EmptyResponse>(
-            config: config,
-            path: .videoProgress(id: videoId),
-            method: .delete
-        )
-        _ = try await request.execute()
-    }
-
-    public func setWatched(
-        config: ServerConfig,
-        videoId: String,
-        isWatched: Bool
-    ) async throws {
-        let body = try JSONEncoder().encode(WatchedRequest(id: videoId, isWatched: isWatched))
-        let request = NetworkAPIRequest<EmptyResponse>(
-            config: config,
-            path: .watched,
-            method: .post,
-            body: body
-        )
-        _ = try await request.execute()
-    }
-
 }
 
 public nonisolated struct EmptyResponse: Decodable, Sendable {

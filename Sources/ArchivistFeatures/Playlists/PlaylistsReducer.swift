@@ -6,7 +6,7 @@ import Foundation
 public struct PlaylistsReducer {
     public init() {}
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         var serverConfig: ServerConfig
         var playlists: IdentifiedArrayOf<PlaylistResponse> = []
         var currentPage: Int = 1

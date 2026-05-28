@@ -1,14 +1,19 @@
+import Dependencies
+import DependenciesMacros
 import Foundation
 
-public protocol PingServiceType: Sendable {
-    func ping(config: ServerConfig) async throws -> PingResponse
+@DependencyClient
+public struct PingService: Sendable {
+    public var ping: @Sendable (_ config: ServerConfig) async throws -> PingResponse
 }
 
-public struct PingService: PingServiceType {
-    public init() {}
+extension PingService: DependencyKey {
+    public static let liveValue = PingService(
+        ping: { config in
+            let request = NetworkAPIRequest<PingResponse>(config: config, path: .ping)
+            return try await request.execute().data
+        }
+    )
 
-    public func ping(config: ServerConfig) async throws -> PingResponse {
-        let request = NetworkAPIRequest<PingResponse>(config: config, path: .ping)
-        return try await request.execute().data
-    }
+    public static var testValue: PingService { PingService() }
 }

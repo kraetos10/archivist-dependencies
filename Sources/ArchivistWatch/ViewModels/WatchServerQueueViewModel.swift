@@ -15,11 +15,11 @@ public final class WatchServerQueueViewModel {
     public var isLoading = false
     public var sortOrder: WatchQueueSortOrder = .recentlyAdded
     public let config: ServerConfig
-    private let service: any DownloadServiceType
+    private let service: DownloadService
 
     public init(
         config: ServerConfig,
-        service: any DownloadServiceType = DownloadService()
+        service: DownloadService = .liveValue
     ) {
         self.config = config
         self.service = service

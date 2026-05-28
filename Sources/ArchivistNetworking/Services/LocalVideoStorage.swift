@@ -1,21 +1,20 @@
 import Dependencies
+import DependenciesMacros
 import Foundation
 
-public nonisolated protocol LocalVideoStorageType: Sendable {
-    func localFileURL(for videoId: String) -> URL
-    func isDownloaded(videoId: String) -> Bool
-    func deleteVideo(videoId: String) throws
-    func deleteAllVideos() throws
-    func moveDownloadedFile(
-        from tempURL: URL,
-        videoId: String
+@DependencyClient
+public struct LocalVideoStorage: Sendable {
+    public var isDownloaded: @Sendable (_ videoId: String) -> Bool = { _ in false }
+    public var deleteVideo: @Sendable (_ videoId: String) throws -> Void
+    public var deleteAllVideos: @Sendable () throws -> Void
+    public var moveDownloadedFile: @Sendable (
+        _ from: URL,
+        _ videoId: String
     ) throws -> URL
 }
 
-public nonisolated struct LocalVideoStorage: LocalVideoStorageType, Sendable {
-    public init() {}
-
-    private var videosDirectory: URL {
+extension LocalVideoStorage {
+    static var videosDirectory: URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = documents.appendingPathComponent("OfflineVideos", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
@@ -24,29 +23,8 @@ public nonisolated struct LocalVideoStorage: LocalVideoStorageType, Sendable {
         return dir
     }
 
-    public func localFileURL(for videoId: String) -> URL {
+    static func fileURL(for videoId: String) -> URL {
         videosDirectory.appendingPathComponent("\(videoId).mp4")
-    }
-
-    public func isDownloaded(videoId: String) -> Bool {
-        FileManager.default.fileExists(atPath: localFileURL(for: videoId).path)
-    }
-
-    public func deleteVideo(videoId: String) throws {
-        let url = localFileURL(for: videoId)
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
-    }
-
-    public func deleteAllVideos() throws {
-        let dir = videosDirectory
-        if FileManager.default.fileExists(atPath: dir.path) {
-            let contents = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-            for file in contents {
-                try FileManager.default.removeItem(at: file)
-            }
-        }
     }
 
     public static func totalDownloadsSize() -> Int64 {
@@ -65,16 +43,37 @@ public nonisolated struct LocalVideoStorage: LocalVideoStorageType, Sendable {
         }
         return total
     }
+}
 
-    public func moveDownloadedFile(
-        from tempURL: URL,
-        videoId: String
-    ) throws -> URL {
-        let destination = localFileURL(for: videoId)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
+extension LocalVideoStorage: DependencyKey {
+    public static let liveValue = LocalVideoStorage(
+        isDownloaded: { videoId in
+            FileManager.default.fileExists(atPath: fileURL(for: videoId).path)
+        },
+        deleteVideo: { videoId in
+            let url = fileURL(for: videoId)
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+        },
+        deleteAllVideos: {
+            let dir = videosDirectory
+            if FileManager.default.fileExists(atPath: dir.path) {
+                let contents = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+                for file in contents {
+                    try FileManager.default.removeItem(at: file)
+                }
+            }
+        },
+        moveDownloadedFile: { tempURL, videoId in
+            let destination = fileURL(for: videoId)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: tempURL, to: destination)
+            return destination
         }
-        try FileManager.default.moveItem(at: tempURL, to: destination)
-        return destination
-    }
+    )
+
+    public static var testValue: LocalVideoStorage { LocalVideoStorage() }
 }

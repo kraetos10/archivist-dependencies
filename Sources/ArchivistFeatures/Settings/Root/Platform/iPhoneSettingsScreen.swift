@@ -109,8 +109,14 @@ public struct iPhoneSettingsScreen: View {
             }
 
             Section {
-                Toggle(String.localised("video.autoplay", table: .videos), isOn: Binding(store.withState { $0.$autoPlayEnabled }))
-                Toggle(String.localised("video.autoplayPlaylist", table: .videos), isOn: Binding(store.withState { $0.$autoPlayPlaylist }))
+                Toggle(
+                    String.localised("video.autoplay", table: .videos),
+                    isOn: Binding(store.withState { $0.$autoPlayEnabled })
+                )
+                Toggle(
+                    String.localised("video.autoplayPlaylist", table: .videos),
+                    isOn: Binding(store.withState { $0.$autoPlayPlaylist })
+                )
             } header: {
                 Text(String.localised("video.autoplaySection", table: .videos))
             }
@@ -182,7 +188,10 @@ public struct iPhoneSettingsScreen: View {
             } header: {
                 Text("Diagnostics")
             } footer: {
-                Text("Logs capture libvlc output for the most recent playback. Export when reporting choppy or stalled video.")
+                Text(
+                    "Logs capture libvlc output for the most recent playback. "
+                    + "Export when reporting choppy or stalled video."
+                )
             }
 
             Section {

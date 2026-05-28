@@ -11,14 +11,14 @@ public final class WatchPlaylistDetailViewModel {
     public var isLoadingVideo = false
     public let config: ServerConfig
     private let playlistId: String
-    private let service: any PlaylistServiceType
-    private let videoService: any VideoServiceType
+    private let service: PlaylistService
+    private let videoService: VideoService
 
     public init(
         config: ServerConfig,
         playlistId: String,
-        service: any PlaylistServiceType = PlaylistService(),
-        videoService: any VideoServiceType = VideoService()
+        service: PlaylistService = .liveValue,
+        videoService: VideoService = .liveValue
     ) {
         self.config = config
         self.playlistId = playlistId

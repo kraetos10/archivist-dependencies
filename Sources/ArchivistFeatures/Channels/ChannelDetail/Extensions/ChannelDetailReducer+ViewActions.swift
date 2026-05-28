@@ -338,9 +338,12 @@ extension ChannelDetailReducer {
     private func handleClearFilteredTapped(state: inout State) -> Effect<Action> {
         let count = state.filteredVideos.count
         guard count > 0 else { return .none }
+        let undoNote = String(localized: "This cannot be undone.")
         let message = state.videoFilter == .unwatched
-            ? String(localized: "Delete all \(count) unwatched videos in this channel from the server? This cannot be undone.")
-            : String(localized: "Delete all \(count) videos in this channel from the server? This cannot be undone.")
+            ? String(localized: "Delete all \(count) unwatched videos in this channel from the server?")
+                + " " + undoNote
+            : String(localized: "Delete all \(count) videos in this channel from the server?")
+                + " " + undoNote
         state.alert = AlertState {
             TextState(String.localised("video.clearFiltered.title", table: .videos))
         } actions: {

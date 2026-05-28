@@ -11,11 +11,11 @@ public final class WatchVideoListViewModel {
     private var currentPage = 1
     private var lastPage = 1
     public let config: ServerConfig
-    private let service: any VideoServiceType
+    private let service: VideoService
 
     public init(
         config: ServerConfig,
-        service: any VideoServiceType = VideoService()
+        service: VideoService = .liveValue
     ) {
         self.config = config
         self.service = service

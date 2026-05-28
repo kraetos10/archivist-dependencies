@@ -13,7 +13,8 @@ public struct PlaybackCacheReducer {
         var entryCount: Int = 0
         @Shared(.appStorage("vlcPrebufferToDisk")) public var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) public var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
-        @Shared(.appStorage("playbackCacheSizeLimitBytes")) public var cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
+        @Shared(.appStorage("playbackCacheSizeLimitBytes"))
+        public var cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
 
         public init() {}
     }

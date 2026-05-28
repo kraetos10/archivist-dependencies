@@ -12,12 +12,12 @@ public final class WatchChannelDetailViewModel {
     private var lastPage = 1
     public let config: ServerConfig
     private let channelId: String
-    private let service: any VideoServiceType
+    private let service: VideoService
 
     public init(
         config: ServerConfig,
         channelId: String,
-        service: any VideoServiceType = VideoService()
+        service: VideoService = .liveValue
     ) {
         self.config = config
         self.channelId = channelId

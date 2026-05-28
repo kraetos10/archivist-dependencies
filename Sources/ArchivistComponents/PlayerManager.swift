@@ -212,6 +212,13 @@ public final class PlayerManager: NSObject {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
+        observeInterruptions()
+        observeRouteChanges()
+        observeForeground()
+        observeOrientation()
+    }
+
+    private func observeInterruptions() {
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,
@@ -248,7 +255,9 @@ public final class PlayerManager: NSObject {
                 }
             }
         }
+    }
 
+    private func observeRouteChanges() {
         // Pause when an audio output device is removed — unplugging wired
         // headphones, disconnecting Bluetooth. Without this, iOS reroutes
         // to the built-in speaker and playback keeps going, blasting audio.
@@ -273,7 +282,9 @@ public final class PlayerManager: NSObject {
                 }
             }
         }
+    }
 
+    private func observeForeground() {
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willEnterForegroundNotification,
             object: nil,
@@ -288,7 +299,9 @@ public final class PlayerManager: NSObject {
                 self?.refreshVideoOutput()
             }
         }
+    }
 
+    private func observeOrientation() {
         // Device rotation triggers a host bounds change, but VLCKit's
         // rendering layer doesn't auto-rebind to the new geometry —
         // audio keeps playing while the picture goes black. Nudge VLC
@@ -396,7 +409,8 @@ public final class PlayerManager: NSObject {
 
         @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
         @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
-        @Shared(.appStorage("playbackCacheSizeLimitBytes")) var cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
+        @Shared(.appStorage("playbackCacheSizeLimitBytes"))
+        var cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
 
         // Cache-first: if we already have the file from a prior session,
         // play it directly as a file:// URL.

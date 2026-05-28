@@ -11,11 +11,11 @@ public final class WatchAddDownloadViewModel {
     public var didAdd = false
 
     private let config: ServerConfig
-    private let downloadService: any DownloadServiceType
+    private let downloadService: DownloadService
 
     public init(
         config: ServerConfig,
-        downloadService: any DownloadServiceType = DownloadService()
+        downloadService: DownloadService = .liveValue
     ) {
         self.config = config
         self.downloadService = downloadService

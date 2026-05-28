@@ -12,59 +12,16 @@ extension VideoDetailReducer {
         case .videoRefreshed(let video):
             state.video = video
             return .none
-        case .commentsResult(.success(let comments)):
-            state.comments = comments
-            state.isLoadingComments = false
-            return .none
-        case .commentsResult(.failure):
-            state.isLoadingComments = false
-            return .none
-        case .similarResult(.success(let videos)):
-            state.similarVideos = videos.filter { !$0.isWatched }
-            state.isLoadingSimilar = false
-            return .none
-        case .similarResult(.failure):
-            state.isLoadingSimilar = false
-            return .none
-        case .downloadResumed(let progress):
-            state.isDownloading = true
-            state.downloadProgress = progress
-            return .none
-        case .downloadProgressUpdated(let progress):
-            state.downloadProgress = progress
-            return .none
-        case .downloadCompleted:
-            state.isDownloading = false
-            state.isDownloaded = true
-            state.downloadProgress = 1
-            return .none
-        case .downloadFailed(let message):
-            state.isDownloading = false
-            state.downloadError = message
-            state.alert = AlertState {
-                TextState(String.localised("generic.error", table: .generic))
-            } message: {
-                TextState(message)
-            }
-            return .none
-        case .serverDeleteResult(.success):
-            state.isDeletingFromServer = false
-            let videoId = state.video.videoId
-            try? localVideoStorage.deleteVideo(videoId: videoId)
-            try? deviceDownloadDatabase.deleteDownload(videoId)
-            state.isDownloaded = false
-            return .none
-        case .serverDeleteResult(.failure(let error)):
-            state.isDeletingFromServer = false
-            state.alert = AlertState {
-                TextState(String.localised("generic.error", table: .generic))
-            } message: {
-                TextState(error.localizedDescription)
-            }
-            return .none
-        case .watchedToggleResult(.success):
-            state.watchedOverride = !(state.watchedOverride ?? state.video.isWatched)
-            return .none
+        case .commentsResult(let result):
+            return handleCommentsResult(result, state: &state)
+        case .similarResult(let result):
+            return handleSimilarResult(result, state: &state)
+        case .downloadResumed, .downloadProgressUpdated, .downloadCompleted, .downloadFailed:
+            return handleDownloadAction(action, state: &state)
+        case .serverDeleteResult(let result):
+            return handleServerDeleteResult(result, state: &state)
+        case .watchedToggleResult(let result):
+            return handleWatchedToggleResult(result, state: &state)
         case .loadNextVideo:
             return handleLoadNextVideo(state: &state)
         case .autoPlayVideo(let video):
@@ -85,11 +42,87 @@ extension VideoDetailReducer {
         case .adoptInflightPlayback:
             state.isPlaying = true
             return .none
-        case .watchedToggleResult(.failure):
-            return .none
         default:
             return .none
         }
+    }
+
+    private func handleCommentsResult(
+        _ result: Result<[VideoComment], Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        state.isLoadingComments = false
+        if case .success(let comments) = result {
+            state.comments = comments
+        }
+        return .none
+    }
+
+    private func handleSimilarResult(
+        _ result: Result<[VideoResponse], Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        state.isLoadingSimilar = false
+        if case .success(let videos) = result {
+            state.similarVideos = videos.filter { !$0.isWatched }
+        }
+        return .none
+    }
+
+    private func handleDownloadAction(_ action: Action, state: inout State) -> Effect<Action> {
+        switch action {
+        case .downloadResumed(let progress):
+            state.isDownloading = true
+            state.downloadProgress = progress
+        case .downloadProgressUpdated(let progress):
+            state.downloadProgress = progress
+        case .downloadCompleted:
+            state.isDownloading = false
+            state.isDownloaded = true
+            state.downloadProgress = 1
+        case .downloadFailed(let message):
+            state.isDownloading = false
+            state.downloadError = message
+            state.alert = AlertState {
+                TextState(String.localised("generic.error", table: .generic))
+            } message: {
+                TextState(message)
+            }
+        default:
+            break
+        }
+        return .none
+    }
+
+    private func handleServerDeleteResult(
+        _ result: Result<Void, Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        state.isDeletingFromServer = false
+        switch result {
+        case .success:
+            let videoId = state.video.videoId
+            try? localVideoStorage.deleteVideo(videoId: videoId)
+            try? deviceDownloadDatabase.deleteDownload(videoId)
+            state.isDownloaded = false
+        case .failure(let error):
+            state.alert = AlertState {
+                TextState(String.localised("generic.error", table: .generic))
+            } message: {
+                TextState(error.localizedDescription)
+            }
+        }
+        return .none
+    }
+
+    private func handleWatchedToggleResult(
+        _ result: Result<Void, Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        if case .success = result {
+            state.watchedOverride = !(state.watchedOverride ?? state.video.isWatched)
+        }
+        return .none
     }
 
     private func handleAutoPlayExhausted(state: inout State) -> Effect<Action> {
@@ -208,68 +241,17 @@ extension VideoDetailReducer {
         let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .merge(
             .run { [videoService] send in
-                let stream = await MainActor.run {
-                    // Auto-advance: keep the fullscreen player up so the
-                    // next video plays fullscreen without a flash.
-                    PlayerManager.shared.stop(dismissFullscreen: false)
-                    PlayerManager.shared.canGoPrevious = hasPrevious
-                    guard let url else { return nil as AsyncStream<Void>? }
-                    PlayerManager.shared.load(
-                        url: url,
-                        startPosition: startPosition,
-                        videoId: videoId,
-                        expectedSize: expectedSize
-                    )
-                    PlayerManager.shared.onPause = {
-                        let position = Int(PlayerManager.shared.currentTime)
-                        guard position > 0 else { return }
-                        Task.detached {
-                            try? await videoService.setProgress(
-                                config: config,
-                                videoId: videoId,
-                                position: position
-                            )
-                        }
-                    }
-                    PlayerManager.shared.onPlaybackCompleted = {
-                        // End-of-media notification — fires even when the
-                        // detail screen has been dismissed (PiP). Mark the
-                        // video watched server-side so the state syncs.
-                        Task.detached {
-                            try? await videoService.setWatched(
-                                config: config,
-                                videoId: videoId,
-                                isWatched: true
-                            )
-                        }
-                    }
-                    PlayerManager.shared.onNextRequested = {
-                        Task { @MainActor in
-                            await send(.view(.nextVideoRequested))
-                        }
-                    }
-                    PlayerManager.shared.onPreviousRequested = {
-                        Task { @MainActor in
-                            await send(.view(.previousVideoRequested))
-                        }
-                    }
-                    PlayerManager.shared.currentVideoID = videoId
-                    // Refresh now-playing metadata so the title/channel
-                    // row in the player overlay (and Control Center
-                    // now-playing) reflect the auto-played video.
-                    // Without this, the overlay sticks on the previous
-                    // video's title until the user opens detail manually.
-                    PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
-                        title: currentVideo.title,
-                        artist: currentVideo.channelName,
-                        duration: Double(currentVideo.player?.duration ?? 0),
-                        artworkURL: config.fullURL(for: currentVideo.vidThumbUrl ?? ""),
-                        channelThumbURL: currentVideo.channel.channelThumbUrl
-                            .flatMap { config.fullURL(for: $0) },
-                        authHeaders: config.authHeaders
-                    )
-                    return PlayerManager.shared.playbackEndEvents()
-                }
+                let stream = await VideoDetailReducer.loadAutoPlayStream(
+                    url: url,
+                    startPosition: startPosition,
+                    videoId: videoId,
+                    expectedSize: expectedSize,
+                    hasPrevious: hasPrevious,
+                    currentVideo: currentVideo,
+                    config: config,
+                    videoService: videoService,
+                    send: send
+                )
                 guard let stream else { return }
                 let saveTask = VideoDetailReducer.periodicProgressSaveTask(
                     config: config,
@@ -284,6 +266,79 @@ extension VideoDetailReducer {
             .cancellable(id: CancelID.playback, cancelInFlight: true),
             .send(.view(.viewDidAppear))
         )
+    }
+
+    @MainActor
+    private static func loadAutoPlayStream(
+        url: URL?,
+        startPosition: Double?,
+        videoId: String,
+        expectedSize: Int64?,
+        hasPrevious: Bool,
+        currentVideo: VideoResponse,
+        config: ServerConfig,
+        videoService: VideoService,
+        send: Send<Action>
+    ) -> AsyncStream<Void>? {
+        // Auto-advance: keep the fullscreen player up so the next video
+        // plays fullscreen without a flash.
+        PlayerManager.shared.stop(dismissFullscreen: false)
+        PlayerManager.shared.canGoPrevious = hasPrevious
+        guard let url else { return nil }
+        PlayerManager.shared.load(
+            url: url,
+            startPosition: startPosition,
+            videoId: videoId,
+            expectedSize: expectedSize
+        )
+        PlayerManager.shared.onPause = {
+            let position = Int(PlayerManager.shared.currentTime)
+            guard position > 0 else { return }
+            Task.detached {
+                try? await videoService.setProgress(
+                    config: config,
+                    videoId: videoId,
+                    position: position
+                )
+            }
+        }
+        PlayerManager.shared.onPlaybackCompleted = {
+            // End-of-media notification — fires even when the detail
+            // screen has been dismissed (PiP). Mark the video watched
+            // server-side so the state syncs.
+            Task.detached {
+                try? await videoService.setWatched(
+                    config: config,
+                    videoId: videoId,
+                    isWatched: true
+                )
+            }
+        }
+        PlayerManager.shared.onNextRequested = {
+            Task { @MainActor in
+                await send(.view(.nextVideoRequested))
+            }
+        }
+        PlayerManager.shared.onPreviousRequested = {
+            Task { @MainActor in
+                await send(.view(.previousVideoRequested))
+            }
+        }
+        PlayerManager.shared.currentVideoID = videoId
+        // Refresh now-playing metadata so the title/channel row in the
+        // player overlay (and Control Center now-playing) reflect the
+        // auto-played video. Without this, the overlay sticks on the
+        // previous video's title until the user opens detail manually.
+        PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
+            title: currentVideo.title,
+            artist: currentVideo.channelName,
+            duration: Double(currentVideo.player?.duration ?? 0),
+            artworkURL: config.fullURL(for: currentVideo.vidThumbUrl ?? ""),
+            channelThumbURL: currentVideo.channel.channelThumbUrl
+                .flatMap { config.fullURL(for: $0) },
+            authHeaders: config.authHeaders
+        )
+        return PlayerManager.shared.playbackEndEvents()
     }
 
     private func handleLoadNextVideo(state: inout State) -> Effect<Action> {

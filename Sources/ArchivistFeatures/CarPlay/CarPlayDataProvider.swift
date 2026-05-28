@@ -6,9 +6,9 @@ import Foundation
 public final class CarPlayDataProvider {
     public let serverConfig: ServerConfig
 
-    private let videoService = VideoService()
-    private let channelService = ChannelService()
-    private let playlistService = PlaylistService()
+    private let videoService = VideoService.liveValue
+    private let channelService = ChannelService.liveValue
+    private let playlistService = PlaylistService.liveValue
 
     public init(serverConfig: ServerConfig) {
         self.serverConfig = serverConfig

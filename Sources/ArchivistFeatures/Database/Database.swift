@@ -11,7 +11,19 @@ public struct TubeData: Sendable {
         let configuration = makeConfiguration()
         let path = resolveDatabasePath()
         let database = try DatabasePool(path: path, configuration: configuration)
+        try migrator().migrate(database)
+        return database
+    }
 
+    /// In-memory database with the full schema applied. Intended for tests
+    /// and previews where on-disk persistence is undesirable.
+    public func inMemoryDatabase() throws -> DatabaseWriter {
+        let database = try DatabaseQueue(configuration: makeConfiguration())
+        try migrator().migrate(database)
+        return database
+    }
+
+    private func migrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         #if DEBUG
         migrator.eraseDatabaseOnSchemaChange = true
@@ -58,9 +70,7 @@ public struct TubeData: Sendable {
                 """).execute(db)
         }
 
-        try migrator.migrate(database)
-
-        return database
+        return migrator
     }
 
     private func makeConfiguration() -> Configuration {

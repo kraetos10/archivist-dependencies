@@ -8,6 +8,9 @@ extension VideoDetailReducer {
         _ action: Action.View,
         state: inout State
     ) -> Effect<Action> {
+        if let effect = handlePlayNextQueueAction(action, state: &state) {
+            return effect
+        }
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
@@ -34,6 +37,24 @@ extension VideoDetailReducer {
             return .none
         case .toggleWatchedTapped:
             return handleToggleWatched(state: &state)
+        case .nextVideoRequested:
+            return .send(.view(.videoPlaybackDidEnd))
+        case .previousVideoRequested:
+            return handlePreviousVideoRequested(state: &state)
+        case .videoChanged:
+            state.showAllComments = false
+            state.currentCommentIndex = 0
+            return .none
+        default:
+            return .none
+        }
+    }
+
+    private func handlePlayNextQueueAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action>? {
+        switch action {
         case .addToPlaylistTapped:
             return handleAddToPlaylistTapped(state: &state)
         case .addToPlayNextTapped:
@@ -44,18 +65,12 @@ extension VideoDetailReducer {
             return handleRemoveFromPlayNextTapped(id, state: &state)
         case .playNextItemTapped(let item):
             return handlePlayNextItemTapped(item, state: &state)
-        case .nextVideoRequested:
-            return .send(.view(.videoPlaybackDidEnd))
-        case .previousVideoRequested:
-            return handlePreviousVideoRequested(state: &state)
-        case .videoChanged:
-            state.showAllComments = false
-            state.currentCommentIndex = 0
-            return .none
         case .autoPlayCountdownPlayNowTapped:
             return handleAutoPlayCountdownPlayNow(state: &state)
         case .autoPlayCountdownCancelTapped:
             return handleAutoPlayCountdownCancel(state: &state)
+        default:
+            return nil
         }
     }
 
@@ -93,85 +108,90 @@ extension VideoDetailReducer {
         state.isDownloaded = localVideoStorage.isDownloaded(videoId: videoId)
         state.isCached = PlaybackCache.isCached(videoId: videoId)
 
-        // Adopt in-flight playback if the player is already streaming
-        // this video — typically a PiP restore where the user closed the
-        // detail screen, watched in PiP, then tapped restore. We re-mount
-        // the player surface and re-subscribe to playback-end events
-        // without calling `load` (which would `stop()` and visibly
-        // restart playback from scratch).
         if !state.isPlaying {
-            effects.append(
-                .run { send in
-                    let stream = await MainActor.run { () -> AsyncStream<Void>? in
-                        guard PlayerManager.shared.currentVideoID == videoId,
-                              PlayerManager.shared.isPlaying else { return nil }
-                        return PlayerManager.shared.playbackEndEvents()
-                    }
-                    guard let stream else { return }
-                    await send(.adoptInflightPlayback)
-                    for await _ in stream {
-                        await send(.view(.videoPlaybackDidEnd))
-                    }
-                }
-                .cancellable(id: CancelID.playback, cancelInFlight: true)
-            )
+            effects.append(adoptInflightPlaybackEffect(videoId: videoId))
         }
 
-        let videoService = self.videoService
-        // Fetch latest video data (progress, watched status)
-        effects.append(
-            .run { send in
-                if let video = try? await videoService.getVideo(config: config, id: videoId) {
-                    await send(.videoRefreshed(video))
-                }
-            }
-        )
-
-        // Resume observing if a download is already in progress
-        effects.append(
-            .run { [persistentDownloadManager] send in
-                let isActive = await persistentDownloadManager.isDownloading(videoId: videoId)
-                guard isActive else { return }
-                let progress = await persistentDownloadManager.progress(for: videoId)
-                await send(.downloadResumed(progress))
-                for await event in await persistentDownloadManager.observe(videoId: videoId) {
-                    switch event {
-                    case .progress(let progress):
-                        await send(.downloadProgressUpdated(progress))
-                    case .completed:
-                        await send(.downloadCompleted)
-                    case .failed(let msg):
-                        await send(.downloadFailed(msg))
-                    }
-                }
-            }
-        )
+        effects.append(refreshVideoEffect(config: config, videoId: videoId))
+        effects.append(observeDownloadEffect(videoId: videoId))
 
         if !state.isLoadingComments && state.comments.isEmpty {
             state.isLoadingComments = true
-            effects.append(
-                .run { [videoService] send in
-                    let result = await Result {
-                        try await videoService.getComments(config: config, videoId: videoId)
-                    }
-                    await send(.commentsResult(result))
-                }
-            )
+            effects.append(fetchCommentsEffect(config: config, videoId: videoId))
         }
 
         if !state.isLoadingSimilar && state.similarVideos.isEmpty {
             state.isLoadingSimilar = true
-            effects.append(
-                .run { [videoService] send in
-                    let result = await Result {
-                        try await videoService.getSimilar(config: config, videoId: videoId)
-                    }
-                    await send(.similarResult(result))
-                }
-            )
+            effects.append(fetchSimilarEffect(config: config, videoId: videoId))
         }
 
         return .merge(effects)
+    }
+
+    /// Adopt in-flight playback if the player is already streaming this
+    /// video — typically a PiP restore where the user closed the detail
+    /// screen, watched in PiP, then tapped restore. Re-mounts the player
+    /// surface and re-subscribes to playback-end events without calling
+    /// `load` (which would `stop()` and visibly restart playback).
+    private func adoptInflightPlaybackEffect(videoId: String) -> Effect<Action> {
+        .run { send in
+            let stream = await MainActor.run { () -> AsyncStream<Void>? in
+                guard PlayerManager.shared.currentVideoID == videoId,
+                      PlayerManager.shared.isPlaying else { return nil }
+                return PlayerManager.shared.playbackEndEvents()
+            }
+            guard let stream else { return }
+            await send(.adoptInflightPlayback)
+            for await _ in stream {
+                await send(.view(.videoPlaybackDidEnd))
+            }
+        }
+        .cancellable(id: CancelID.playback, cancelInFlight: true)
+    }
+
+    private func refreshVideoEffect(config: ServerConfig, videoId: String) -> Effect<Action> {
+        .run { [videoService] send in
+            if let video = try? await videoService.getVideo(config: config, id: videoId) {
+                await send(.videoRefreshed(video))
+            }
+        }
+    }
+
+    private func observeDownloadEffect(videoId: String) -> Effect<Action> {
+        .run { [persistentDownloadManager] send in
+            let isActive = await persistentDownloadManager.isDownloading(videoId: videoId)
+            guard isActive else { return }
+            let progress = await persistentDownloadManager.progress(for: videoId)
+            await send(.downloadResumed(progress))
+            for await event in await persistentDownloadManager.observe(videoId: videoId) {
+                switch event {
+                case .progress(let progress):
+                    await send(.downloadProgressUpdated(progress))
+                case .completed:
+                    await send(.downloadCompleted)
+                case .failed(let msg):
+                    await send(.downloadFailed(msg))
+                }
+            }
+        }
+    }
+
+    private func fetchCommentsEffect(config: ServerConfig, videoId: String) -> Effect<Action> {
+        .run { [videoService] send in
+            let result = await Result {
+                try await videoService.getComments(config: config, videoId: videoId)
+            }
+            await send(.commentsResult(result))
+        }
+    }
+
+    private func fetchSimilarEffect(config: ServerConfig, videoId: String) -> Effect<Action> {
+        .run { [videoService] send in
+            let result = await Result {
+                try await videoService.getSimilar(config: config, videoId: videoId)
+            }
+            await send(.similarResult(result))
+        }
     }
 
     private func handlePlayTapped(state: inout State) -> Effect<Action> {
@@ -328,7 +348,7 @@ extension VideoDetailReducer {
     static func periodicProgressSaveTask(
         config: ServerConfig,
         videoId: String,
-        videoService: VideoServiceType
+        videoService: VideoService
     ) -> Task<Void, Never> {
         Task { [videoService] in
             while !Task.isCancelled {

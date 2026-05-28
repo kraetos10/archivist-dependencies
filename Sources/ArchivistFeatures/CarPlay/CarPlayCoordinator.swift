@@ -8,7 +8,7 @@ import UIKit
 public final class CarPlayCoordinator {
     private var interfaceController: CPInterfaceController?
     private let dataProvider: CarPlayDataProvider
-    private let videoService = VideoService()
+    private let videoService = VideoService.liveValue
     private var currentSort: VideoSortOrder = .published
     private weak var recentTemplate: CPListTemplate?
 

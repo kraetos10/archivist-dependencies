@@ -10,7 +10,7 @@ public final class WatchVideoActionViewModel {
 
     private let video: VideoResponse
     private let config: ServerConfig
-    private let videoService: any VideoServiceType
+    private let videoService: VideoService
     private let storage = WatchAudioStorage()
     private let downloadManager = WatchDownloadManager.shared
 
@@ -29,7 +29,7 @@ public final class WatchVideoActionViewModel {
     public init(
         video: VideoResponse,
         config: ServerConfig,
-        videoService: any VideoServiceType = VideoService()
+        videoService: VideoService = .liveValue
     ) {
         self.video = video
         self.config = config

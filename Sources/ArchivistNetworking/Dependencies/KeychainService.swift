@@ -1,50 +1,51 @@
 import Dependencies
+import DependenciesMacros
 import Foundation
 import KeychainAccess
-
-public protocol KeychainServiceType: Sendable {
-    func save(token: String) throws
-    func loadToken() -> String?
-    func deleteToken() throws
-}
 
 public nonisolated enum KeychainError: Error, Equatable {
     case saveFailed(OSStatus)
     case deleteFailed(OSStatus)
 }
 
-public struct KeychainService: KeychainServiceType {
-    private static let service = "com.mintywater.archivist"
-    private static let accountToken = "apiToken"
-    private static let legacyAccountUsername = "username"
-    private static let legacyAccountPassword = "password"
+@DependencyClient
+public struct KeychainService: Sendable {
+    public var save: @Sendable (_ token: String) throws -> Void
+    public var loadToken: @Sendable () -> String? = { nil }
+    public var deleteToken: @Sendable () throws -> Void
+}
 
-    private var keychain: Keychain { Keychain(service: Self.service) }
+extension KeychainService: DependencyKey {
+    public static let liveValue: KeychainService = {
+        let service = "com.mintywater.archivist"
+        let accountToken = "apiToken"
 
-    public init() {
         // Best-effort cleanup of legacy credential entries from the previous
         // username/password auth flow.
-        try? keychain.remove(Self.legacyAccountUsername)
-        try? keychain.remove(Self.legacyAccountPassword)
-    }
+        let legacy = Keychain(service: service)
+        try? legacy.remove("username")
+        try? legacy.remove("password")
 
-    public func save(token: String) throws {
-        do {
-            try keychain.set(token, key: Self.accountToken)
-        } catch {
-            throw KeychainError.saveFailed((error as? Status)?.rawValue ?? errSecParam)
-        }
-    }
+        return KeychainService(
+            save: { token in
+                do {
+                    try Keychain(service: service).set(token, key: accountToken)
+                } catch {
+                    throw KeychainError.saveFailed((error as? Status)?.rawValue ?? errSecParam)
+                }
+            },
+            loadToken: {
+                try? Keychain(service: service).get(accountToken)
+            },
+            deleteToken: {
+                do {
+                    try Keychain(service: service).remove(accountToken)
+                } catch {
+                    throw KeychainError.deleteFailed((error as? Status)?.rawValue ?? errSecParam)
+                }
+            }
+        )
+    }()
 
-    public func loadToken() -> String? {
-        try? keychain.get(Self.accountToken)
-    }
-
-    public func deleteToken() throws {
-        do {
-            try keychain.remove(Self.accountToken)
-        } catch {
-            throw KeychainError.deleteFailed((error as? Status)?.rawValue ?? errSecParam)
-        }
-    }
+    public static var testValue: KeychainService { KeychainService() }
 }

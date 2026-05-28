@@ -7,3 +7,4 @@ public enum PlaylistsPath {
 }
 
 extension PlaylistsPath.State: Sendable {}
+extension PlaylistsPath.State: Equatable {}

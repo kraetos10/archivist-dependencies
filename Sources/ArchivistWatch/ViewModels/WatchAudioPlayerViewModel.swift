@@ -30,7 +30,7 @@ public final class WatchAudioPlayerViewModel {
     private var localPlayer: AVAudioPlayer?
     private var progressTimer: Timer?
     private var timeObserver: Any?
-    private let videoService: any VideoServiceType
+    private let videoService: VideoService
     public let isStreaming: Bool
 
     public var elapsedFormatted: String {
@@ -47,7 +47,7 @@ public final class WatchAudioPlayerViewModel {
     public init(
         video: VideoResponse,
         serverConfig: ServerConfig,
-        videoService: any VideoServiceType = VideoService()
+        videoService: VideoService = .liveValue
     ) {
         self.videoId = video.videoId
         self.title = video.title
@@ -76,7 +76,7 @@ public final class WatchAudioPlayerViewModel {
         thumbPath: String?,
         fileURL: URL,
         serverConfig: ServerConfig,
-        videoService: any VideoServiceType = VideoService(),
+        videoService: VideoService = .liveValue,
         startPosition: TimeInterval = 0
     ) {
         self.videoId = videoId
