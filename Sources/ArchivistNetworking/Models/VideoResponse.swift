@@ -65,18 +65,40 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         return min(max(progress / 100, 0), 1)
     }
 
+    /// Videos whose saved position is within this many seconds of the end
+    /// are treated as finished and restart from the beginning, rather than
+    /// resuming into the final moments (which immediately ends the video,
+    /// appearing as a "skip to the end").
+    private static let completionRemainingThreshold: Double = 15
+
     /// Best-known resume position in seconds. Prefers the server's
     /// `player.position` (set by `setProgress`), but falls back to
     /// `progress%` × `duration` so videos that only carry a percentage
-    /// still resume correctly.
+    /// still resume correctly. Returns `nil` — i.e. start from the
+    /// beginning — for completed videos and for positions within the
+    /// final stretch of the video.
     public var resumePositionSeconds: Double? {
+        // A completed video restarts from the beginning.
+        if isWatched { return nil }
+
+        let resume: Double
         if let position = player?.position, position > 0 {
-            return position
+            resume = position
+        } else if let progress = player?.progress, progress > 0,
+                  let duration = player?.duration, duration > 0 {
+            resume = (progress / 100) * Double(duration)
+        } else {
+            return nil
         }
-        guard let progress = player?.progress, progress > 0,
-              let duration = player?.duration, duration > 0 else { return nil }
-        let derived = (progress / 100) * Double(duration)
-        return derived > 0 ? derived : nil
+        guard resume > 0 else { return nil }
+
+        // Treat a position within the final stretch as finished —
+        // resuming there would land on (or seek straight to) the end.
+        if let duration = player?.duration, duration > 0,
+           Double(duration) - resume <= Self.completionRemainingThreshold {
+            return nil
+        }
+        return resume
     }
 
     public var publishedDate: Date? {

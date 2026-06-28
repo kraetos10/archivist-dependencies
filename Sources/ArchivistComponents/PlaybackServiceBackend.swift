@@ -38,6 +38,10 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     /// stream as seekable. Mirrors the deferred-seek pattern from
     /// the VLCUI backend — `:start-time=` is best-effort for HTTP.
     private var pendingResumeSec: Double = 0
+    /// Target resume position as a fraction (0...1) of the media length,
+    /// captured at swap time from the known-stable streaming duration.
+    /// `-1` means "unknown" — fall back to the live duration divisor.
+    private var pendingResumeFraction: Double = -1
     /// Sticky flag set once we've observed `.playing` for the current
     /// media. VLCKit emits transient `.buffering` events as the
     /// libvlc network buffer refills mid-stream; those aren't real
@@ -54,6 +58,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         isBuffering = true
         isPlaying = true
         hasReachedPlaying = false
+        pendingResumeFraction = -1
         if let startPosition, startPosition > 0 {
             currentTime = startPosition
             onTimeUpdate?(currentTime)
@@ -96,6 +101,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         currentTime = 0
         duration = 0
         pendingResumeSec = 0
+        pendingResumeFraction = -1
         hasReachedPlaying = false
         playbackEndContinuation?.finish()
         playbackEndContinuation = nil
@@ -176,6 +182,14 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         guard fileURL.isFileURL else { return }
         let resumeSec = max(currentTime, 0)
         pendingResumeSec = resumeSec
+        // Capture the resume point as a fraction of the *known-stable*
+        // streaming duration. The local file is the same content, so this
+        // fraction is accurate — and it sidesteps the transient, partially
+        // probed `mediaDuration` the new media reports right after the swap.
+        // Dividing the reconcile seek by that under-read duration inflated
+        // the fraction and landed playback past the resume point — the
+        // visible forward skip.
+        pendingResumeFraction = duration > 0 ? min(max(resumeSec / duration, 0), 1) : -1
         // The new media has to re-prove it's playing before we trust any
         // position updates — without this, libvlc's transient `playbackTime`
         // and `mediaDuration` readings during the transition can drive the
@@ -247,13 +261,18 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         onTimeUpdate?(currentTime)
 
         if pendingResumeSec > 0, service.isSeekable, duration > 0 {
-            let target = pendingResumeSec
             // Always reconcile — `:start-time` rounds to a keyframe and
             // can land seconds ahead of the captured position, which on a
             // cache swap shows up as a visible forward skip. An accurate
-            // seek snaps us back to where the user actually was.
-            service.playbackPosition = Float(min(max(target / duration, 0), 1))
+            // seek snaps us back to where the user actually was. Prefer the
+            // fraction captured against the stable streaming duration; only
+            // fall back to the live duration divisor when none was captured.
+            let fraction = pendingResumeFraction >= 0
+                ? Float(pendingResumeFraction)
+                : Float(min(max(pendingResumeSec / duration, 0), 1))
+            service.playbackPosition = fraction
             pendingResumeSec = 0
+            pendingResumeFraction = -1
         }
     }
 
