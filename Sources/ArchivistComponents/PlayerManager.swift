@@ -127,6 +127,15 @@ public final class PlayerManager: NSObject {
     private var foregroundObserver: NSObjectProtocol?
     private var orientationObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
+    private var backgroundObserver: NSObjectProtocol?
+    private var becomeActiveObserver: NSObjectProtocol?
+    /// Set when the app actually backgrounds (app switch or device lock),
+    /// cleared on the next `didBecomeActive`. Distinguishes a real
+    /// foreground return — where VLC's GPU surface was torn down and needs
+    /// rebinding — from the frequent `didBecomeActive` events fired by
+    /// Control Center / the notification shade, where the surface is intact
+    /// and a rebind would only cause a needless flash.
+    @ObservationIgnored private var didBackground = false
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -215,6 +224,7 @@ public final class PlayerManager: NSObject {
         observeInterruptions()
         observeRouteChanges()
         observeForeground()
+        observeBecomeActive()
         observeOrientation()
     }
 
@@ -289,14 +299,46 @@ public final class PlayerManager: NSObject {
             forName: UIApplication.willEnterForegroundNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
+            // Reactivate the audio session early on the way back in. The
+            // video drawable rebind is deferred to `didBecomeActive`
+            // (see `observeBecomeActive`), which fires once the GPU surface
+            // has actually been restored — rebinding here is too early on
+            // device unlock and leaves the picture black.
             try? AVAudioSession.sharedInstance().setActive(true)
-            // VLCKit's video output occasionally loses its window/layer
-            // binding while the app is backgrounded — audio keeps playing
-            // but the picture comes back black. Force a re-bind of the
-            // rendering pipeline against the current host window.
-            MainActor.assumeIsolated {
-                self?.refreshVideoOutput()
+        }
+    }
+
+    private func observeBecomeActive() {
+        // Locking the device (and app switching) tears down VLC's GPU
+        // surface. `willEnterForeground` fires too early on unlock — the
+        // Metal drawable isn't restored yet, so the rebind there lands on a
+        // dead surface and the picture stays black. `didBecomeActive` fires
+        // once the app is fully interactive and the surface is back, so
+        // rebind again there. Gate on `didBackground` so the noisy
+        // `didBecomeActive` events from Control Center / the notification
+        // shade (which never background the app) don't cause a needless
+        // rebind flash.
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.didBackground = true }
+        }
+        becomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.didBackground else { return }
+                self.didBackground = false
+                try? AVAudioSession.sharedInstance().setActive(true)
+                // One runloop hop after activation so the window/surface
+                // have settled before we retarget the drawable.
+                try? await Task.sleep(for: .milliseconds(50))
+                self.refreshVideoOutput()
             }
         }
     }
