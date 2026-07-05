@@ -229,6 +229,13 @@ extension VideoDetailReducer {
                             videoId: videoId,
                             isWatched: true
                         )
+                        // Reset stored playtime so the finished video
+                        // starts from the beginning next time rather than
+                        // resuming into the final moments.
+                        try? await videoService.deleteProgress(
+                            config: config,
+                            videoId: videoId
+                        )
                     }
                 }
                 PlayerManager.shared.onCacheCompleted = { completedId in
@@ -478,6 +485,11 @@ extension VideoDetailReducer {
         return .run { send in
             let result = await Result {
                 try await videoService.setWatched(config: config, videoId: videoId, isWatched: newWatched)
+                // Marking watched resets stored playtime so the video
+                // starts from the beginning next time.
+                if newWatched {
+                    try await videoService.deleteProgress(config: config, videoId: videoId)
+                }
             }
             await send(.watchedToggleResult(result))
         }

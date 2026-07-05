@@ -260,17 +260,22 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         currentTime = Double(timeMs) / 1000.0
         onTimeUpdate?(currentTime)
 
-        if pendingResumeSec > 0, service.isSeekable, duration > 0 {
-            // Always reconcile — `:start-time` rounds to a keyframe and
-            // can land seconds ahead of the captured position, which on a
-            // cache swap shows up as a visible forward skip. An accurate
-            // seek snaps us back to where the user actually was. Prefer the
-            // fraction captured against the stable streaming duration; only
-            // fall back to the live duration divisor when none was captured.
+        // Reconcile the resume seek once the reported duration is
+        // trustworthy. `:start-time` rounds to a keyframe and can land
+        // seconds off the captured position (a visible skip), so an
+        // accurate seek snaps us back — but only when the divisor is real.
+        // libvlc briefly reports a tiny or stale `mediaDuration` right
+        // after `.playing`; dividing the resume target by that inflates the
+        // fraction to 1.0 and seeks to the very end, which then fires
+        // end-of-media and the "next video" overlay. The true duration is
+        // always longer than the resume target, so waiting for
+        // `duration >= pendingResumeSec` filters out those transient
+        // readings — `:start-time` keeps us roughly in place until then.
+        if pendingResumeSec > 0, service.isSeekable, duration >= pendingResumeSec {
             let fraction = pendingResumeFraction >= 0
-                ? Float(pendingResumeFraction)
-                : Float(min(max(pendingResumeSec / duration, 0), 1))
-            service.playbackPosition = fraction
+                ? min(max(pendingResumeFraction, 0), 1)
+                : min(max(pendingResumeSec / duration, 0), 1)
+            service.playbackPosition = Float(fraction)
             pendingResumeSec = 0
             pendingResumeFraction = -1
         }
