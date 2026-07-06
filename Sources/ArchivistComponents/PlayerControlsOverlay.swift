@@ -312,7 +312,11 @@ struct SeekBar: View {
     @State private var dragProgress: Double = 0
 
     private var displayProgress: Double {
-        isDragging ? dragProgress : progress
+        // Clamp to [0, 1] — `progress` is `currentTime / duration`, which
+        // can momentarily exceed 1 (currentTime overshooting a stale/short
+        // duration at end-of-video or just after a resume). Without this
+        // the fill capsule's width runs past the track's max bound.
+        min(max(isDragging ? dragProgress : progress, 0), 1)
     }
 
     var body: some View {
