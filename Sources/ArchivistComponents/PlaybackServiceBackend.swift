@@ -109,6 +109,12 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
             return
         }
         service.playbackPosition = Float(min(max(seconds / length, 0), 1))
+        // Reflect the new position immediately. While paused libvlc emits no
+        // `playbackPositionUpdated` callback, so without this the UI's
+        // `currentTime` never moves and the scrubber snaps back — making it
+        // look like you can't seek while paused.
+        currentTime = min(seconds, length)
+        onTimeUpdate?(currentTime)
     }
 
     /// Re-assign the video output view to the same host. libvlc's
