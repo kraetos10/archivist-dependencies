@@ -652,12 +652,23 @@ public final class PlayerManager: NSObject {
         backend?.setPlaybackRate(rate)
     }
 
+    /// Playback duration, falling back to the known metadata duration while
+    /// libvlc hasn't reported the media length yet (the moment right after a
+    /// resume, when `duration` is still 0). Without this the UI briefly shows
+    /// a total of 0:00 — or a total shorter than the resumed position — which
+    /// reads as "the length is less than the current progress".
+    public var effectiveDuration: Double {
+        duration > 0 ? duration : (currentMetadata?.duration ?? 0)
+    }
+
     public var currentTimeDisplay: String {
-        Self.formatTime(currentTime)
+        // Never display a position past the (effective) total.
+        let total = effectiveDuration
+        return Self.formatTime(total > 0 ? min(currentTime, total) : currentTime)
     }
 
     public var durationDisplay: String {
-        Self.formatTime(duration)
+        Self.formatTime(effectiveDuration)
     }
 
     private static func formatTime(_ seconds: Double) -> String {

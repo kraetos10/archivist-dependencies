@@ -249,14 +249,14 @@ public struct PlayerControlsOverlay: View {
             .buttonStyle(.plain)
 
             SeekBar(
-                progress: playerManager.duration > 0
-                    ? playerManager.currentTime / playerManager.duration
+                progress: playerManager.effectiveDuration > 0
+                    ? playerManager.currentTime / playerManager.effectiveDuration
                     : 0,
                 onDragStarted: {
                     playerManager.cancelVLCHideControls()
                 },
                 onSeek: { value in
-                    let target = value * playerManager.duration
+                    let target = value * playerManager.effectiveDuration
                     playerManager.seekTo(target)
                     playerManager.scheduleHideVLCControls()
                 }
