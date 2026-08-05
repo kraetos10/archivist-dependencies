@@ -62,10 +62,15 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
             pendingResumeSec = 0
         }
 
+        // Resume is applied via the deferred `playbackPosition` seek in
+        // `handlePositionUpdate` once libvlc reports the stream seekable —
+        // NOT via `:start-time=`. Over HTTP, `:start-time=` makes libvlc
+        // report a *relative* timeline (`mediaDuration` = remaining length,
+        // `playbackTime` starting at 0), which surfaced as a total showing
+        // only "what's left" and a progress bar pinned at 0. Loading the
+        // full media keeps the timeline absolute so the deferred seek lands
+        // the resume point against the true duration.
         let media = VLCMedia(url: url)!
-        if pendingResumeSec > 0 {
-            media.addOption(":start-time=\(Int(pendingResumeSec))")
-        }
         let list = VLCMediaList()
         list.add(media)
 
