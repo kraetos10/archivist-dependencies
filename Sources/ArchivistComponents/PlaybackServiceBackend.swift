@@ -209,14 +209,15 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // resume point.
         hasReachedPlaying = false
 
+        // Resume via the deferred `playbackPosition` seek in
+        // `handlePositionUpdate` (pinned to `pendingResumeSec` above), NOT
+        // `:start-time=`. Same reason as `load()`: `:start-time=` makes
+        // libvlc report a relative timeline for the swapped-in file
+        // (`mediaDuration` = remaining, `playbackTime` from 0), so after the
+        // cache swap the total and current times collapsed to "time left"
+        // instead of the true duration. Loading the file whole keeps the
+        // timeline absolute so the seek lands against the real length.
         let media = VLCMedia(url: fileURL)!
-        if resumeSec > 0 {
-            // Fractional seconds: libvlc accepts a float here. Truncating
-            // to whole seconds nudged the initial landing earlier in time,
-            // which combined with libvlc's keyframe rounding made the
-            // post-swap reconcile seek visibly skip forward.
-            media.addOption(":start-time=\(String(format: "%.3f", resumeSec))")
-        }
         let list = VLCMediaList()
         list.add(media)
         service.playMediaList(list, firstIndex: 0, subtitlesFilePath: nil)
