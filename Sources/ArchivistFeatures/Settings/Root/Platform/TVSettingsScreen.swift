@@ -119,6 +119,8 @@ public struct TVSettingsScreen: View {
                 Text(String.localised("video.autoplaySection", table: .videos))
             }
 
+            ThemePickerSection()
+
             Section {
                 Button(role: .destructive) {
                     send(.logoutTapped)

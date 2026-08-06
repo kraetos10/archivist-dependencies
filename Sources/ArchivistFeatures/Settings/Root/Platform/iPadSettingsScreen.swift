@@ -113,6 +113,8 @@ public struct iPadSettingsScreen: View {
                 Text(String.localised("video.autoplaySection", table: .videos))
             }
 
+            ThemePickerSection()
+
             Section {
                 Button { send(.playbackCacheTapped) } label: {
                     settingsRow(
