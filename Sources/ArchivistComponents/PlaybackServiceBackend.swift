@@ -155,6 +155,21 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         }
     }
 
+    /// Rebuild libvlc's audio output unit. A transient `AVAudioSession`
+    /// interruption (a notification sound, a brief route blip) or a
+    /// lock/unlock can stop the audio unit while VLC's video vout keeps
+    /// running off its own clock — the sound goes silent but the picture
+    /// keeps playing. libvlc doesn't restart the aout on its own;
+    /// deselecting and re-selecting the current audio track forces it to
+    /// rebuild against the now-active session without disturbing video.
+    public func refreshAudio() {
+        guard hasReachedPlaying else { return }
+        let current = service.indexOfCurrentAudioTrack
+        guard current >= 0 else { return }
+        service.disableAudio()
+        service.selectAudioTrack(at: current)
+    }
+
     private static func forceLayoutSweep(_ view: UIView) {
         view.setNeedsLayout()
         view.layoutIfNeeded()

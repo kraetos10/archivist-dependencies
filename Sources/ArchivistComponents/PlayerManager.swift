@@ -254,11 +254,21 @@ public final class PlayerManager: NSObject {
                         self.pause()
                     }
                 case .ended:
+                    // Reactivate the session and rebuild VLC's audio unit.
+                    // A transient interruption can leave the audio output
+                    // dead while the video vout keeps running (silent
+                    // video), and we only pause on `.began` when we caught
+                    // `isPlaying` — so recover audio here whether or not
+                    // the system asks us to resume.
+                    try? AVAudioSession.sharedInstance().setActive(true)
                     if let optionsValue {
                         let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                         if options.contains(.shouldResume), self.backend != nil {
                             self.resume()
                         }
+                    }
+                    if self.isPlaying {
+                        self.backend?.refreshAudio()
                     }
                 @unknown default:
                     break
@@ -339,6 +349,11 @@ public final class PlayerManager: NSObject {
                 // have settled before we retarget the drawable.
                 try? await Task.sleep(for: .milliseconds(50))
                 self.refreshVideoOutput()
+                // Lock/unlock also tears down VLC's audio unit; rebuild it
+                // so we don't come back to a silent-but-playing video.
+                if self.isPlaying {
+                    self.backend?.refreshAudio()
+                }
             }
         }
     }

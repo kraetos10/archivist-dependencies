@@ -36,6 +36,12 @@ public protocol PlayerBackend: AnyObject {
     /// no-op for backends that don't need the nudge.
     func refreshDrawable()
 
+    /// Rebuild the audio output after an interruption or foreground
+    /// transition that silently stopped it while the video kept playing
+    /// (picture runs, sound goes dead). Default is a no-op for backends
+    /// whose audio output recovers on its own.
+    func refreshAudio()
+
     func playbackEndEvents() -> AsyncStream<Void>
 
     var onTimeUpdate: ((Double) -> Void)? { get set }
@@ -56,6 +62,11 @@ public extension PlayerBackend {
     func refreshDrawable() {
         // Default no-op — backends with a stable drawable binding don't
         // need to do anything on rotation / foreground transitions.
+    }
+
+    func refreshAudio() {
+        // Default no-op — backends whose audio output recovers on its
+        // own after an interruption don't need the nudge.
     }
 
     func setPlaybackRate(_ rate: Float) {
