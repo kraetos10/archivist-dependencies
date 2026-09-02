@@ -250,6 +250,60 @@ enum TestFixtures {
         commentCount: nil
     )
 
+    /// `video1` with the server reporting it as watched. Used to check the
+    /// similar-videos list drops anything already seen.
+    static let watchedVideo = VideoResponse(
+        videoId: "video_watched",
+        title: "Already Watched",
+        description: nil,
+        category: nil,
+        channel: VideoChannel(
+            channelId: "UC_channel1",
+            channelName: "Test Channel 1",
+            channelActive: nil,
+            channelBannerUrl: nil,
+            channelThumbUrl: nil,
+            channelTvartUrl: nil,
+            channelDescription: nil,
+            channelLastRefresh: nil,
+            channelSubs: nil,
+            channelSubscribed: nil,
+            channelTags: nil,
+            channelTabs: nil
+        ),
+        published: "2025-01-03T00:00:00+00:00",
+        dateDownloaded: nil,
+        vidLastRefresh: nil,
+        vidThumbUrl: nil,
+        vidType: nil,
+        active: nil,
+        mediaUrl: nil,
+        mediaSize: nil,
+        player: VideoPlayer(
+            watched: true,
+            watchedDate: nil,
+            duration: 600,
+            durationStr: "10:00",
+            progress: nil,
+            position: nil
+        ),
+        stats: nil,
+        subtitles: nil,
+        streams: nil,
+        tags: nil,
+        commentCount: nil
+    )
+
+    static let comment1 = VideoComment(
+        commentId: "comment_1",
+        commentText: "First comment",
+        commentTimestamp: 1_700_000_000,
+        commentLikeCount: 3,
+        commentIsFavorited: false,
+        commentAuthor: "Someone",
+        commentAuthorId: "UC_someone"
+    )
+
     static let paginatedVideos = PaginatedResponse<VideoResponse>(
         data: [video1, video2],
         paginate: PaginatedResponse<VideoResponse>.PaginateInfo(

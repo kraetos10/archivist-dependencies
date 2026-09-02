@@ -26,39 +26,41 @@ public struct TabScreen: View {
 
     private var iPhoneTabScreen: some View {
         TabView(selection: $store.selectedTab.sending(\.selectTab)) {
-            VideoListScreen(store: store.scope(state: \.videoList, action: \.videoList))
-                .tabItem {
-                    Label(String.localised("generic.home", table: .generic), systemImage: "house")
-                }
-                .tag(AppTab.home)
+            Tab(
+                String.localised("generic.home", table: .generic),
+                systemImage: "house",
+                value: AppTab.home
+            ) {
+                VideoListScreen(store: store.scope(state: \.videoList, action: \.videoList))
+            }
 
-            ChannelsScreen(store: store.scope(state: \.channels, action: \.channels))
-                .tabItem {
-                    Label(
-                        String.localised("generic.channels", table: .generic),
-                        systemImage: "antenna.radiowaves.left.and.right"
+            Tab(
+                String.localised("generic.channels", table: .generic),
+                systemImage: "antenna.radiowaves.left.and.right",
+                value: AppTab.channels
+            ) {
+                ChannelsScreen(store: store.scope(state: \.channels, action: \.channels))
+            }
+
+            Tab(
+                String.localised("generic.playlists", table: .generic),
+                systemImage: "music.note.list",
+                value: AppTab.playlists
+            ) {
+                PlaylistsScreen(store: store.scope(state: \.playlists, action: \.playlists))
+            }
+
+            Tab(
+                String.localised("video.deviceDownloads", table: .videos),
+                systemImage: "arrow.down.to.line",
+                value: AppTab.deviceDownloads
+            ) {
+                NavigationStack {
+                    DeviceDownloadsScreen(
+                        store: store.scope(state: \.deviceDownloads, action: \.deviceDownloads)
                     )
                 }
-                .tag(AppTab.channels)
-
-            PlaylistsScreen(store: store.scope(state: \.playlists, action: \.playlists))
-                .tabItem {
-                    Label(String.localised("generic.playlists", table: .generic), systemImage: "music.note.list")
-                }
-                .tag(AppTab.playlists)
-
-            NavigationStack {
-                DeviceDownloadsScreen(
-                    store: store.scope(state: \.deviceDownloads, action: \.deviceDownloads)
-                )
             }
-            .tabItem {
-                Label(
-                    String.localised("video.deviceDownloads", table: .videos),
-                    systemImage: "arrow.down.to.line"
-                )
-            }
-            .tag(AppTab.deviceDownloads)
 
             settingsTab
         }
@@ -76,21 +78,20 @@ public struct TabScreen: View {
         }
     }
 
-    @ViewBuilder
-    private var settingsTab: some View {
+    // `TabReducer.State.selectedTab` is optional, so the `TabView`'s
+    // selection — and therefore every `Tab` value in it — is `AppTab?`.
+    @TabContentBuilder<AppTab?>
+    private var settingsTab: some TabContent<AppTab?> {
+        let title = String.localised("generic.settings", table: .generic)
         if store.childModeEnabled, !store.settingsUnlocked {
-            PinLockedSettingsPlaceholder()
-                .tabItem {
-                    Label(String.localised("generic.settings", table: .generic), systemImage: "gearshape")
-                }
-                .tag(AppTab.settings)
+            Tab(title, systemImage: "gearshape", value: AppTab.settings) {
+                PinLockedSettingsPlaceholder()
+            }
         } else {
-            SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
-                .tabItem {
-                    Label(String.localised("generic.settings", table: .generic), systemImage: "gearshape")
-                }
-                .tag(AppTab.settings)
-                .badge(store.activeDownload != nil ? 1 : 0)
+            Tab(title, systemImage: "gearshape", value: AppTab.settings) {
+                SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
+            }
+            .badge(store.activeDownload != nil ? 1 : 0)
         }
     }
 }
@@ -99,7 +100,9 @@ private struct PinLockedSettingsPlaceholder: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 40))
+                .scaledSystemFont(size: 40, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Accent.dark)
             Text(String.localised("childMode.pinEntry.subtitle", table: .login))
                 .font(.subheadline)

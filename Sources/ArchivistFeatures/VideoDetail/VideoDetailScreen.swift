@@ -134,7 +134,7 @@ public struct VideoDetailScreen: View {
         .background(Color.Brand.primary.ignoresSafeArea())
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .topBarLeading) {
                 Button {
                     send(.dismissTapped)
                 } label: {
@@ -245,7 +245,9 @@ public struct VideoDetailScreen: View {
     var emptyStateSimilar: some View {
         VStack(spacing: 8) {
             Image(systemName: "play.rectangle.on.rectangle")
-                .font(.system(size: 32))
+                .scaledSystemFont(size: 32, relativeTo: .title)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
             Text(String.localised("video.empty.noSimilar", table: .videos))
                 .font(.subheadline)

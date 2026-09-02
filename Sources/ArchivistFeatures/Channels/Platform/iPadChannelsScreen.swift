@@ -50,7 +50,9 @@ public struct iPadChannelsScreen: View {
     private var emptyDetailView: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.crop.rectangle.stack")
-                .font(.system(size: 48))
+                .scaledSystemFont(size: 48, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
             Text(String(localized: "Select a channel"))
                 .font(.headline)

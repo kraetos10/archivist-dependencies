@@ -90,6 +90,13 @@ public struct ChildVideoPlayerScreen: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { send(.playTapped) }
+        // A bare `onTapGesture` carries no accessibility traits, so
+        // VoiceOver saw the thumbnail as static art with no way to start
+        // playback. Collapse the stack into one button element instead.
+        .accessibilityElement()
+        .accessibilityLabel(String.localised("video.playVideo", table: .videos))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { send(.playTapped) }
     }
 
     private var topBar: some View {
@@ -98,6 +105,7 @@ public struct ChildVideoPlayerScreen: View {
                 Image(systemName: "xmark")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
+                    .accessibilityLabel(String.localised("generic.close", table: .generic))
                     .padding(12)
                     .background(.black.opacity(0.5), in: Circle())
             }
@@ -151,6 +159,11 @@ public struct ChildVideoPlayerScreen: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(
+                playerManager.isPlaying
+                    ? String.localised("video.pause", table: .videos)
+                    : String.localised("video.play", table: .videos)
+            )
 
             ChildSeekBar(
                 progress: playerManager.duration > 0

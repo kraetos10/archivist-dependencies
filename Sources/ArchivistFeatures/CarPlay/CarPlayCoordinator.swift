@@ -11,6 +11,11 @@ public final class CarPlayCoordinator {
     private let videoService = VideoService.liveValue
     private var currentSort: VideoSortOrder = .published
     private weak var recentTemplate: CPListTemplate?
+    /// Subscription to `PlayerManager.events` for the video CarPlay is
+    /// currently playing. Held so starting another video — or tearing the
+    /// scene down — replaces it rather than leaking a second listener that
+    /// would double-save progress.
+    private var playbackObservationTask: Task<Void, Never>?
 
     public init(dataProvider: CarPlayDataProvider) {
         self.dataProvider = dataProvider
@@ -62,6 +67,11 @@ public final class CarPlayCoordinator {
             }
         }
         PlayerManager.shared.stop()
+        // Drop the event subscription with the scene. Left running it would
+        // keep saving progress for a CarPlay session the user has already
+        // disconnected from.
+        playbackObservationTask?.cancel()
+        playbackObservationTask = nil
         interfaceController = nil
     }
 
@@ -229,32 +239,36 @@ public final class CarPlayCoordinator {
             authHeaders: config.authHeaders
         )
 
-        PlayerManager.shared.onPause = { [videoService = self.videoService] in
-            let position = Int(PlayerManager.shared.currentTime)
-            guard position > 0 else { return }
-            Task.detached {
-                try? await videoService.setProgress(config: config, videoId: videoId, position: position)
-            }
-        }
-        PlayerManager.shared.onPlaybackCompleted = { [videoService = self.videoService] in
-            Task.detached {
-                try? await videoService.setWatched(
-                    config: config,
-                    videoId: videoId,
-                    isWatched: true
-                )
-            }
-        }
+        // One subscription covers progress saves and the watched flag.
+        // This used to install `onPause` / `onPlaybackCompleted` closures on
+        // `PlayerManager`, which were single-assignment: connecting CarPlay
+        // overwrote the slots the VideoDetail feature had installed and left
+        // its progress saving dead for the rest of the session (and vice
+        // versa, depending on which ran last). A broadcast stream lets both
+        // observers coexist.
+        playbackObservationTask?.cancel()
+        playbackObservationTask = Task { [videoService = self.videoService] in
+            for await event in PlayerManager.shared.events {
+                switch event {
+                case .paused(let eventVideoId, let position):
+                    guard eventVideoId == videoId, position > 0 else { continue }
+                    try? await videoService.setProgress(
+                        config: config,
+                        videoId: videoId,
+                        position: position
+                    )
 
-        Task { [videoService = self.videoService] in
-            for await _ in PlayerManager.shared.playbackEndEvents() {
-                let position = Int(PlayerManager.shared.currentTime)
-                guard position > 0 else { continue }
-                try? await videoService.setProgress(
-                    config: config,
-                    videoId: videoId,
-                    position: position
-                )
+                case .playbackCompleted(let eventVideoId):
+                    guard eventVideoId == videoId else { continue }
+                    try? await videoService.setWatched(
+                        config: config,
+                        videoId: videoId,
+                        isWatched: true
+                    )
+
+                default:
+                    continue
+                }
             }
         }
 

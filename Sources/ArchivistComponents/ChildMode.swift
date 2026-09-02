@@ -145,7 +145,9 @@ public struct PinEntrySheet: View {
         NavigationStack {
             VStack(spacing: 24) {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 56))
+                    .scaledSystemFont(size: 56, relativeTo: .largeTitle)
+                    // Decorative: the adjacent label carries the meaning.
+                    .accessibilityHidden(true)
                     .foregroundStyle(Color.Accent.dark)
                     .padding(.top, 32)
 

@@ -203,7 +203,9 @@ public struct HistoryScreen: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 48))
+                .scaledSystemFont(size: 48, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
             Text(String.localised("settings.noHistory", table: .settings))
                 .font(.headline)

@@ -396,6 +396,17 @@
           }
         }
       }
+    },
+    "generic.close" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

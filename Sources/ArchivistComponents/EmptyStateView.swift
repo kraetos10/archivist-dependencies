@@ -20,8 +20,13 @@ public struct EmptyStateView: View {
             Spacer()
                 .frame(height: 80)
             Image(systemName: icon)
-                .font(.system(size: 48))
+                // Keeps the glyph in proportion as the user scales text; a
+                // bare `.system(size: 48)` stays 48pt at every setting.
+                .scaledSystemFont(size: 48, relativeTo: .largeTitle)
                 .foregroundStyle(Color.Brand.secondary)
+                // Decorative — the title and description below carry the
+                // meaning, so don't make VoiceOver read out a symbol name.
+                .accessibilityHidden(true)
             Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.Text.primary)

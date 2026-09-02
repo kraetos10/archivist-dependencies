@@ -109,7 +109,7 @@ extension VideoDetailReducer {
         state.isCached = PlaybackCache.isCached(videoId: videoId)
 
         if !state.isPlaying {
-            effects.append(adoptInflightPlaybackEffect(videoId: videoId))
+            effects.append(adoptInflightPlaybackEffect(config: config, videoId: videoId))
         }
 
         effects.append(refreshVideoEffect(config: config, videoId: videoId))
@@ -131,20 +131,24 @@ extension VideoDetailReducer {
     /// Adopt in-flight playback if the player is already streaming this
     /// video — typically a PiP restore where the user closed the detail
     /// screen, watched in PiP, then tapped restore. Re-mounts the player
-    /// surface and re-subscribes to playback-end events without calling
-    /// `load` (which would `stop()` and visibly restart playback).
-    private func adoptInflightPlaybackEffect(videoId: String) -> Effect<Action> {
-        .run { send in
-            let stream = await MainActor.run { () -> AsyncStream<Void>? in
+    /// surface and re-subscribes to player events without calling `load`
+    /// (which would `stop()` and visibly restart playback).
+    private func adoptInflightPlaybackEffect(config: ServerConfig, videoId: String) -> Effect<Action> {
+        .run { [videoService] send in
+            let events = await MainActor.run { () -> AsyncStream<PlayerEvent>? in
                 guard PlayerManager.shared.currentVideoID == videoId,
                       PlayerManager.shared.isPlaying else { return nil }
-                return PlayerManager.shared.playbackEndEvents()
+                return PlayerManager.shared.events
             }
-            guard let stream else { return }
+            guard let events else { return }
             await send(.adoptInflightPlayback)
-            for await _ in stream {
-                await send(.view(.videoPlaybackDidEnd))
-            }
+            await VideoDetailReducer.consumePlayerEvents(
+                events,
+                videoId: videoId,
+                config: config,
+                videoService: videoService,
+                send: send
+            )
         }
         .cancellable(id: CancelID.playback, cancelInFlight: true)
     }
@@ -203,57 +207,16 @@ extension VideoDetailReducer {
         let video = state.video
         let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .run { [videoService] send in
-            let stream = await MainActor.run {
+            let events = await MainActor.run {
+                // Subscribe before loading so nothing emitted during
+                // `load()` — an immediate cache hit, say — is missed.
+                let events = PlayerManager.shared.events
                 PlayerManager.shared.load(
                     url: url,
                     startPosition: startPosition,
                     videoId: videoId,
                     expectedSize: expectedSize
                 )
-                PlayerManager.shared.onPause = {
-                    let position = Int(PlayerManager.shared.currentTime)
-                    guard position > 0 else { return }
-                    Task.detached {
-                        try? await videoService.setProgress(config: config, videoId: videoId, position: position)
-                    }
-                }
-                PlayerManager.shared.onPlaybackCompleted = {
-                    // Fires when the player reaches end-of-media on its
-                    // own — including when the user has dismissed the
-                    // detail screen and the video finished in PiP. Mark
-                    // it watched so the server reflects the completion
-                    // regardless of which UI surface was visible.
-                    Task.detached {
-                        try? await videoService.setWatched(
-                            config: config,
-                            videoId: videoId,
-                            isWatched: true
-                        )
-                        // Reset stored playtime so the finished video
-                        // starts from the beginning next time rather than
-                        // resuming into the final moments.
-                        try? await videoService.deleteProgress(
-                            config: config,
-                            videoId: videoId
-                        )
-                    }
-                }
-                PlayerManager.shared.onCacheCompleted = { completedId in
-                    guard completedId == videoId else { return }
-                    Task { @MainActor in
-                        await send(.cacheStatusChanged(true))
-                    }
-                }
-                PlayerManager.shared.onNextRequested = {
-                    Task { @MainActor in
-                        await send(.view(.nextVideoRequested))
-                    }
-                }
-                PlayerManager.shared.onPreviousRequested = {
-                    Task { @MainActor in
-                        await send(.view(.previousVideoRequested))
-                    }
-                }
                 PlayerManager.shared.currentVideoID = videoId
                 PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
                     title: video.title,
@@ -264,7 +227,7 @@ extension VideoDetailReducer {
                         .flatMap { config.fullURL(for: $0) },
                     authHeaders: config.authHeaders
                 )
-                return PlayerManager.shared.playbackEndEvents()
+                return events
             }
             let saveTask = VideoDetailReducer.periodicProgressSaveTask(
                 config: config,
@@ -272,9 +235,13 @@ extension VideoDetailReducer {
                 videoService: videoService
             )
             defer { saveTask.cancel() }
-            for await _ in stream {
-                await send(.view(.videoPlaybackDidEnd))
-            }
+            await VideoDetailReducer.consumePlayerEvents(
+                events,
+                videoId: videoId,
+                config: config,
+                videoService: videoService,
+                send: send
+            )
         }
         .cancellable(id: CancelID.playback, cancelInFlight: true)
     }

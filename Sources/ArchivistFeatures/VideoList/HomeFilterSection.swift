@@ -136,7 +136,9 @@ struct HomeFilterSection: View {
         Button(action: onViewAll) {
             VStack(spacing: 8) {
                 Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 32))
+                    .scaledSystemFont(size: 32, relativeTo: .title)
+                    // Decorative: the adjacent label carries the meaning.
+                    .accessibilityHidden(true)
                     .foregroundStyle(Color.Accent.dark)
                 Text(String.localised("video.viewAll", table: .videos))
                     .font(.caption)

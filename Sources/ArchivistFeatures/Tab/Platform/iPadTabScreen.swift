@@ -79,7 +79,9 @@ private struct PinLockedTabPlaceholder: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 40))
+                .scaledSystemFont(size: 40, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Accent.dark)
             Text(String.localised("childMode.pinEntry.subtitle", table: .login))
                 .font(.subheadline)

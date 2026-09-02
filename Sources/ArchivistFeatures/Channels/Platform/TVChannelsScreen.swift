@@ -92,7 +92,9 @@ public struct TVChannelsScreen: View {
             Spacer()
                 .frame(height: 120)
             Image(systemName: "person.2.rectangle.stack")
-                .font(.system(size: 64))
+                .scaledSystemFont(size: 64, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(.secondary)
             Text(String.localised("login.noChannels", table: .login))
                 .font(.title2)
@@ -109,7 +111,9 @@ public struct TVChannelsScreen: View {
             Spacer()
                 .frame(height: 120)
             Image(systemName: "eye.slash")
-                .font(.system(size: 64))
+                .scaledSystemFont(size: 64, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(.secondary)
             Text(String.localised("video.empty.noUnwatched", table: .videos))
                 .font(.title2)

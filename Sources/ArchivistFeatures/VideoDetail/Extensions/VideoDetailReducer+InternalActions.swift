@@ -187,24 +187,32 @@ extension VideoDetailReducer {
                 }
             },
             .run { send in
-                // Wire the countdown card's buttons for the lifetime of
-                // this countdown so the fullscreen player VC (which can't
-                // see the store) can drive play-now / cancel.
-                await MainActor.run {
-                    PlayerManager.shared.onAutoPlayPlayNow = {
-                        Task { @MainActor in
-                            await send(.view(.autoPlayCountdownPlayNowTapped))
+                // Listen for the countdown card's buttons for the lifetime
+                // of this countdown. The card is rendered by the fullscreen
+                // player VC, which can't see the store, so it reports taps
+                // through `PlayerManager`'s event stream instead.
+                let events = await MainActor.run { PlayerManager.shared.events }
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        for await event in events {
+                            switch event {
+                            case .autoPlayPlayNowTapped:
+                                await send(.view(.autoPlayCountdownPlayNowTapped))
+                            case .autoPlayCancelTapped:
+                                await send(.view(.autoPlayCountdownCancelTapped))
+                            default:
+                                continue
+                            }
                         }
                     }
-                    PlayerManager.shared.onAutoPlayCancel = {
-                        Task { @MainActor in
-                            await send(.view(.autoPlayCountdownCancelTapped))
-                        }
+                    // The countdown itself defines the effect's lifetime;
+                    // when it runs out, tear the listener down with it so
+                    // the subscription can't outlive the card.
+                    for _ in 0..<Self.autoPlayCountdownSeconds {
+                        try? await Task.sleep(for: .seconds(1))
+                        await send(.autoPlayCountdownTick)
                     }
-                }
-                for _ in 0..<Self.autoPlayCountdownSeconds {
-                    try? await Task.sleep(for: .seconds(1))
-                    await send(.autoPlayCountdownTick)
+                    group.cancelAll()
                 }
             }
             .cancellable(id: CancelID.autoPlayCountdown, cancelInFlight: true)
@@ -254,27 +262,29 @@ extension VideoDetailReducer {
         let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .merge(
             .run { [videoService] send in
-                let stream = await VideoDetailReducer.loadAutoPlayStream(
+                let events = await VideoDetailReducer.loadAutoPlayStream(
                     url: url,
                     startPosition: startPosition,
                     videoId: videoId,
                     expectedSize: expectedSize,
                     hasPrevious: hasPrevious,
                     currentVideo: currentVideo,
-                    config: config,
-                    videoService: videoService,
-                    send: send
+                    config: config
                 )
-                guard let stream else { return }
+                guard let events else { return }
                 let saveTask = VideoDetailReducer.periodicProgressSaveTask(
                     config: config,
                     videoId: videoId,
                     videoService: videoService
                 )
                 defer { saveTask.cancel() }
-                for await _ in stream {
-                    await send(.view(.videoPlaybackDidEnd))
-                }
+                await VideoDetailReducer.consumePlayerEvents(
+                    events,
+                    videoId: videoId,
+                    config: config,
+                    videoService: videoService,
+                    send: send
+                )
             }
             .cancellable(id: CancelID.playback, cancelInFlight: true),
             .send(.view(.viewDidAppear))
@@ -289,10 +299,15 @@ extension VideoDetailReducer {
         expectedSize: Int64?,
         hasPrevious: Bool,
         currentVideo: VideoResponse,
-        config: ServerConfig,
-        videoService: VideoService,
-        send: Send<Action>
-    ) -> AsyncStream<Void>? {
+        config: ServerConfig
+    ) -> AsyncStream<PlayerEvent>? {
+        // Subscribe before stopping the outgoing video, so the `.paused`
+        // that `stop()` emits still reaches a listener and the outgoing
+        // video's final position is saved. The consumer filters by
+        // `videoId`, so that event is correctly ignored by *this* stream's
+        // handler while the outgoing video's own effect (not yet cancelled)
+        // acts on it.
+        let events = PlayerManager.shared.events
         // Auto-advance: keep the fullscreen player up so the next video
         // plays fullscreen without a flash.
         PlayerManager.shared.stop(dismissFullscreen: false)
@@ -304,45 +319,6 @@ extension VideoDetailReducer {
             videoId: videoId,
             expectedSize: expectedSize
         )
-        PlayerManager.shared.onPause = {
-            let position = Int(PlayerManager.shared.currentTime)
-            guard position > 0 else { return }
-            Task.detached {
-                try? await videoService.setProgress(
-                    config: config,
-                    videoId: videoId,
-                    position: position
-                )
-            }
-        }
-        PlayerManager.shared.onPlaybackCompleted = {
-            // End-of-media notification — fires even when the detail
-            // screen has been dismissed (PiP). Mark the video watched
-            // server-side so the state syncs.
-            Task.detached {
-                try? await videoService.setWatched(
-                    config: config,
-                    videoId: videoId,
-                    isWatched: true
-                )
-                // Reset stored playtime so the finished video starts from
-                // the beginning next time rather than resuming at the end.
-                try? await videoService.deleteProgress(
-                    config: config,
-                    videoId: videoId
-                )
-            }
-        }
-        PlayerManager.shared.onNextRequested = {
-            Task { @MainActor in
-                await send(.view(.nextVideoRequested))
-            }
-        }
-        PlayerManager.shared.onPreviousRequested = {
-            Task { @MainActor in
-                await send(.view(.previousVideoRequested))
-            }
-        }
         PlayerManager.shared.currentVideoID = videoId
         // Refresh now-playing metadata so the title/channel row in the
         // player overlay (and Control Center now-playing) reflect the
@@ -360,7 +336,7 @@ extension VideoDetailReducer {
                 .flatMap { config.fullURL(for: $0) },
             authHeaders: config.authHeaders
         )
-        return PlayerManager.shared.playbackEndEvents()
+        return events
     }
 
     private func handleLoadNextVideo(state: inout State) -> Effect<Action> {
@@ -375,55 +351,36 @@ extension VideoDetailReducer {
         let expectedSize = state.video.mediaSize.map { Int64($0) }
         return .merge(
             .run { [videoService] send in
-                let stream = await MainActor.run {
+                let events = await MainActor.run { () -> AsyncStream<PlayerEvent>? in
+                    // Subscribe before stopping, so the `.paused` emitted
+                    // for the outgoing video still reaches its own effect.
+                    let events = PlayerManager.shared.events
                     // Loading the next video — keep the fullscreen player
                     // up so playback continues fullscreen seamlessly.
                     PlayerManager.shared.stop(dismissFullscreen: false)
-                    guard let url else { return nil as AsyncStream<Void>? }
+                    guard let url else { return nil }
                     PlayerManager.shared.load(
                         url: url,
                         startPosition: startPosition,
                         videoId: videoId,
                         expectedSize: expectedSize
                     )
-                    PlayerManager.shared.onPause = {
-                        let position = Int(PlayerManager.shared.currentTime)
-                        guard position > 0 else { return }
-                        Task.detached {
-                            try? await videoService.setProgress(
-                                config: config,
-                                videoId: videoId,
-                                position: position
-                            )
-                        }
-                    }
-                    PlayerManager.shared.onPlaybackCompleted = {
-                        Task.detached {
-                            try? await videoService.setWatched(
-                                config: config,
-                                videoId: videoId,
-                                isWatched: true
-                            )
-                            // Reset stored playtime so the finished video
-                            // starts from the beginning next time.
-                            try? await videoService.deleteProgress(
-                                config: config,
-                                videoId: videoId
-                            )
-                        }
-                    }
-                    return PlayerManager.shared.playbackEndEvents()
+                    return events
                 }
-                guard let stream else { return }
+                guard let events else { return }
                 let saveTask = VideoDetailReducer.periodicProgressSaveTask(
                     config: config,
                     videoId: videoId,
                     videoService: videoService
                 )
                 defer { saveTask.cancel() }
-                for await _ in stream {
-                    await send(.view(.videoPlaybackDidEnd))
-                }
+                await VideoDetailReducer.consumePlayerEvents(
+                    events,
+                    videoId: videoId,
+                    config: config,
+                    videoService: videoService,
+                    send: send
+                )
             }
             .cancellable(id: CancelID.playback, cancelInFlight: true),
             .send(.view(.viewDidAppear))

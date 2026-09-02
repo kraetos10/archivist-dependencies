@@ -75,7 +75,9 @@ public struct TVPlaylistsScreen: View {
             Spacer()
                 .frame(height: 120)
             Image(systemName: "music.note.list")
-                .font(.system(size: 64))
+                .scaledSystemFont(size: 64, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(.secondary)
             Text(String.localised("login.noPlaylists", table: .login))
                 .font(.title2)

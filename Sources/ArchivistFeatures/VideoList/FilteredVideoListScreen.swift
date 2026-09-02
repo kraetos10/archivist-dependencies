@@ -23,7 +23,9 @@ public struct FilteredVideoListScreen: View {
             if store.hasLoaded && store.displayedVideos.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: store.filter.icon)
-                        .font(.system(size: 48))
+                        .scaledSystemFont(size: 48, relativeTo: .largeTitle)
+                        // Decorative: the adjacent label carries the meaning.
+                        .accessibilityHidden(true)
                         .foregroundStyle(Color.Brand.secondary)
                     Text(String.localised("video.empty.noVideos", table: .videos))
                         .foregroundStyle(Color.Brand.secondary)

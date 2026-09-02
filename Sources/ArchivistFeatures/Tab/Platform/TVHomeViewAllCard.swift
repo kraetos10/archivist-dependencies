@@ -23,7 +23,9 @@ struct TVHomeViewAllCard: View {
 
                     VStack(spacing: 12) {
                         Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 56, weight: .semibold))
+                            .scaledSystemFont(size: 56, relativeTo: .largeTitle, weight: .semibold)
+                            // Decorative: the adjacent label carries the meaning.
+                            .accessibilityHidden(true)
                             .foregroundStyle(Color.Accent.dark)
                         Text(String.localised("video.viewAll", table: .videos))
                             .font(.callout)

@@ -50,7 +50,9 @@ public struct iPadPlaylistsScreen: View {
     private var emptyDetailView: some View {
         VStack(spacing: 12) {
             Image(systemName: "music.note.list")
-                .font(.system(size: 48))
+                .scaledSystemFont(size: 48, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
             Text(String(localized: "Select a playlist"))
                 .font(.headline)

@@ -144,37 +144,60 @@ public final class PlayerManager: NSObject {
     private var playbackTransitionTask: UIBackgroundTaskIdentifier = .invalid
     #endif
 
-    public var onPause: (() -> Void)?
-    /// Fires when the player reaches end-of-media on its own (i.e. the video
-    /// played through to the end, distinct from a user-initiated pause/stop).
-    /// Set by `VideoDetailReducer` so we can mark the video as watched on
-    /// the server even when the detail screen has been dismissed (e.g. the
-    /// user is in PiP and the video finishes there).
-    public var onPlaybackCompleted: (() -> Void)?
-    /// Fires on the main actor when the parallel prebuffer download finishes
-    /// and the backend has swapped to the local file. Useful for UI surfaces
-    /// like the video detail row that show a "cached" indicator.
-    public var onCacheCompleted: ((String) -> Void)?
-    /// User tapped "next" on the transport overlay. Wired by the VideoDetail
-    /// reducer to the same auto-advance rules end-of-media uses.
-    public var onNextRequested: (() -> Void)?
-    /// User tapped "previous" on the transport overlay. No-op while
-    /// `canGoPrevious` is false.
-    public var onPreviousRequested: (() -> Void)?
     /// True when a history of previously-played videos exists, so the
     /// "previous" transport button should be enabled.
     public var canGoPrevious: Bool = false
+
+    /// Live subscribers to `events`. Keyed so a stream that terminates —
+    /// its consuming effect was cancelled, the screen went away — can drop
+    /// its own entry without disturbing the others.
+    @ObservationIgnored
+    private var eventContinuations: [UUID: AsyncStream<PlayerEvent>.Continuation] = [:]
+
+    /// Broadcast stream of playback notifications. Each access returns a
+    /// fresh, independent stream, so several observers (VideoDetail, the
+    /// CarPlay coordinator) can listen at once without stepping on one
+    /// another — the failure mode of the single-assignment `onPause` /
+    /// `onPlaybackCompleted` closures this replaces.
+    ///
+    /// Consumers see events for *every* video, so filter on the payload's
+    /// `videoId` rather than assuming the stream is scoped to yours.
+    ///
+    /// Iterating from a TCA `.run` effect ties the subscription to the
+    /// effect's lifetime: cancelling the effect terminates the stream and
+    /// unregisters the continuation, which is what keeps a dismissed screen
+    /// from continuing to react to playback.
+    public var events: AsyncStream<PlayerEvent> {
+        // Bounded so a stalled consumer can't grow the buffer without
+        // limit. These are user-paced events; 32 is far more headroom than
+        // any real observer needs.
+        AsyncStream(bufferingPolicy: .bufferingNewest(32)) { continuation in
+            let id = UUID()
+            eventContinuations[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in
+                    self?.eventContinuations[id] = nil
+                }
+            }
+        }
+    }
+
+    /// Broadcast one event to every live subscriber.
+    ///
+    /// Call sites must snapshot any player state into the event's payload:
+    /// delivery is asynchronous, so by the time an observer runs, `stop()`
+    /// may already have zeroed `currentTime` and cleared `currentVideoID`.
+    public func emit(_ event: PlayerEvent) {
+        for continuation in eventContinuations.values {
+            continuation.yield(event)
+        }
+    }
 
     /// Auto-play "up next" countdown, mirrored from the `VideoDetail`
     /// reducer. Non-nil while the countdown card should be shown. Lets the
     /// fullscreen player VC render the card even though it can't see the
     /// reducer's store.
     public var autoPlayCountdown: AutoPlayCountdownInfo?
-    /// User tapped "play now" on the countdown card. Wired by the
-    /// `VideoDetail` reducer for the lifetime of each countdown.
-    public var onAutoPlayPlayNow: (() -> Void)?
-    /// User tapped "cancel" on the countdown card.
-    public var onAutoPlayCancel: (() -> Void)?
     /// Fires when the user taps "restore from PiP" but the source detail
     /// screen has already been dismissed. Wired at app start to push the
     /// VideoDetail screen back onto the navigation stack so the player
@@ -410,10 +433,6 @@ public final class PlayerManager: NSObject {
         isBuffering = backend.isBuffering
     }
 
-    public func playbackEndEvents() -> AsyncStream<Void> {
-        backend?.playbackEndEvents() ?? AsyncStream { $0.finish() }
-    }
-
     /// True when a PiP-end event should be allowed to drive a fresh
     /// detail-screen remount via `onPiPRestoreRequested`. Returns false
     /// during the cooldown window after a previous restore so a
@@ -536,7 +555,7 @@ public final class PlayerManager: NSObject {
                 } else {
                     self.backend?.swapToLocalFile(fileURL)
                 }
-                self.onCacheCompleted?(videoId)
+                self.emit(.cacheCompleted(videoId: videoId))
             }
         }
         #endif
@@ -561,11 +580,12 @@ public final class PlayerManager: NSObject {
             stopPiP()
         }
         #endif
-        // Fire `onPause` before tearing state down so the reducer-installed
-        // progress-save closure (which reads `currentTime` off this manager)
-        // gets a final position to send to the server. Without this, stops
+        // Emit `.paused` before tearing state down, and carry the position
+        // in the payload: observers receive this asynchronously, so reading
+        // `currentTime` off the manager on the far side would see the zeroed
+        // value set a few lines below. Without this snapshot, stops
         // initiated from PiP teardown or external "stop" paths skip saving.
-        onPause?()
+        emit(.paused(videoId: currentVideoID, position: Int(currentTime)))
         // Cancel any in-progress cache download so its completion callback
         // doesn't swap a stale file into the next video's backend.
         if let videoId = currentVideoID {
@@ -578,8 +598,6 @@ public final class PlayerManager: NSObject {
         isBuffering = true
         currentTime = 0
         duration = 0
-        onPause = nil
-        onPlaybackCompleted = nil
         if dismissFullscreen {
             #if os(iOS)
             if activeFullscreenViewController != nil {
@@ -606,7 +624,7 @@ public final class PlayerManager: NSObject {
     public func pause() {
         backend?.pause()
         isPlaying = false
-        onPause?()
+        emit(.paused(videoId: currentVideoID, position: Int(currentTime)))
         #if !os(tvOS)
         if currentMetadata != nil {
             nowPlayingService.updatePlaybackState(
@@ -640,10 +658,10 @@ public final class PlayerManager: NSObject {
         // Leave a 2s buffer at the end. Without this, rapid taps on the
         // skip-forward button accumulate past the end of the media —
         // libvlc reports the seek as a natural .stopped event, the
-        // backend fires `onPlaybackEnd → onPlaybackCompleted`, and the
-        // video gets marked watched + auto-advances. Letting playback
-        // run into the end naturally still completes the video the
-        // intended way.
+        // backend fires `onPlaybackEnd`, which emits `.playbackCompleted`,
+        // and the video gets marked watched + auto-advances. Letting
+        // playback run into the end naturally still completes the video
+        // the intended way.
         guard duration > 0 else { return }
         let safeEnd = max(currentTime, duration - 2)
         let target = min(currentTime + seconds, safeEnd)
@@ -873,7 +891,7 @@ public final class PlayerManager: NSObject {
             self.isBuffering = backend.isBuffering
             self.duration = backend.duration
             if wasPlaying && !backend.isPlaying {
-                self.onPause?()
+                self.emit(.paused(videoId: self.currentVideoID, position: Int(self.currentTime)))
             }
         }
 
@@ -908,14 +926,14 @@ public final class PlayerManager: NSObject {
             }
             #endif
 
-            // Notify any registered observer (typically the VideoDetail
-            // reducer's progress-save closure) that the video reached its
-            // natural end. This fires regardless of whether the detail
-            // screen is still presented — important for the PiP path,
-            // where the detail screen has been dismissed but the player
-            // continues running and the user expects the watched flag to
-            // land on the server.
-            self?.onPlaybackCompleted?()
+            // Notify observers (typically the VideoDetail reducer) that the
+            // video reached its natural end. This fires regardless of
+            // whether the detail screen is still presented — important for
+            // the PiP path, where the detail screen has been dismissed but
+            // the player continues running and the user expects the watched
+            // flag to land on the server.
+            guard let self else { return }
+            self.emit(.playbackCompleted(videoId: self.currentVideoID))
         }
     }
 }

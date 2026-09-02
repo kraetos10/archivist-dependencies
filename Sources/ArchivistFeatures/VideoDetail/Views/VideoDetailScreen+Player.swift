@@ -78,6 +78,16 @@ extension VideoDetailScreen {
             HapticFeedback.light.play()
             send(.playTapped)
         }
+        // A bare `onTapGesture` carries no accessibility traits, so
+        // VoiceOver saw the thumbnail as static art with no way to start
+        // playback. Collapse the stack into one button element instead.
+        .accessibilityElement()
+        .accessibilityLabel(String.localised("video.playVideo", table: .videos))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            HapticFeedback.light.play()
+            send(.playTapped)
+        }
     }
 
     func thumbnailPlaceholder(height: CGFloat) -> some View {

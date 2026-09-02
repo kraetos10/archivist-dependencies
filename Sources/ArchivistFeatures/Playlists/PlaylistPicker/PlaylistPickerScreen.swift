@@ -27,7 +27,9 @@ public struct PlaylistPickerScreen: View {
                     VStack(spacing: 12) {
                         Spacer()
                         Image(systemName: "music.note.list")
-                            .font(.system(size: 48))
+                            .scaledSystemFont(size: 48, relativeTo: .largeTitle)
+                            // Decorative: the adjacent label carries the meaning.
+                            .accessibilityHidden(true)
                             .foregroundStyle(Color.Brand.secondary)
                         Text(String.localised("login.noCustomPlaylists", table: .login))
                             .font(.headline)

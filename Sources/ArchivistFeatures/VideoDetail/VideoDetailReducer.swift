@@ -231,8 +231,10 @@ public struct VideoDetailReducer {
         .onChange(of: \.autoPlayCountdown) { _, countdown in
             // Mirror the auto-play countdown into `PlayerManager` so the
             // fullscreen player VC — which has no access to this store —
-            // can render the "up next" card. Clearing it also drops the
-            // card's button callbacks wired in `handleAutoPlayCountdownStarted`.
+            // can render the "up next" card. The card's button taps come
+            // back over the player event stream, whose subscription is
+            // owned by the countdown effect in
+            // `handleAutoPlayCountdownStarted` and torn down with it.
             Reduce { state, _ in
                 let config = state.serverConfig
                 return .run { _ in
@@ -247,8 +249,6 @@ public struct VideoDetailReducer {
                             )
                         } else {
                             PlayerManager.shared.autoPlayCountdown = nil
-                            PlayerManager.shared.onAutoPlayPlayNow = nil
-                            PlayerManager.shared.onAutoPlayCancel = nil
                         }
                     }
                 }

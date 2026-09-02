@@ -70,8 +70,8 @@ public struct PlayerControlsOverlay: View {
                    let countdown = playerManager.autoPlayCountdown {
                     AutoPlayCountdownOverlay(
                         info: countdown,
-                        onPlayNow: { playerManager.onAutoPlayPlayNow?() },
-                        onCancel: { playerManager.onAutoPlayCancel?() }
+                        onPlayNow: { playerManager.emit(.autoPlayPlayNowTapped) },
+                        onCancel: { playerManager.emit(.autoPlayCancelTapped) }
                     )
                     .transition(.opacity)
                 }
@@ -111,6 +111,7 @@ public struct PlayerControlsOverlay: View {
                 HStack(spacing: 12) {
                     roundedControlButton(
                         systemImage: "pip.enter",
+                        label: String.localised("video.pictureInPicture", table: .videos),
                         iconSize: 16,
                         padding: 12
                     ) {
@@ -128,6 +129,7 @@ public struct PlayerControlsOverlay: View {
                     if playerManager.isVLCFullscreen {
                         roundedControlButton(
                             systemImage: "rotate.right",
+                            label: String.localised("video.rotate", table: .videos),
                             iconSize: 18,
                             padding: 12
                         ) {
@@ -149,6 +151,9 @@ public struct PlayerControlsOverlay: View {
                             systemImage: playerManager.isVLCFullscreen
                                 ? "arrow.down.right.and.arrow.up.left"
                                 : "arrow.up.left.and.arrow.down.right",
+                            label: playerManager.isVLCFullscreen
+                                ? String.localised("video.exitFullscreen", table: .videos)
+                                : String.localised("video.enterFullscreen", table: .videos),
                             iconSize: 18,
                             padding: 12
                         ) {
@@ -198,8 +203,17 @@ public struct PlayerControlsOverlay: View {
             }
     }
 
+    /// - Parameter label: Spoken name for the control. Required rather than
+    ///   optional — these buttons are icon-only, so without it VoiceOver
+    ///   falls back to reading the SF Symbol name ("pip dot enter").
+    ///
+    /// The icon size stays fixed under Dynamic Type on purpose: this is
+    /// player chrome laid out over video at a size the surrounding
+    /// transport row depends on, and it matches how the system player
+    /// behaves.
     private func roundedControlButton(
         systemImage: String,
+        label: String,
         iconSize: CGFloat,
         padding: CGFloat,
         isEnabled: Bool = true,
@@ -217,6 +231,7 @@ public struct PlayerControlsOverlay: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.35)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Bottom info + seek bar
@@ -247,6 +262,20 @@ public struct PlayerControlsOverlay: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(
+                playerManager.isPlaying
+                    ? String.localised("video.pause", table: .videos)
+                    : String.localised("video.play", table: .videos)
+            )
+            // The ±15s skips are double-tap zones over the video, which
+            // VoiceOver can't surface. Hang them off the transport button
+            // as rotor actions so they're still reachable.
+            .accessibilityAction(named: String.localised("video.skipBackward", table: .videos)) {
+                playerManager.skipBackward(15)
+            }
+            .accessibilityAction(named: String.localised("video.skipForward", table: .videos)) {
+                playerManager.skipForward(15)
+            }
 
             SeekBar(
                 progress: playerManager.effectiveDuration > 0

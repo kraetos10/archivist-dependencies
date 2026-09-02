@@ -168,7 +168,9 @@ public struct TVSearchScreen: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 48))
+                .scaledSystemFont(size: 48, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
             Text(String(localized: "No results found"))
                 .font(.headline)

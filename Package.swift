@@ -104,6 +104,9 @@ let package = Package(
             name: "ArchivistFeaturesTests",
             dependencies: [
                 "ArchivistFeatures",
+                // For `PlayerEvent`, which the VideoDetail playback tests
+                // feed through the reducer's event consumer directly.
+                .target(name: "ArchivistComponents", condition: .when(platforms: [.iOS, .tvOS])),
                 .product(name: "DependenciesTestSupport", package: "swift-dependencies")
             ]
         )

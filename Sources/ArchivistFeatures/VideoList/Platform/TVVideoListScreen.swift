@@ -101,7 +101,9 @@ public struct TVVideoListScreen: View {
             Spacer()
                 .frame(height: 120)
             Image(systemName: "play.rectangle.on.rectangle")
-                .font(.system(size: 64))
+                .scaledSystemFont(size: 64, relativeTo: .largeTitle)
+                // Decorative: the adjacent label carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(.secondary)
             Text(String.localised("video.empty.noVideos", table: .videos))
                 .font(.title2)
