@@ -9,10 +9,9 @@ extension DeviceDownloadsReducer {
         state: inout State
     ) -> Effect<Action> {
         switch action {
-        case .storageInfoLoaded(let downloadsSize, let available, let total):
+        case .storageInfoLoaded(let downloadsSize, let available):
             state.downloadsSize = downloadsSize
             state.availableStorage = available
-            state.totalStorage = total
             return .none
         default:
             return .none

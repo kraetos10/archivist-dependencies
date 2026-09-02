@@ -42,14 +42,10 @@ extension DeviceDownloadsReducer {
                     let resourceValues = try? URL(
                         fileURLWithPath: NSHomeDirectory())
                         .resourceValues(
-                            forKeys: [
-                                .volumeAvailableCapacityForImportantUsageKey,
-                                .volumeTotalCapacityKey
-                            ]
+                            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
                         )
                     let available = resourceValues?.volumeAvailableCapacityForImportantUsage ?? 0
-                    let total = Int64(resourceValues?.volumeTotalCapacity ?? 0)
-                    await send(.storageInfoLoaded(downloadsSize: downloadsSize, available: available, total: total))
+                    await send(.storageInfoLoaded(downloadsSize: downloadsSize, available: available))
                 }
             }
             .cancellable(id: CancelID.storageRefresh, cancelInFlight: true)
@@ -60,10 +56,9 @@ extension DeviceDownloadsReducer {
         .run { send in
             let downloadsSize = LocalVideoStorage.totalDownloadsSize()
             let resourceValues = try? URL(fileURLWithPath: NSHomeDirectory())
-                .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey])
+                .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
             let available = resourceValues?.volumeAvailableCapacityForImportantUsage ?? 0
-            let total = Int64(resourceValues?.volumeTotalCapacity ?? 0)
-            await send(.storageInfoLoaded(downloadsSize: downloadsSize, available: available, total: total))
+            await send(.storageInfoLoaded(downloadsSize: downloadsSize, available: available))
         }
     }
 

@@ -132,16 +132,18 @@ public struct DeviceDownloadsScreen: View {
 
     private var storageOverlay: some View {
         VStack(spacing: 10) {
-            if store.totalStorage > 0 {
-                let usedFraction = Double(store.totalStorage - store.availableStorage) / Double(store.totalStorage)
-                let downloadsFraction = Double(store.downloadsSize) / Double(store.totalStorage)
+            // Scaled to what this app accounts for — its downloads plus the
+            // space still free — rather than the whole volume. Space taken
+            // by other apps isn't actionable from this screen, and including
+            // it squeezed our own slice down to a sliver on a full device,
+            // which is exactly when the number matters most.
+            let scale = store.downloadsSize + store.availableStorage
+            if scale > 0 {
+                let downloadsFraction = Double(store.downloadsSize) / Double(scale)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
                             .fill(Color.Brand.secondary.opacity(0.3))
-                        Capsule()
-                            .fill(Color.Brand.secondary.opacity(0.6))
-                            .frame(width: geo.size.width * usedFraction)
                         Capsule()
                             .fill(Color.Accent.dark)
                             .frame(width: geo.size.width * downloadsFraction)

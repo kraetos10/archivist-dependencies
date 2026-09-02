@@ -16,7 +16,6 @@ public struct DeviceDownloadsReducer {
         var serverConfig: ServerConfig
         var downloadsSize: Int64 = 0
         var availableStorage: Int64 = 0
-        var totalStorage: Int64 = 0
         @FetchAll(
             DeviceDownload
                 .where { $0.status.eq(DeviceDownloadStatus.completed) }
@@ -36,7 +35,7 @@ public struct DeviceDownloadsReducer {
         case view(View)
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
-        case storageInfoLoaded(downloadsSize: Int64, available: Int64, total: Int64)
+        case storageInfoLoaded(downloadsSize: Int64, available: Int64)
 
         @CasePathable
         public enum View {
