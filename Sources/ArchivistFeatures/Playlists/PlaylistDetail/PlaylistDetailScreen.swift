@@ -58,19 +58,31 @@ public struct PlaylistDetailScreen: View {
     }
 
     #if !os(tvOS)
+    /// Loop is a persisted toggle, so the button has to read as on or off at
+    /// a glance. Colour alone didn't carry that — both tints are muted and
+    /// the state was easy to misread — so the symbol swaps to its filled
+    /// variant as well, matching what the tvOS screen already does.
     private var loopButton: some View {
         Button {
-            send(.loopToggled)
+            send(.loopToggled, animation: .default)
         } label: {
-            Image(systemName: "repeat")
+            Image(systemName: store.loopPlaylistEnabled ? "repeat.circle.fill" : "repeat")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(
                     store.loopPlaylistEnabled
                         ? Color.Accent.dark
                         : Color.Brand.secondary
                 )
+                .contentTransition(.symbolEffect(.replace))
         }
         .accessibilityLabel(String.localised("video.loopPlaylist", table: .videos))
+        // Without this VoiceOver reads the same label in both states, and
+        // the symbol change is invisible to it.
+        .accessibilityValue(
+            store.loopPlaylistEnabled
+                ? String.localised("generic.on", table: .generic)
+                : String.localised("generic.off", table: .generic)
+        )
         .accessibilityAddTraits(store.loopPlaylistEnabled ? .isSelected : [])
     }
 
