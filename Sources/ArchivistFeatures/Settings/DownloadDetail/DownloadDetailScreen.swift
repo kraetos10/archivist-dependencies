@@ -122,17 +122,22 @@ public struct DownloadDetailScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
+    /// Stays on the spinner once the request succeeds, rather than swapping
+    /// in a "queued" confirmation.
+    ///
+    /// Both presenters dismiss this screen on `downloadResult(.success)`,
+    /// and `ifLet` runs this reducer before the parent — so a success state
+    /// here renders for a frame on the way out, resizing the button (and
+    /// with it the popover) just as it disappears. The confirmation is the
+    /// dismissal; the queued video is already visible in the list behind.
     private var downloadButton: some View {
         Button {
             send(.downloadTapped)
         } label: {
             HStack(spacing: 8) {
-                if store.isDownloading {
+                if store.isDownloading || store.downloadTriggered {
                     ProgressView()
                         .tint(.white)
-                } else if store.downloadTriggered {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text(String.localised("video.downloadQueued", table: .videos))
                 } else {
                     Image(systemName: "arrow.down.circle.fill")
                     Text(String.localised("video.downloadNow", table: .videos))
@@ -143,7 +148,7 @@ public struct DownloadDetailScreen: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(store.downloadTriggered ? Color.Brand.secondary : Color.Accent.dark)
+            .background(Color.Accent.dark)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .disabled(store.isDownloading || store.downloadTriggered)
