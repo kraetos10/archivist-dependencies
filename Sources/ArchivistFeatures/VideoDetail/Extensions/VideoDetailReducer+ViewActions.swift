@@ -259,7 +259,7 @@ extension VideoDetailReducer {
                     title: video.title,
                     artist: video.channelName,
                     duration: Double(video.player?.duration ?? 0),
-                    artworkURL: config.fullURL(for: video.vidThumbUrl ?? ""),
+                    artworkURL: config.thumbnailURL(videoId: video.videoId, path: video.vidThumbUrl),
                     channelThumbURL: video.channel.channelThumbUrl
                         .flatMap { config.fullURL(for: $0) },
                     authHeaders: config.authHeaders
@@ -402,6 +402,7 @@ extension VideoDetailReducer {
         let title = state.video.title
         let channelName = state.video.channelName
         let thumbUrl = state.video.vidThumbUrl
+        let thumbnailURL = thumbUrl.flatMap { state.serverConfig.fullURL(for: $0) }
         let authHeaders = state.serverConfig.authHeaders
         let expectedSize = state.video.mediaSize.map { Int64($0) }
         let expectedSizeInt = state.video.mediaSize
@@ -419,7 +420,12 @@ extension VideoDetailReducer {
             try deviceDownloadDatabase.insertDownload(download)
 
             await persistentDownloadManager.startDownload(
-                url: mediaURL, videoId: videoId, title: title, expectedSize: expectedSize, authHeaders: authHeaders
+                url: mediaURL,
+                videoId: videoId,
+                title: title,
+                expectedSize: expectedSize,
+                authHeaders: authHeaders,
+                thumbnailURL: thumbnailURL
             )
             for await event in await persistentDownloadManager.observe(videoId: videoId) {
                 switch event {
@@ -522,6 +528,7 @@ extension VideoDetailReducer {
         let nextVideos = state.nextVideos
         let shouldAutoPlayNext = state.shouldAutoPlayNextVideo
         let similarVideos = state.similarVideos
+        let loopVideoIds = state.loopVideoIds
         return .merge(saveEffect, .run { [playNextDatabase, videoService] send in
             // 1. Play Next queue (user-curated, highest priority)
             // Peek (don't pop) so the row stays queued if the user
@@ -543,6 +550,23 @@ extension VideoDetailReducer {
                 return
             }
 
+            // 2b. Looping playlist — walk on from the current entry,
+            // wrapping past the last one back to the first. Turning loop on
+            // is an explicit, per-playlist choice, so it advances even when
+            // the general "autoplay playlist" preference is off.
+            if !loopVideoIds.isEmpty {
+                let upcomingIds = Self.loopIds(after: currentVideoId, in: loopVideoIds)
+                let upcoming = await Self.fetchVideos(
+                    ids: upcomingIds,
+                    config: config,
+                    videoService: videoService
+                )
+                if let first = upcoming.first {
+                    await send(.playlistLoopAdvanced(first, nextVideos: Array(upcoming.dropFirst())))
+                    return
+                }
+            }
+
             // 3. Similar videos (pre-loaded)
             if let firstSimilar = similarVideos.first {
                 await send(.autoPlayCountdownStarted(firstSimilar, consumesPlayNextQueue: false))
@@ -559,6 +583,46 @@ extension VideoDetailReducer {
             // No source had a follow-up — drop back to the thumbnail.
             await send(.autoPlayExhausted)
         })
+    }
+
+    /// Playlist IDs following `videoId`, wrapped around the end of the
+    /// playlist. A single-entry playlist yields that same entry, so looping
+    /// it replays the one video.
+    static func loopIds(
+        after videoId: String,
+        in ids: [String],
+        limit: Int = 11
+    ) -> [String] {
+        guard let index = ids.firstIndex(of: videoId) else {
+            return Array(ids.prefix(limit))
+        }
+        let rotated = Array(ids[ids.index(after: index)...]) + Array(ids[...index])
+        return Array(rotated.prefix(limit))
+    }
+
+    /// Resolves IDs to videos concurrently while preserving playlist order.
+    /// Entries the server can no longer serve are dropped rather than
+    /// stalling the loop.
+    static func fetchVideos(
+        ids: [String],
+        config: ServerConfig,
+        videoService: VideoService
+    ) async -> [VideoResponse] {
+        await withTaskGroup(of: (Int, VideoResponse)?.self) { group in
+            for (index, id) in ids.enumerated() {
+                group.addTask {
+                    guard let video = try? await videoService.getVideo(config: config, id: id) else {
+                        return nil
+                    }
+                    return (index, video)
+                }
+            }
+            var results: [(Int, VideoResponse)] = []
+            for await result in group {
+                if let result { results.append(result) }
+            }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
+        }
     }
 
     private func handleAddToPlaylistTapped(state: inout State) -> Effect<Action> {

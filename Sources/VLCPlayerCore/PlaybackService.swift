@@ -720,7 +720,10 @@ public final class PlaybackService: NSObject, @unchecked Sendable {
             _playbackSessionManagementLock.unlock()
             return
         }
-        media.parse(options: [.parseLocal, .parseNetwork])
+        // VLCKit 4.0.0-a22 moved parsing off VLCMedia and onto a queue
+        // owned by VLCMediaParser; the parsed-status KVO and the
+        // VLCMediaDelegate callback below still report the result.
+        _ = VLCMediaParser.shared().queue(media, options: [.parse, .fetchLocal, .fetchNetwork])
         media.delegate = self
         if let opts = mediaOptionsDictionary {
             media.addOptions(opts)

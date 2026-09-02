@@ -80,10 +80,16 @@ public struct DeviceDownloadsScreen: View {
         }
         .background(Color.Brand.primary)
         .onAppear { send(.viewDidAppear) }
+        .onDisappear { send(.viewDidDisappear) }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(String.localised("video.deviceDownloads", table: .videos))
         .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
             PlaylistPickerScreen(store: pickerStore)
+        }
+        .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
+            NavigationStack {
+                VideoDetailScreen(store: detailStore)
+            }
         }
     }
 
@@ -109,6 +115,7 @@ public struct DeviceDownloadsScreen: View {
         }()
 
         return CardData(
+            videoId: download.id,
             title: download.title,
             channelName: download.channelName,
             thumbPath: download.thumbUrl,

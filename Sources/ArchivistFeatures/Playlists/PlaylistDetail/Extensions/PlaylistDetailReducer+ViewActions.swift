@@ -37,6 +37,9 @@ extension PlaylistDetailReducer {
             return handleQueueServerDownloadTapped(entry, state: &state)
         case .markAsWatchedTapped(let entry):
             return handleMarkAsWatchedTapped(entry, state: &state)
+        case .loopToggled:
+            state.$loopPlaylistEnabled.withLock { $0.toggle() }
+            return .none
         }
     }
 
@@ -199,7 +202,8 @@ extension PlaylistDetailReducer {
                 videoId: videoId,
                 title: video.title,
                 expectedSize: video.mediaSize.map { Int64($0) },
-                authHeaders: config.authHeaders
+                authHeaders: config.authHeaders,
+                thumbnailURL: video.vidThumbUrl.flatMap { config.fullURL(for: $0) }
             )
         }
     }

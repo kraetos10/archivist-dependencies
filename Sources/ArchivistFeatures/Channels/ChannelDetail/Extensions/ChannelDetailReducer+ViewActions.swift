@@ -237,6 +237,7 @@ extension ChannelDetailReducer {
         let title = video.title
         let channelName = video.channelName
         let thumbUrl = video.vidThumbUrl
+        let thumbnailURL = thumbUrl.flatMap { state.serverConfig.fullURL(for: $0) }
         let authHeaders = state.serverConfig.authHeaders
         let expectedSize = video.mediaSize.map { Int64($0) }
         let expectedSizeInt = video.mediaSize
@@ -257,7 +258,8 @@ extension ChannelDetailReducer {
                 videoId: videoId,
                 title: title,
                 expectedSize: expectedSize,
-                authHeaders: authHeaders
+                authHeaders: authHeaders,
+                thumbnailURL: thumbnailURL
             )
         }
     }

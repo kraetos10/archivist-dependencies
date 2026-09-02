@@ -54,9 +54,6 @@ public struct SettingsReducer {
             case reAuthTapped
             case downloadsTapped
             case statsTapped
-            #if !os(tvOS)
-            case deviceDownloadsTapped
-            #endif
             case historyTapped
             #if !os(watchOS)
             case playbackCacheTapped
@@ -99,17 +96,6 @@ public struct SettingsReducer {
                     shouldAutoPlayNextVideo: autoPlayEnabled1
                 )
                 return .none
-            #if !os(tvOS)
-            case .path(.element(_, action: .deviceDownloads(.delegate(.playVideo(let video, let nextVideos))))):
-                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled2 = true
-                state.videoDetail = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video,
-                    nextVideos: nextVideos,
-                    shouldAutoPlayNextVideo: autoPlayEnabled2
-                )
-                return .none
-            #endif
             case .path:
                 return .none
             default:

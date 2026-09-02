@@ -35,12 +35,14 @@ public struct iPadTabScreen: View {
             }
 
             Tab(
-                String.localised("settings.queue", table: .settings),
-                systemImage: "arrow.down.circle",
-                value: AppTab.queue
+                String.localised("video.deviceDownloads", table: .videos),
+                systemImage: "arrow.down.to.line",
+                value: AppTab.deviceDownloads
             ) {
                 NavigationStack {
-                    DownloadsScreen(store: store.scope(state: \.queue, action: \.queue))
+                    DeviceDownloadsScreen(
+                        store: store.scope(state: \.deviceDownloads, action: \.deviceDownloads)
+                    )
                 }
             }
 

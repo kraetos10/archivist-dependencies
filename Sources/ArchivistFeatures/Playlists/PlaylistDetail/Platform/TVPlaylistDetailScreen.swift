@@ -50,6 +50,15 @@ public struct TVPlaylistDetailScreen: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
+            Button {
+                send(.loopToggled)
+            } label: {
+                Label(
+                    String.localised("video.loopPlaylist", table: .videos),
+                    systemImage: store.loopPlaylistEnabled ? "repeat.circle.fill" : "repeat"
+                )
+            }
+
             if let description = store.playlist.playlistDescription, !description.isEmpty {
                 Text(description)
                     .font(.body)

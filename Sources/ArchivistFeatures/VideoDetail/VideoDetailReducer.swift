@@ -45,6 +45,11 @@ public struct VideoDetailReducer {
         var similarVideos: [VideoResponse] = []
         var isLoadingSimilar = false
         var nextVideos: [VideoResponse] = []
+        /// Ordered video IDs of the playlist this detail session was opened
+        /// from, set only when the playlist's loop option is on. Once
+        /// `nextVideos` runs dry, playback walks this list from the entry
+        /// after the current video, wrapping past the end back to the top.
+        var loopVideoIds: [String] = []
         /// Stack of videos we've auto-advanced past in this detail session —
         /// powers the "previous" transport button.
         var previousVideos: [VideoResponse] = []
@@ -89,6 +94,7 @@ public struct VideoDetailReducer {
             serverConfig: ServerConfig,
             video: VideoResponse,
             nextVideos: [VideoResponse] = [],
+            loopVideoIds: [String] = [],
             shouldAutoPlayNextVideo: Bool = true,
             showPlayNext: Bool = true,
             isPlaying: Bool = false
@@ -96,6 +102,7 @@ public struct VideoDetailReducer {
             self.serverConfig = serverConfig
             self.video = video
             self.nextVideos = nextVideos
+            self.loopVideoIds = loopVideoIds
             self.shouldAutoPlayNextVideo = shouldAutoPlayNextVideo
             self.showPlayNext = showPlayNext
             self.isPlaying = isPlaying
@@ -144,6 +151,7 @@ public struct VideoDetailReducer {
         case autoPlayVideo(VideoResponse)
         case autoPlayExhausted
         case autoPlayCountdownStarted(VideoResponse, consumesPlayNextQueue: Bool)
+        case playlistLoopAdvanced(VideoResponse, nextVideos: [VideoResponse])
         case autoPlayCountdownTick
         case cacheStatusChanged(Bool)
         case pipRestoreRequested(VideoResponse)

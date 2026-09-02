@@ -24,24 +24,27 @@ public struct DeviceDownloadsReducer {
         )
         var completedDownloads
         @Presents var playlistPicker: PlaylistPickerReducer.State?
+        @Presents var videoDetail: VideoDetailReducer.State?
+        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
+
+        public init(serverConfig: ServerConfig) {
+            self.serverConfig = serverConfig
+        }
     }
 
     public enum Action: ViewAction {
         case view(View)
-        case delegate(Delegate)
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
+        case videoDetail(PresentationAction<VideoDetailReducer.Action>)
         case storageInfoLoaded(downloadsSize: Int64, available: Int64, total: Int64)
 
         @CasePathable
         public enum View {
             case viewDidAppear
+            case viewDidDisappear
             case deleteTapped(String)
             case downloadTapped(DeviceDownload)
             case addToPlaylistTapped(DeviceDownload)
-        }
-
-        public enum Delegate: Equatable, Sendable {
-            case playVideo(VideoResponse, nextVideos: [VideoResponse])
         }
     }
 
@@ -55,7 +58,11 @@ public struct DeviceDownloadsReducer {
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .delegate, .playlistPicker:
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))),
+                 .videoDetail(.presented(.delegate(.didDismiss))):
+                state.videoDetail = nil
+                return .none
+            case .videoDetail, .playlistPicker:
                 return .none
             default:
                 return handleInternalAction(action, state: &state)
@@ -63,6 +70,9 @@ public struct DeviceDownloadsReducer {
         }
         .ifLet(\.$playlistPicker, action: \.playlistPicker) {
             PlaylistPickerReducer()
+        }
+        .ifLet(\.$videoDetail, action: \.videoDetail) {
+            VideoDetailReducer()
         }
     }
 }

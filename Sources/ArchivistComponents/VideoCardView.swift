@@ -2,6 +2,9 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct CardData {
+    /// Backs the offline thumbnail lookup — cards for videos downloaded to
+    /// the device read their poster art off disk instead of the server.
+    public let videoId: String?
     public let title: String
     public let channelName: String?
     public let thumbPath: String?
@@ -15,6 +18,7 @@ public struct CardData {
     public let fileSize: String?
 
     public init(
+        videoId: String? = nil,
         title: String,
         channelName: String?,
         thumbPath: String?,
@@ -27,6 +31,7 @@ public struct CardData {
         isDownloaded: Bool = false,
         fileSize: String? = nil
     ) {
+        self.videoId = videoId
         self.title = title
         self.channelName = channelName
         self.thumbPath = thumbPath
@@ -44,6 +49,7 @@ public struct CardData {
 public extension VideoResponse {
     var cardData: CardData {
         CardData(
+            videoId: videoId,
             title: title,
             channelName: channelName,
             thumbPath: vidThumbUrl,
@@ -60,6 +66,7 @@ public extension VideoResponse {
 public extension DownloadResponse {
     var cardData: CardData {
         CardData(
+            videoId: youtubeId,
             title: title ?? youtubeId,
             channelName: channelName,
             thumbPath: vidThumbUrl,
@@ -70,6 +77,20 @@ public extension DownloadResponse {
             watchProgress: 0,
             isPending: true
         )
+    }
+}
+
+public extension CardData {
+    /// Cached thumbnail on disk wins over the server URL so downloaded
+    /// videos still show artwork with no connection to the server. Only
+    /// downloaded cards touch the filesystem — everything else goes
+    /// straight to the server URL.
+    func thumbnailURL(serverConfig: ServerConfig) -> URL? {
+        if isDownloaded, let videoId {
+            return serverConfig.thumbnailURL(videoId: videoId, path: thumbPath)
+        }
+        guard let thumbPath else { return nil }
+        return serverConfig.fullURL(for: thumbPath)
     }
 }
 
@@ -260,8 +281,7 @@ public struct VideoCardView: View {
     }
 
     private var thumbnailURL: URL? {
-        guard let thumbPath = data.thumbPath else { return nil }
-        return serverConfig.fullURL(for: thumbPath)
+        data.thumbnailURL(serverConfig: serverConfig)
     }
 }
 

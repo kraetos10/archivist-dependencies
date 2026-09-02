@@ -36,6 +36,8 @@ extension VideoDetailReducer {
             )
         case .autoPlayCountdownTick:
             return handleAutoPlayCountdownTick(state: &state)
+        case .playlistLoopAdvanced(let video, let nextVideos):
+            return handlePlaylistLoopAdvanced(video, nextVideos: nextVideos, state: &state)
         case .cacheStatusChanged(let isCached):
             state.isCached = isCached
             return .none
@@ -137,6 +139,17 @@ extension VideoDetailReducer {
                 await MainActor.run { PlayerManager.shared.stop() }
             }
         )
+    }
+
+    /// Refills the up-next queue from the looping playlist, then hands off
+    /// to the normal countdown so the wrap looks like any other advance.
+    private func handlePlaylistLoopAdvanced(
+        _ video: VideoResponse,
+        nextVideos: [VideoResponse],
+        state: inout State
+    ) -> Effect<Action> {
+        state.nextVideos = nextVideos
+        return .send(.autoPlayCountdownStarted(video, consumesPlayNextQueue: false))
     }
 
     private func handleAutoPlayCountdownStarted(
@@ -339,7 +352,10 @@ extension VideoDetailReducer {
             title: currentVideo.title,
             artist: currentVideo.channelName,
             duration: Double(currentVideo.player?.duration ?? 0),
-            artworkURL: config.fullURL(for: currentVideo.vidThumbUrl ?? ""),
+            artworkURL: config.thumbnailURL(
+                videoId: currentVideo.videoId,
+                path: currentVideo.vidThumbUrl
+            ),
             channelThumbURL: currentVideo.channel.channelThumbUrl
                 .flatMap { config.fullURL(for: $0) },
             authHeaders: config.authHeaders

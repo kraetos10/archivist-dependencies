@@ -35,13 +35,6 @@ extension SettingsReducer {
                 .stats(StatsReducer.State(serverConfig: state.serverConfig))
             )
             return .none
-        #if !os(tvOS)
-        case .deviceDownloadsTapped:
-            state.path.append(
-                .deviceDownloads(DeviceDownloadsReducer.State(serverConfig: state.serverConfig))
-            )
-            return .none
-        #endif
         case .historyTapped:
             state.path.append(
                 .history(HistoryReducer.State(serverConfig: state.serverConfig))

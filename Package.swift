@@ -80,9 +80,14 @@ let package = Package(
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
             ]
         ),
+        // VLCKit 4.0.0-a24 (tagged 2026-08-31), consumed as the official
+        // Swift Package binary artifact VideoLAN began publishing in
+        // 4.0.0-a22. To bump: take the url/checksum pair from the
+        // Package.swift of the tag you want at github.com/videolan/VLCKit.
         .binaryTarget(
             name: "VLCKit",
-            path: "VLCKit.xcframework"
+            url: "https://download.videolan.org/cocoapods/unstable/VLCKit-4.0-20260831-1526.zip",
+            checksum: "c61a42052ec4c1315325fba81f8893f4ccf639d92bf61dd1b3c37c3a2f26b8e3"
         ),
         // Lifted verbatim from videolan/vlc-ios. UIKit-only; we slim
         // PlaybackService to URL-driven playback (keeps the queue layer)

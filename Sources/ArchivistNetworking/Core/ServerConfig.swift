@@ -33,6 +33,20 @@ public nonisolated struct ServerConfig: Sendable, Codable, Equatable {
         ["Authorization": "Token \(apiToken)"]
     }
 
+    /// Thumbnail URL for a video, preferring the copy cached on disk
+    /// alongside a device download so artwork still resolves when the
+    /// server is unreachable.
+    public func thumbnailURL(
+        videoId: String,
+        path: String?
+    ) -> URL? {
+        if let localURL = LocalVideoStorage.localThumbnailURL(for: videoId) {
+            return localURL
+        }
+        guard let path, !path.isEmpty else { return nil }
+        return fullURL(for: path)
+    }
+
     public func fullURL(for relativePath: String) -> URL? {
         var components = URLComponents()
         components.scheme = scheme

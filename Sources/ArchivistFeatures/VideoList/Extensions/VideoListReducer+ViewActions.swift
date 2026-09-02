@@ -191,6 +191,7 @@ extension VideoListReducer {
         let title = video.title
         let channelName = video.channelName
         let thumbUrl = video.vidThumbUrl
+        let thumbnailURL = thumbUrl.flatMap { state.serverConfig.fullURL(for: $0) }
         let authHeaders = state.serverConfig.authHeaders
         let expectedSize = video.mediaSize.map { Int64($0) }
         let expectedSizeInt = video.mediaSize
@@ -208,7 +209,12 @@ extension VideoListReducer {
             try? deviceDownloadDatabase.insertDownload(download)
 
             await persistentDownloadManager.startDownload(
-                url: mediaURL, videoId: videoId, title: title, expectedSize: expectedSize, authHeaders: authHeaders
+                url: mediaURL,
+                videoId: videoId,
+                title: title,
+                expectedSize: expectedSize,
+                authHeaders: authHeaders,
+                thumbnailURL: thumbnailURL
             )
         }
     }

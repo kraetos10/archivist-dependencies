@@ -15,7 +15,11 @@ extension PlaylistDetailReducer {
             state.hasLoadedEntries = true
             return .none
         case .videoResult(.success(let (video, nextVideos))):
-            return .send(.delegate(.showVideo(video, nextVideos: nextVideos)))
+            return .send(.delegate(.showVideo(
+                video,
+                nextVideos: nextVideos,
+                loopVideoIds: state.loopVideoIds
+            )))
         case .videoResult(.failure):
             return .none
         case .removeEntryResult(.success(let videoId)):

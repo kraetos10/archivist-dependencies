@@ -39,9 +39,8 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     /// the VLCUI backend — `:start-time=` is best-effort for HTTP.
     private var pendingResumeSec: Double = 0
     /// Sticky flag set once we've observed `.playing` for the current
-    /// media. VLCKit emits transient `.buffering` events as the
-    /// libvlc network buffer refills mid-stream; those aren't real
-    /// stalls and shouldn't toggle the spinner.
+    /// media. Gates the deferred resume seek and position propagation
+    /// so neither fires against a stream that hasn't started yet.
     private var hasReachedPlaying = false
 
     private var service: PlaybackService { .sharedInstance() }
@@ -293,14 +292,12 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     private func handleStateChange(_ currentState: VLCMediaPlayerState) {
         switch currentState {
         case .opening:
+            // VLCKit 4.0.0-a22 dropped the `.buffering` state; buffer fill
+            // now arrives via `mediaPlayerBufferingChanged:`. We only ever
+            // showed the spinner between `.opening` and the first
+            // `.playing` anyway (mid-stream refills were deliberately
+            // ignored), so that window is unchanged.
             isBuffering = true
-        case .buffering:
-            // Only treat as buffering before the first .playing — VLCKit
-            // emits .buffering as a buffer-fill heartbeat once playback
-            // is underway, which would otherwise leave the spinner up.
-            if !hasReachedPlaying {
-                isBuffering = true
-            }
         case .playing:
             hasReachedPlaying = true
             isPlaying = true
@@ -314,6 +311,11 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
             hasReachedPlaying = false
             playbackEndContinuation?.yield()
             onPlaybackEnd?()
+        case .stopping:
+            // Stop was requested and libvlc is tearing the stream down.
+            // Playback-end is signalled on `.stopped`, so don't yield here.
+            isPlaying = false
+            isBuffering = false
         case .error:
             isPlaying = false
             isBuffering = false

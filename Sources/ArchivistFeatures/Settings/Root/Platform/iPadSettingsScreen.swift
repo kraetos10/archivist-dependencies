@@ -21,8 +21,6 @@ public struct iPadSettingsScreen: View {
                 DownloadsScreen(store: store)
             case .stats(let store):
                 StatsScreen(store: store)
-            case .deviceDownloads(let store):
-                DeviceDownloadsScreen(store: store)
             case .history(let store):
                 HistoryScreen(store: store)
             case .playbackCache(let store):
@@ -47,16 +45,16 @@ public struct iPadSettingsScreen: View {
             ActiveDeviceDownloadView()
 
             Section {
+                Button { send(.downloadsTapped) } label: {
+                    settingsRow(
+                        icon: "arrow.down.circle",
+                        title: String.localised("settings.queue", table: .settings)
+                    )
+                }
                 Button { send(.statsTapped) } label: {
                     settingsRow(
                         icon: "chart.bar",
                         title: String.localised("settings.stats", table: .settings)
-                    )
-                }
-                Button { send(.deviceDownloadsTapped) } label: {
-                    settingsRow(
-                        icon: "arrow.down.to.line",
-                        title: String.localised("video.deviceDownloads", table: .videos)
                     )
                 }
                 Button { send(.historyTapped) } label: {

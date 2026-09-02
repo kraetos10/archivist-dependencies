@@ -35,13 +35,18 @@ extension PlaylistsReducer {
             }
             _ = state.path.popLast()
             return .none
-        case .path(.element(_, action: .playlistDetail(.delegate(.showVideo(let video, let nextVideos))))),
-             .playlistDetail(.presented(.delegate(.showVideo(let video, let nextVideos)))):
+        case .path(.element(_, action: .playlistDetail(.delegate(
+                .showVideo(let video, let nextVideos, let loopVideoIds)
+             )))),
+             .playlistDetail(.presented(.delegate(
+                .showVideo(let video, let nextVideos, let loopVideoIds)
+             ))):
             @Shared(.appStorage("autoPlayPlaylist")) var autoPlayPlaylist = true
             state.videoDetail = VideoDetailReducer.State(
                 serverConfig: state.serverConfig,
                 video: video,
                 nextVideos: nextVideos,
+                loopVideoIds: loopVideoIds,
                 shouldAutoPlayNextVideo: autoPlayPlaylist
             )
             return .none

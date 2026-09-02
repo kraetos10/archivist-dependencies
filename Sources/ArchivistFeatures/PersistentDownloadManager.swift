@@ -32,7 +32,8 @@ public nonisolated protocol PersistentDownloadManagerType: Sendable {
         videoId: String,
         title: String,
         expectedSize: Int64?,
-        authHeaders: [String: String]
+        authHeaders: [String: String],
+        thumbnailURL: URL?
     ) async
     func isDownloading(videoId: String) async -> Bool
     func progress(for videoId: String) async -> Double
@@ -54,7 +55,8 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
         videoId: String,
         title: String,
         expectedSize: Int64?,
-        authHeaders: [String: String]
+        authHeaders: [String: String],
+        thumbnailURL: URL?
     ) {
         guard activeTasks[videoId] == nil else { return }
         currentProgress[videoId] = 0
@@ -69,6 +71,16 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
             // var — capturing the mutable var trips strict-concurrency's
             // 'sending' closure data-race diagnostic.
             let database = deviceDownloadDatabase
+
+            // Cache the poster art alongside the media so the downloads
+            // list and player still have artwork with no server reachable.
+            if let thumbnailURL {
+                await Self.cacheThumbnail(
+                    from: thumbnailURL,
+                    videoId: videoId,
+                    authHeaders: authHeaders
+                )
+            }
 
             let progress = Progress(totalUnitCount: 100)
             let manager = VideoDownloadManager(progress: progress)
@@ -140,6 +152,21 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
     }
 
     // MARK: - Private
+
+    private static func cacheThumbnail(
+        from url: URL,
+        videoId: String,
+        authHeaders: [String: String]
+    ) async {
+        var request = URLRequest(url: url)
+        for (key, value) in authHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else { return }
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode >= 400 { return }
+        guard !data.isEmpty else { return }
+        try? LocalVideoStorage.saveThumbnail(data, videoId: videoId)
+    }
 
     private func handleProgress(
         videoId: String,

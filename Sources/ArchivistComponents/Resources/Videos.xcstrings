@@ -1034,6 +1034,17 @@
           }
         }
       }
+    },
+    "video.loopPlaylist": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop playlist"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

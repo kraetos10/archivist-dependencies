@@ -48,12 +48,17 @@ public struct TabScreen: View {
                 .tag(AppTab.playlists)
 
             NavigationStack {
-                DownloadsScreen(store: store.scope(state: \.queue, action: \.queue))
+                DeviceDownloadsScreen(
+                    store: store.scope(state: \.deviceDownloads, action: \.deviceDownloads)
+                )
             }
             .tabItem {
-                Label(String.localised("settings.queue", table: .settings), systemImage: "arrow.down.circle")
+                Label(
+                    String.localised("video.deviceDownloads", table: .videos),
+                    systemImage: "arrow.down.to.line"
+                )
             }
-            .tag(AppTab.queue)
+            .tag(AppTab.deviceDownloads)
 
             settingsTab
         }

@@ -11,6 +11,10 @@ extension DeviceDownloadsReducer {
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
+        case .viewDidDisappear:
+            // The reducer now lives for the app's lifetime as a tab root, so
+            // the storage poll has to stop when the tab isn't on screen.
+            return .cancel(id: CancelID.storageRefresh)
         case .deleteTapped(let videoId):
             return handleDeleteTapped(videoId, state: &state)
         case .downloadTapped(let download):
@@ -88,7 +92,13 @@ extension DeviceDownloadsReducer {
             } else {
                 nextVideos = []
             }
-            return .send(.delegate(.playVideo(video, nextVideos: nextVideos)))
+            state.videoDetail = VideoDetailReducer.State(
+                serverConfig: state.serverConfig,
+                video: video,
+                nextVideos: nextVideos,
+                shouldAutoPlayNextVideo: state.autoPlayEnabled
+            )
+            return .none
         case .failed:
             let videoId = download.id
             let config = state.serverConfig
@@ -114,7 +124,8 @@ extension DeviceDownloadsReducer {
                     videoId: videoId,
                     title: video.title,
                     expectedSize: video.mediaSize.map { Int64($0) },
-                    authHeaders: config.authHeaders
+                    authHeaders: config.authHeaders,
+                    thumbnailURL: video.vidThumbUrl.flatMap { config.fullURL(for: $0) }
                 )
             }
         default:

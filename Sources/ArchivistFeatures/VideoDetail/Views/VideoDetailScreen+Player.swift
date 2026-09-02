@@ -87,8 +87,10 @@ extension VideoDetailScreen {
     }
 
     var thumbnailURL: URL? {
-        guard let thumbPath = store.video.vidThumbUrl else { return nil }
-        return store.serverConfig.fullURL(for: thumbPath)
+        store.serverConfig.thumbnailURL(
+            videoId: store.video.videoId,
+            path: store.video.vidThumbUrl
+        )
     }
 }
 #endif

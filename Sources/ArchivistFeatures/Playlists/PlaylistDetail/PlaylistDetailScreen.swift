@@ -37,6 +37,21 @@ public struct PlaylistDetailScreen: View {
         .toolbar {
             #if !os(tvOS)
             ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    send(.loopToggled)
+                } label: {
+                    Image(systemName: "repeat")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(
+                            store.loopPlaylistEnabled
+                                ? Color.Accent.dark
+                                : Color.Brand.secondary
+                        )
+                }
+                .accessibilityLabel(String.localised("video.loopPlaylist", table: .videos))
+            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     if !store.isCustomPlaylist, let youtubeURL = store.playlist.youtubeURL {
                         ShareLink(item: youtubeURL) {

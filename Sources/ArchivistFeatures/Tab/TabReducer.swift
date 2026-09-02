@@ -9,6 +9,9 @@ public enum AppTab: Hashable, Sendable {
     case channels
     case playlists
     case queue
+    #if !os(tvOS)
+    case deviceDownloads
+    #endif
     case settings
 }
 
@@ -23,6 +26,9 @@ public struct TabReducer {
         public var channels: ChannelsReducer.State
         public var playlists: PlaylistsReducer.State
         public var queue: DownloadsReducer.State
+        #if !os(tvOS)
+        public var deviceDownloads: DeviceDownloadsReducer.State
+        #endif
         public var settings: SettingsReducer.State
         @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
         @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
@@ -43,10 +49,18 @@ public struct TabReducer {
         }
 
         var presentedVideoDetailVideoId: String? {
+            #if os(tvOS)
             videoList.videoDetail?.video.videoId
                 ?? channels.videoDetail?.video.videoId
                 ?? playlists.videoDetail?.video.videoId
                 ?? settings.videoDetail?.video.videoId
+            #else
+            videoList.videoDetail?.video.videoId
+                ?? channels.videoDetail?.video.videoId
+                ?? playlists.videoDetail?.video.videoId
+                ?? deviceDownloads.videoDetail?.video.videoId
+                ?? settings.videoDetail?.video.videoId
+            #endif
         }
 
         public var activeDownload: ActiveDownload? {
@@ -62,6 +76,9 @@ public struct TabReducer {
             self.channels = ChannelsReducer.State(serverConfig: serverConfig)
             self.playlists = PlaylistsReducer.State(serverConfig: serverConfig)
             self.queue = DownloadsReducer.State(serverConfig: serverConfig)
+            #if !os(tvOS)
+            self.deviceDownloads = DeviceDownloadsReducer.State(serverConfig: serverConfig)
+            #endif
             self.settings = SettingsReducer.State(serverConfig: serverConfig, supportURL: supportURL)
             #if os(tvOS)
             self.search = TVSearchReducer.State(serverConfig: serverConfig)
@@ -82,6 +99,9 @@ public struct TabReducer {
         case channels(ChannelsReducer.Action)
         case playlists(PlaylistsReducer.Action)
         case queue(DownloadsReducer.Action)
+        #if !os(tvOS)
+        case deviceDownloads(DeviceDownloadsReducer.Action)
+        #endif
         case settings(SettingsReducer.Action)
         #if os(tvOS)
         case search(TVSearchReducer.Action)
@@ -176,6 +196,10 @@ public struct TabReducer {
             // through to a normal `didDismiss`.
             case .videoList, .channels, .playlists, .queue, .settings:
                 return .none
+            #if !os(tvOS)
+            case .deviceDownloads:
+                return .none
+            #endif
             #if os(tvOS)
             case .search(.delegate(.showChannel(let channel))):
                 return .send(.homeChannelTapped(channel))
@@ -204,6 +228,11 @@ public struct TabReducer {
         Scope(state: \.queue, action: \.queue) {
             DownloadsReducer()
         }
+        #if !os(tvOS)
+        Scope(state: \.deviceDownloads, action: \.deviceDownloads) {
+            DeviceDownloadsReducer()
+        }
+        #endif
         Scope(state: \.settings, action: \.settings) {
             SettingsReducer()
         }

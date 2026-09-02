@@ -27,6 +27,45 @@ extension LocalVideoStorage {
         videosDirectory.appendingPathComponent("\(videoId).mp4")
     }
 
+    /// Thumbnails live inside the videos directory so `deleteAllVideos`
+    /// and `totalDownloadsSize` (which recurses) pick them up for free.
+    static var thumbnailsDirectory: URL {
+        let dir = videosDirectory.appendingPathComponent("Thumbnails", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    static func thumbnailFileURL(for videoId: String) -> URL {
+        thumbnailsDirectory.appendingPathComponent("\(videoId).jpg")
+    }
+
+    /// File URL of the cached thumbnail, or `nil` when the video was
+    /// downloaded before thumbnail caching existed / the fetch failed.
+    /// Callers fall back to the server URL in that case.
+    public static func localThumbnailURL(for videoId: String) -> URL? {
+        let url = thumbnailFileURL(for: videoId)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    @discardableResult
+    public static func saveThumbnail(
+        _ data: Data,
+        videoId: String
+    ) throws -> URL {
+        let destination = thumbnailFileURL(for: videoId)
+        try data.write(to: destination, options: .atomic)
+        return destination
+    }
+
+    public static func deleteThumbnail(videoId: String) throws {
+        let url = thumbnailFileURL(for: videoId)
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
     public static func totalDownloadsSize() -> Int64 {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = documents.appendingPathComponent("OfflineVideos", isDirectory: true)
@@ -55,6 +94,7 @@ extension LocalVideoStorage: DependencyKey {
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
             }
+            try deleteThumbnail(videoId: videoId)
         },
         deleteAllVideos: {
             let dir = videosDirectory

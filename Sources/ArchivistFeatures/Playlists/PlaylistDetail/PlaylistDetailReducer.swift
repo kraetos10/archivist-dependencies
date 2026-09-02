@@ -14,6 +14,7 @@ public struct PlaylistDetailReducer {
         var isEditing = false
         var entryThumbnails: [String: String] = [:]
         var availableVideoIDs: Set<String> = []
+        @Shared(.appStorage("loopPlaylist")) var loopPlaylistEnabled = false
         @Presents var alert: AlertState<AlertAction>?
         @Presents var videoPicker: VideoPickerReducer.State?
 
@@ -41,6 +42,12 @@ public struct PlaylistDetailReducer {
 
         var isCustomPlaylist: Bool {
             playlist.playlistType == .custom
+        }
+
+        /// Ordered entry IDs handed to the player so it can wrap back to the
+        /// top of the playlist. Empty unless looping is switched on.
+        var loopVideoIds: [String] {
+            loopPlaylistEnabled ? entries.compactMap(\.youtubeId) : []
         }
     }
 
@@ -74,10 +81,15 @@ public struct PlaylistDetailReducer {
             case downloadToDeviceTapped(PlaylistEntry)
             case queueServerDownloadTapped(PlaylistEntry)
             case markAsWatchedTapped(PlaylistEntry)
+            case loopToggled
         }
 
         public enum Delegate: Equatable, Sendable {
-            case showVideo(VideoResponse, nextVideos: [VideoResponse])
+            case showVideo(
+                VideoResponse,
+                nextVideos: [VideoResponse],
+                loopVideoIds: [String]
+            )
         }
     }
 
