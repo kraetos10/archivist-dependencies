@@ -69,6 +69,9 @@ public struct DownloadsScreen: View {
         }
         #endif
         .alert($store.scope(state: \.alert, action: \.alert))
+        #if !os(tvOS)
+        .modifier(DownloadDetailSheetPresentation(store: store, sizeClass: horizontalSizeClass))
+        #endif
     }
 
     // MARK: - Queue Content
@@ -153,7 +156,6 @@ private struct DownloadQueueCardWithPopover: View {
     @Bindable var store: StoreOf<DownloadsReducer>
     var onDelete: () -> Void
     @State private var showPopover = false
-    @State private var showSheet = false
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     public var body: some View {
@@ -163,10 +165,11 @@ private struct DownloadQueueCardWithPopover: View {
         )
         .pressable {
             store.send(.view(.downloadTapped(download)))
+            // Compact presents from the screen, bound straight to store
+            // state; only the iPad popover needs a local flag, because it
+            // has to anchor to this card.
             if sizeClass == .regular {
                 showPopover = true
-            } else {
-                showSheet = true
             }
         }
         .contextMenu {
@@ -188,17 +191,40 @@ private struct DownloadQueueCardWithPopover: View {
                     .frame(idealWidth: 420)
             }
         }
-        .sheet(isPresented: $showSheet) {
-            if let detailStore = store.scope(state: \.downloadDetail, action: \.downloadDetail.presented) {
-                DownloadDetailScreen(store: detailStore)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
         .onChange(of: store.downloadDetail == nil) { _, isNil in
             if isNil {
                 showPopover = false
-                showSheet = false
+            }
+        }
+    }
+}
+
+/// Presents the download detail as a sheet on compact widths.
+///
+/// Attached once at the screen and driven by `$store.scope` rather than
+/// per-card with an `isPresented` flag. With a flag, queueing a download
+/// nil-ed the presentation state one pass before `onChange` could lower
+/// the flag, so the sheet's `if let` content emptied while it was still
+/// presented — it expanded to the large detent, flashed white, and only
+/// then dismissed. A single binding ends content and presentation
+/// together.
+///
+/// iPad keeps its per-card popover so the arrow still points at the card
+/// that was tapped.
+private struct DownloadDetailSheetPresentation: ViewModifier {
+    @Bindable var store: StoreOf<DownloadsReducer>
+    let sizeClass: UserInterfaceSizeClass?
+
+    func body(content: Content) -> some View {
+        if sizeClass == .regular {
+            content
+        } else {
+            content.sheet(
+                item: $store.scope(state: \.downloadDetail, action: \.downloadDetail)
+            ) { detailStore in
+                DownloadDetailScreen(store: detailStore)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }

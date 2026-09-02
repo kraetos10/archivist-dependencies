@@ -12,6 +12,8 @@ public struct ChannelDetailScreen: View {
         self.store = store
     }
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     public var body: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
@@ -46,6 +48,7 @@ public struct ChannelDetailScreen: View {
             send(.viewDidAppear)
         }
         .alert($store.scope(state: \.alert, action: \.alert))
+        .modifier(ChannelDownloadDetailSheet(store: store, sizeClass: horizontalSizeClass))
     }
 
     private var channelMenu: some View {
