@@ -82,7 +82,7 @@ public struct DeviceDownloadsScreen: View {
         .onAppear { send(.viewDidAppear) }
         .onDisappear { send(.viewDidDisappear) }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(String.localised("video.deviceDownloads", table: .videos))
+        .navigationTitle(String.localised("video.saved", table: .videos))
         .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
             PlaylistPickerScreen(store: pickerStore)
         }

@@ -1144,6 +1144,17 @@
           }
         }
       }
+    },
+    "video.saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

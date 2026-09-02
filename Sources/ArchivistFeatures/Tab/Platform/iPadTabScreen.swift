@@ -35,7 +35,7 @@ public struct iPadTabScreen: View {
             }
 
             Tab(
-                String.localised("video.deviceDownloads", table: .videos),
+                String.localised("video.saved", table: .videos),
                 systemImage: "arrow.down.to.line",
                 value: AppTab.deviceDownloads
             ) {
