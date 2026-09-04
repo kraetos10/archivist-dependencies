@@ -206,6 +206,7 @@ public struct TVVideoDetailScreen: View {
             }
         }
         .onAppear { send(.viewDidAppear) }
+        .alert($store.scope(state: \.alert, action: \.alert))
     }
 
     // MARK: - Thumbnail

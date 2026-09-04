@@ -52,6 +52,38 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         return formatter
     }()
 
+    /// The video stream, if the server reported per-stream detail.
+    public var videoStream: VideoStream? {
+        streams?.first { $0.type?.lowercased() == "video" }
+    }
+
+    /// True when this video is high resolution *and* encoded with a codec
+    /// no Apple hardware decoder handles, so playback falls back to
+    /// software.
+    ///
+    /// VideoToolbox covers H.264 and HEVC. It has never covered VP9 or AV1
+    /// on any Apple silicon, including Apple TV 4K — and VP9 is what
+    /// YouTube serves most 4K in, with AV1 increasingly common, so a 4K
+    /// download from TubeArchivist is very likely to be one of the two.
+    /// At 2160p an A-series chip can't software-decode those in real time,
+    /// which shows up as stutter and dropped frames.
+    ///
+    /// Restricted to 4K and above deliberately: 1440p VP9 decodes in
+    /// software acceptably, so warning about it would be noise.
+    public var requiresSoftwareDecodingAtHighResolution: Bool {
+        guard let stream = videoStream,
+              let codec = stream.codec?.lowercased()
+        else { return false }
+
+        // TubeArchivist reports ffprobe's codec name ("vp9", "av1"), but
+        // accept the ISO-BMFF fourccs too in case the source differs.
+        let hasNoHardwareDecoder = ["vp9", "vp09", "av1", "av01"]
+            .contains { codec.contains($0) }
+        guard hasNoHardwareDecoder else { return false }
+
+        return (stream.height ?? 0) >= 2160 || (stream.width ?? 0) >= 3840
+    }
+
     public var isWatched: Bool { player?.watched ?? false }
     public var isPartiallyWatched: Bool { !isWatched && watchProgress > 0 }
     /// Strict "unwatched": never started and not marked watched. Partially

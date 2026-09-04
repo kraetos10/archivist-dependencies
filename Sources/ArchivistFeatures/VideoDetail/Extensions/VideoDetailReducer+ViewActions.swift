@@ -15,7 +15,7 @@ extension VideoDetailReducer {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
         case .playTapped:
-            return handlePlayTapped(state: &state)
+            return handlePlayTappedWarningIfNeeded(state: &state)
         case .stopPlayback:
             return handleStopPlayback(state: &state)
         case .dismissTapped:
@@ -198,7 +198,35 @@ extension VideoDetailReducer {
         }
     }
 
-    private func handlePlayTapped(state: inout State) -> Effect<Action> {
+    /// Warns once, on the first 4K VP9/AV1 video the user plays, that the
+    /// device has to decode it in software.
+    ///
+    /// Gated on a persisted flag rather than shown per video: the
+    /// limitation belongs to the hardware, so repeating it every time
+    /// would just train the user to dismiss it. Playing is still the
+    /// default action — the warning informs, it doesn't block.
+    private func handlePlayTappedWarningIfNeeded(state: inout State) -> Effect<Action> {
+        guard state.video.requiresSoftwareDecodingAtHighResolution,
+              !state.hasSeenSoftwareDecodeWarning
+        else { return handlePlayTapped(state: &state) }
+
+        state.$hasSeenSoftwareDecodeWarning.withLock { $0 = true }
+        state.alert = AlertState {
+            TextState(String.localised("video.softwareDecode.title", table: .videos))
+        } actions: {
+            ButtonState(action: .confirmSoftwareDecodePlayback) {
+                TextState(String.localised("video.softwareDecode.continue", table: .videos))
+            }
+            ButtonState(role: .cancel, action: .dismissed) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.softwareDecode.message", table: .videos))
+        }
+        return .none
+    }
+
+    func handlePlayTapped(state: inout State) -> Effect<Action> {
         guard let url = mediaURL(state: state) else { return .none }
         state.isPlaying = true
         let startPosition = state.video.resumePositionSeconds

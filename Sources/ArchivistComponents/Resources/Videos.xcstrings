@@ -1155,6 +1155,39 @@
           }
         }
       }
+    },
+    "video.softwareDecode.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "May not play smoothly"
+          }
+        }
+      }
+    },
+    "video.softwareDecode.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video is 4K in a format Apple devices can't decode in hardware, so it may stutter or drop frames. Re-downloading it as H.264 or HEVC will play smoothly."
+          }
+        }
+      }
+    },
+    "video.softwareDecode.continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play Anyway"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

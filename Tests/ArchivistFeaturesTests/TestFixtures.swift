@@ -294,6 +294,32 @@ enum TestFixtures {
         commentCount: nil
     )
 
+    /// `video1` with a single video stream attached, for the
+    /// software-decode check.
+    static func videoWithStream(_ stream: VideoStream) -> VideoResponse {
+        VideoResponse(
+            videoId: video1.videoId,
+            title: video1.title,
+            description: nil,
+            category: nil,
+            channel: video1.channel,
+            published: video1.published,
+            dateDownloaded: nil,
+            vidLastRefresh: nil,
+            vidThumbUrl: nil,
+            vidType: nil,
+            active: nil,
+            mediaUrl: nil,
+            mediaSize: nil,
+            player: nil,
+            stats: nil,
+            subtitles: nil,
+            streams: [stream],
+            tags: nil,
+            commentCount: nil
+        )
+    }
+
     static let comment1 = VideoComment(
         commentId: "comment_1",
         commentText: "First comment",

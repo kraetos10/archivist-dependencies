@@ -67,6 +67,11 @@ public struct VideoDetailReducer {
         var watchedOverride: Bool?
         var localWatchProgress: Double?
         var autoPlayCountdown: AutoPlayCountdown?
+        /// Set the first time the software-decode warning is shown. The
+        /// limitation is a property of the device, not of any one video, so
+        /// it's worth saying once and never again.
+        @Shared(.appStorage("hasSeenSoftwareDecodeWarning"))
+        var hasSeenSoftwareDecodeWarning = false
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
         @Presents var playlistPicker: PlaylistPickerReducer.State?
@@ -132,6 +137,7 @@ public struct VideoDetailReducer {
     public enum AlertAction: Equatable, Sendable {
         case dismissed
         case confirmDeleteFromServer
+        case confirmSoftwareDecodePlayback
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -218,6 +224,8 @@ public struct VideoDetailReducer {
                 return .none
             case .alert(.presented(.confirmDeleteFromServer)):
                 return handleConfirmedDeleteFromServer(state: &state)
+            case .alert(.presented(.confirmSoftwareDecodePlayback)):
+                return handlePlayTapped(state: &state)
             case .alert:
                 return .none
             default:

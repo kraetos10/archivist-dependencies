@@ -49,6 +49,7 @@ public struct ChildVideoPlayerScreen: View {
             send(.videoChanged)
             overlayShown = true
         }
+        .alert($store.scope(state: \.alert, action: \.alert))
     }
 
     @ViewBuilder
