@@ -64,6 +64,18 @@ public struct TabScreen: View {
 
             settingsTab
         }
+        #if os(iOS)
+        .overlay {
+            ExpandedMiniPlayerOverlay(store: store)
+        }
+        .overlay {
+            MiniPlayerHostOverlay(
+                store: store,
+                miniSize: CGSize(width: 200, height: 200 * 9 / 16),
+                bottomInset: 60
+            )
+        }
+        #endif
         .tint(Color.Accent.dark)
         .onAppear { store.send(.appeared) }
         .onChange(of: scenePhase) {
@@ -115,7 +127,4 @@ private struct PinLockedSettingsPlaceholder: View {
     }
 }
 
-// In-app mini player removed. The dismiss flow on `VideoDetailReducer`
-// hands off to system PiP via `PlayerManager.startPiPIfAvailable()`; if the
-// platform won't grant PiP we just stop the player.
 #endif

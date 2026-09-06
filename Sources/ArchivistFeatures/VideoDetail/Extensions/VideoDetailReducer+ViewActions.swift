@@ -11,6 +11,9 @@ extension VideoDetailReducer {
         if let effect = handlePlayNextQueueAction(action, state: &state) {
             return effect
         }
+        if let effect = handleScreenLifecycleAction(action, state: &state) {
+            return effect
+        }
         switch action {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
@@ -18,8 +21,6 @@ extension VideoDetailReducer {
             return handlePlayTappedWarningIfNeeded(state: &state)
         case .stopPlayback:
             return handleStopPlayback(state: &state)
-        case .dismissTapped:
-            return handleDismissTapped(state: &state)
         case .downloadTapped:
             return handleDownloadTapped(state: &state)
         case .deleteDownloadTapped:
@@ -47,6 +48,22 @@ extension VideoDetailReducer {
             return .none
         default:
             return .none
+        }
+    }
+
+    /// The two ways off this screen. Split out of the main switch to keep
+    /// its cyclomatic complexity under the project's limit.
+    private func handleScreenLifecycleAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action>? {
+        switch action {
+        case .dismissTapped:
+            return handleDismissTapped(state: &state)
+        case .minimizeRequested:
+            return handleMinimizeRequested(state: &state)
+        default:
+            return nil
         }
     }
 
@@ -133,7 +150,7 @@ extension VideoDetailReducer {
     /// screen, watched in PiP, then tapped restore. Re-mounts the player
     /// surface and re-subscribes to player events without calling `load`
     /// (which would `stop()` and visibly restart playback).
-    private func adoptInflightPlaybackEffect(config: ServerConfig, videoId: String) -> Effect<Action> {
+    func adoptInflightPlaybackEffect(config: ServerConfig, videoId: String) -> Effect<Action> {
         .run { [videoService] send in
             let events = await MainActor.run { () -> AsyncStream<PlayerEvent>? in
                 guard PlayerManager.shared.currentVideoID == videoId,
@@ -296,35 +313,58 @@ extension VideoDetailReducer {
             try? await videoService.setProgress(config: config, videoId: videoId, position: position)
         }
 
+        let isMiniPlayer = state.isHostedInMiniPlayer
+
         return .merge(saveEffect, .run { [dismiss] send in
-            #if !os(tvOS)
-            let isPlaying = await MainActor.run { PlayerManager.shared.isPlaying }
-            let isInPiP = await MainActor.run { PlayerManager.shared.isInPiP }
-
-            if isPlaying || isInPiP {
-                // Hand off to system PiP. If the platform won't mint a PiP
-                // controller (Simulator, unsupported device), we just stop —
-                // the in-app mini player has been removed.
-                _ = await MainActor.run {
-                    PlayerManager.shared.startPiPIfAvailable()
-                }
-                let stillPlaying = await MainActor.run { PlayerManager.shared.isInPiP }
-                if !stillPlaying {
-                    await MainActor.run { PlayerManager.shared.stop() }
-                }
-                await send(.delegate(.didDismiss(videoId)))
-                await dismiss()
-                return
-            }
-            #endif
-
-            // Not playing — stop and dismiss
+            // Close means close. Dragging the player down is the way to
+            // keep it playing, so there's no PiP hand-off here any more.
             await MainActor.run {
+                PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
                 PlayerManager.shared.stop()
             }
             await send(.delegate(.didDismiss(videoId)))
+            // The mini player's copy of this state isn't presented by
+            // anyone — `TabReducer` tears it down off the delegate action
+            // above, and calling `dismiss()` here would have nothing to
+            // dismiss.
+            guard !isMiniPlayer else { return }
             await dismiss()
         })
+    }
+
+    /// Hands this screen's state to `TabReducer` so playback can carry on
+    /// in the floating mini player, then dismisses the screen.
+    ///
+    /// The surface role is switched *before* the request so the mini
+    /// player's host adopts the live VLC view as soon as it mounts. The
+    /// dismissed screen's host only detaches a surface it still owns, so
+    /// ordering it this way avoids the orphaned-view window that makes VLC
+    /// stall its video output.
+    private func handleMinimizeRequested(state: inout State) -> Effect<Action> {
+        // Nothing to carry over if nothing is playing — the drag should
+        // spring back instead.
+        guard state.isPlaying else { return .none }
+
+        // Already the tab's mini-player state, only expanded: the tab owns
+        // it, so re-minimising is just a surface + visibility change.
+        guard !state.isHostedInMiniPlayer else {
+            return .run { send in
+                await MainActor.run {
+                    PlayerManager.shared.activePlayerSurfaceRole = .mini
+                }
+                await send(.delegate(.didRequestMinimize))
+            }
+        }
+
+        let detail = state
+        return .run { [dismiss, minimizePlayer] send in
+            await MainActor.run {
+                PlayerManager.shared.activePlayerSurfaceRole = .mini
+            }
+            await minimizePlayer.request(detail)
+            await send(.delegate(.didRequestMinimize))
+            await dismiss()
+        }
     }
 
     private func saveProgressEffect(state: State) -> Effect<Action> {

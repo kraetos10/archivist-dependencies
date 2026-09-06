@@ -67,6 +67,12 @@ public struct VideoDetailReducer {
         var watchedOverride: Bool?
         var localWatchProgress: Double?
         var autoPlayCountdown: AutoPlayCountdown?
+        /// True when this state is the one `TabReducer` holds for the mini
+        /// player, rather than a screen pushed onto a tab's navigation
+        /// stack. The mini player's copy is not presented by anyone, so it
+        /// must not drive `@Dependency(\.dismiss)` — the tab tears it down
+        /// in response to the delegate action instead.
+        var isHostedInMiniPlayer = false
         /// Set the first time the software-decode warning is shown. The
         /// limitation is a property of the device, not of any one video, so
         /// it's worth saying once and never again.
@@ -162,6 +168,12 @@ public struct VideoDetailReducer {
         case cacheStatusChanged(Bool)
         case pipRestoreRequested(VideoResponse)
         case adoptInflightPlayback
+        /// Re-attach to playback that is already running for this video.
+        /// Sent by `TabReducer` when a dragged-down detail screen becomes
+        /// the mini player: the screen's playback effect died with its
+        /// store, so auto-advance and progress saving need a new
+        /// subscription to `PlayerManager.events`.
+        case resumePlaybackObservation
         case serverDeleteResult(Result<Void, Error>)
         case loadNextVideo
         case watchedToggleResult(Result<Void, Error>)
@@ -177,6 +189,7 @@ public struct VideoDetailReducer {
             case playTapped
             case stopPlayback
             case dismissTapped
+            case minimizeRequested
             case downloadTapped
             case deleteDownloadTapped
             case deleteFromServerTapped
@@ -209,6 +222,7 @@ public struct VideoDetailReducer {
     @Dependency(\.persistentDownloadManager) var persistentDownloadManager
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
     @Dependency(\.playNextDatabase) var playNextDatabase
+    @Dependency(\.minimizePlayer) var minimizePlayer
 
     public var body: some Reducer<State, Action> {
         BindingReducer()

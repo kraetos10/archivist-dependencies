@@ -452,12 +452,28 @@ public final class PlayerManager: NSObject {
 
     // MARK: - Playback Control
 
+    /// Announce the hand-over before `load` tears the outgoing video down.
+    /// `stop()` zeroes `currentTime` and clears `currentVideoID`, so an
+    /// observer reading them afterwards would find nothing left to save.
+    private func announceSupersession(by incomingVideoId: String?) {
+        guard let outgoingVideoId = currentVideoID else { return }
+        emit(
+            .supersededByNewMedia(
+                previousVideoId: outgoingVideoId,
+                position: Int(currentTime),
+                newVideoId: incomingVideoId
+            )
+        )
+    }
+
     public func load(
         url: URL,
         startPosition: Double?,
         videoId: String? = nil,
         expectedSize: Int64? = nil
     ) {
+        announceSupersession(by: videoId)
+
         // Auto-advance routes through `load()`; keep any presented
         // fullscreen player up so the next video keeps playing fullscreen
         // rather than dropping back to the inline detail screen.

@@ -44,6 +44,11 @@ extension VideoDetailReducer {
         case .adoptInflightPlayback:
             state.isPlaying = true
             return .none
+        case .resumePlaybackObservation:
+            return adoptInflightPlaybackEffect(
+                config: state.serverConfig,
+                videoId: state.video.videoId
+            )
         default:
             return .none
         }

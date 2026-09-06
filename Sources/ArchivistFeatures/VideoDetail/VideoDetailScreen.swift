@@ -25,6 +25,15 @@ public struct VideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
     @Environment(\.horizontalSizeClass) private var sizeClass
     @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
+    /// Live translation of the drag-to-minimise gesture on the player.
+    /// Only the downward component is tracked; it drives the shrink-away
+    /// preview and is reset (or handed to the reducer) on release.
+    @State private var minimizeDrag: CGFloat = 0
+
+    /// Downward distance past which releasing commits to the mini player.
+    private static let minimizeCommitDistance: CGFloat = 110
+    /// Distance at which the shrink preview reaches its smallest size.
+    private static let minimizeTravel: CGFloat = 320
 
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
@@ -32,6 +41,47 @@ public struct VideoDetailScreen: View {
 
     var isCompact: Bool {
         sizeClass == .compact
+    }
+
+    /// 0 at rest, 1 when the drag has travelled far enough to look fully
+    /// collapsed. Drives scale, offset and fade together so the screen
+    /// reads as heading for the mini player's corner.
+    private var minimizeProgress: CGFloat {
+        min(max(minimizeDrag / Self.minimizeTravel, 0), 1)
+    }
+
+    /// Vertical drag on the player that hands playback to the mini player.
+    ///
+    /// Attached as a *simultaneous* gesture so the transport controls
+    /// underneath keep working — the seek scrubber is a horizontal drag, so
+    /// the vertical-dominance check below is what keeps the two apart.
+    private var minimizeGesture: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                guard store.isPlaying else { return }
+                let translation = value.translation
+                guard translation.height > 0,
+                      translation.height > abs(translation.width)
+                else { return }
+                minimizeDrag = translation.height
+            }
+            .onEnded { value in
+                guard store.isPlaying, minimizeDrag > 0 else {
+                    minimizeDrag = 0
+                    return
+                }
+                let committed = value.translation.height > Self.minimizeCommitDistance
+                    || value.predictedEndTranslation.height > Self.minimizeTravel
+                if committed {
+                    HapticFeedback.light.play()
+                    minimizeDrag = 0
+                    send(.minimizeRequested)
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        minimizeDrag = 0
+                    }
+                }
+            }
     }
 
     public var body: some View {
@@ -129,7 +179,29 @@ public struct VideoDetailScreen: View {
                         width: isCompact ? geo.size.width : leftColumnWidth,
                         height: inlineHeight
                     )
+                    .simultaneousGesture(minimizeGesture)
+                    // The drag is the only way into the mini player, and a
+                    // drag isn't reachable under VoiceOver or Switch
+                    // Control — so expose the same hand-off as a custom
+                    // action on the player.
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAction(
+                        named: String.localised("video.minimize", table: .videos)
+                    ) {
+                        guard store.isPlaying else { return }
+                        send(.minimizeRequested)
+                    }
             }
+            // Preview of the hand-off: the screen shrinks towards the
+            // bottom-trailing corner the mini player snaps to by default.
+            // Committing swaps this out for the real mini player, which
+            // adopts the same live VLC surface.
+            .scaleEffect(1 - 0.28 * minimizeProgress, anchor: .bottomTrailing)
+            .offset(
+                x: 16 * minimizeProgress,
+                y: minimizeDrag * 0.4
+            )
+            .opacity(1 - 0.45 * minimizeProgress)
         }
         .background(Color.Brand.primary.ignoresSafeArea())
         .toolbar(.hidden, for: .bottomBar)

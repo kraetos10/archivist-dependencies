@@ -34,6 +34,18 @@ public enum PlayerEvent: Sendable, Equatable {
     /// the local file.
     case cacheCompleted(videoId: String)
 
+    /// A `load()` is about to replace whatever was playing. Emitted before
+    /// the outgoing video is torn down, and carrying its position, because
+    /// any UI still bound to it — the mini player above all — needs both to
+    /// stand down *and* to save a resume position that `stop()` is about to
+    /// zero.
+    ///
+    /// Fires for every load with something already playing, including a
+    /// feature auto-advancing to its own next video. Tell the two apart by
+    /// comparing `previousVideoId` against the video your state holds
+    /// *now*: on your own advance you have already moved on, so they differ.
+    case supersededByNewMedia(previousVideoId: String, position: Int, newVideoId: String?)
+
     /// User asked for the next video from the transport controls.
     case nextRequested
 

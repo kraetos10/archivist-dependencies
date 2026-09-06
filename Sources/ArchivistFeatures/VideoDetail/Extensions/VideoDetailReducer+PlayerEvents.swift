@@ -70,6 +70,13 @@ extension VideoDetailReducer {
             case .previousRequested:
                 await send(.view(.previousVideoRequested))
 
+            case .supersededByNewMedia:
+                // Owned by `TabReducer`, which uses it to retire the mini
+                // player. A detail screen starting the next video has
+                // already replaced this subscription via `cancelInFlight`,
+                // so there is nothing to do here.
+                continue
+
             case .autoPlayPlayNowTapped, .autoPlayCancelTapped:
                 // Owned by the countdown effect, which subscribes
                 // separately for the lifetime of a single countdown.

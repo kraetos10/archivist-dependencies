@@ -1188,6 +1188,39 @@
           }
         }
       }
+    },
+    "video.miniPlayer.expandHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double tap to return to the video"
+          }
+        }
+      }
+    },
+    "video.miniPlayer.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close mini player"
+          }
+        }
+      }
+    },
+    "video.minimize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimise to mini player"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

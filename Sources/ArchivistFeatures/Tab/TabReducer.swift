@@ -34,6 +34,17 @@ public struct TabReducer {
         @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
         public var settingsUnlocked: Bool = false
         public var isPresentingSettingsPin: Bool = false
+        #if os(iOS)
+        /// Video handed over by a detail screen the user dragged down, so
+        /// playback can carry on in the floating mini player. It lives here
+        /// rather than in the presenting feature because the mini player
+        /// has to outlive whichever tab's navigation stack the detail was
+        /// pushed onto.
+        public var miniPlayer: VideoDetailReducer.State?
+        /// False while the mini player has been tapped back up to a full
+        /// detail screen.
+        public var isMiniPlayerMinimised = true
+        #endif
         #if os(tvOS)
         public var search: TVSearchReducer.State
         /// True when the "View All" channels destination is presented as a
@@ -62,6 +73,16 @@ public struct TabReducer {
                 ?? settings.videoDetail?.video.videoId
             #endif
         }
+
+        #if os(iOS)
+        /// Identity of what the mini player overlays are showing, so they
+        /// can animate in and out of the reducer-driven changes. `State`
+        /// isn't `Equatable`, so `.animation(value:)` needs a scalar.
+        var miniPlayerAnimationKey: String? {
+            guard let miniPlayer else { return nil }
+            return "\(miniPlayer.video.videoId)-\(isMiniPlayerMinimised)"
+        }
+        #endif
 
         public var activeDownload: ActiveDownload? {
             settings.activeTask.activeDownload
@@ -103,6 +124,14 @@ public struct TabReducer {
         case deviceDownloads(DeviceDownloadsReducer.Action)
         #endif
         case settings(SettingsReducer.Action)
+        #if os(iOS)
+        case minimizePlayerRequested(VideoDetailReducer.State)
+        case miniPlayerTapped
+        case miniPlayerCloseTapped
+        case miniPlayerFinished
+        case miniPlayer(VideoDetailReducer.Action)
+        case playerSuperseded(previousVideoId: String, position: Int)
+        #endif
         #if os(tvOS)
         case search(TVSearchReducer.Action)
         case setPresentingAllChannels(Bool)
@@ -110,8 +139,24 @@ public struct TabReducer {
         #endif
     }
 
+    #if os(iOS)
+    enum CancelID {
+        /// Watches for another video taking over the player while the mini
+        /// player is up. Kept on the tab's own ID rather than the video
+        /// detail's, whose `CancelID.playback` the incoming video cancels.
+        case miniPlayerSupersession
+        /// Subscription to `MinimizePlayerClient`. `.appeared` can fire
+        /// more than once, and a second subscription would install the
+        /// same mini player twice.
+        case minimizeRequests
+    }
+    #endif
+
     @Dependency(\.continuousClock) var clock
     @Dependency(\.videoService) var videoService
+    #if os(iOS)
+    @Dependency(\.minimizePlayer) var minimizePlayer
+    #endif
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
@@ -194,6 +239,38 @@ public struct TabReducer {
             // system PiP for minimize. Each VideoDetail dismiss now hands
             // off via `PlayerManager.startPiPIfAvailable()` and falls
             // through to a normal `didDismiss`.
+            #if os(iOS)
+            case .minimizePlayerRequested(let detail):
+                return handleMinimizePlayerRequested(detail, state: &state)
+            case .miniPlayerTapped:
+                return handleMiniPlayerTapped(state: &state)
+            case .miniPlayerCloseTapped:
+                return handleMiniPlayerClosed(state: &state)
+            case .miniPlayer(.delegate(.didRequestMinimize)):
+                return handleMiniPlayerReminimised(state: &state)
+            // Closing from the expanded mini player, deleting the video on
+            // the server, or running out of videos to auto-advance to all
+            // leave nothing to keep playing — so the mini player goes away.
+            //
+            // Deferred through a separate action rather than cleared here:
+            // this reducer runs before the `ifLet` below, so clearing the
+            // state now would drop the same action on the floor before the
+            // mini player's own reducer had handled it.
+            case .miniPlayer(.delegate(.didDismiss)),
+                 .miniPlayer(.serverDeleteResult(.success)),
+                 .miniPlayer(.autoPlayExhausted):
+                return .send(.miniPlayerFinished)
+            case .miniPlayerFinished:
+                return handleMiniPlayerFinished(state: &state)
+            case .miniPlayer:
+                return .none
+            case .playerSuperseded(let previousVideoId, let position):
+                return handlePlayerSuperseded(
+                    previousVideoId: previousVideoId,
+                    position: position,
+                    state: &state
+                )
+            #endif
             case .videoList, .channels, .playlists, .queue, .settings:
                 return .none
             #if !os(tvOS)
@@ -216,6 +293,11 @@ public struct TabReducer {
             #endif
             }
         }
+        #if os(iOS)
+        .ifLet(\.miniPlayer, action: \.miniPlayer) {
+            VideoDetailReducer()
+        }
+        #endif
         Scope(state: \.videoList, action: \.videoList) {
             VideoListReducer()
         }

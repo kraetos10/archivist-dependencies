@@ -60,6 +60,18 @@ public struct iPadTabScreen: View {
             .badge(store.activeDownload != nil ? 1 : 0)
         }
         .tabViewStyle(.sidebarAdaptable)
+        #if os(iOS)
+        .overlay {
+            ExpandedMiniPlayerOverlay(store: store)
+        }
+        .overlay {
+            MiniPlayerHostOverlay(
+                store: store,
+                miniSize: CGSize(width: 200, height: 200 * 9 / 16),
+                bottomInset: 60
+            )
+        }
+        #endif
         .tint(Color.Accent.dark)
         .onAppear { store.send(.appeared) }
         .onChange(of: scenePhase) {
