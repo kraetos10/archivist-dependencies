@@ -38,11 +38,6 @@ public struct VideoDetailScreen: View {
     private static let minimizeCommitDistance: CGFloat = 100
     /// Predicted travel that counts as a downward flick.
     private static let minimizeFlickDistance: CGFloat = 240
-    /// Distance over which the screen's own background fades away as it is
-    /// dragged down, so it reads as lifting off the app behind it. Set
-    /// slightly beyond `minimizeCommitDistance` so a fully transparent
-    /// background also tells the user that releasing will now minimise.
-    private static let minimizeFadeDistance: CGFloat = 150
 
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
@@ -50,17 +45,6 @@ public struct VideoDetailScreen: View {
 
     var isCompact: Bool {
         sizeClass == .compact
-    }
-
-    /// Opacity of the screen's own background during the minimise drag:
-    /// solid at rest, fully clear once the drag is past the commit point.
-    ///
-    /// Only the background layer fades — the content on top of it stays
-    /// opaque. Fading the whole subtree would composite the live video
-    /// layer offscreen every frame, which is what made an earlier version
-    /// of this drag stutter.
-    private var minimizeBackgroundOpacity: Double {
-        Double(1 - min(max(minimizeDrag / Self.minimizeFadeDistance, 0), 1))
     }
 
     /// Vertical drag on the player that hands playback to the mini player.
@@ -106,7 +90,11 @@ public struct VideoDetailScreen: View {
                     || value.predictedEndTranslation.height > Self.minimizeFlickDistance
                 if committed {
                     HapticFeedback.light.play()
-                    minimizeDrag = 0
+                    // Deliberately left where the finger let go. Resetting
+                    // it here snapped the screen back to full size for the
+                    // frames between release and the cover dismissing,
+                    // which read as a flash of full screen before the mini
+                    // player appeared.
                     send(.minimizeRequested)
                 } else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -224,26 +212,27 @@ public struct VideoDetailScreen: View {
                         send(.minimizeRequested)
                     }
             }
-            // Preview of the hand-off: translation, and nothing else.
-            //
-            // No `scaleEffect` — scaling this subtree resizes the hosted
-            // `VLCPlayerHostView`, whose `layoutSubviews` reacts to a
-            // bounds change by rebinding VLC's drawable, so the video
-            // strobes for the length of the drag. No `opacity` either:
-            // a non-opaque group composites the live video layer
-            // offscreen every frame. `offset` is a render-time
-            // translation, so neither the host's bounds nor its
-            // compositing change.
-            //
-            // The translation tracks the finger 1:1; anything less feels
-            // like the screen is resisting.
-            .offset(y: minimizeDrag)
         }
-        .background(
-            Color.Brand.primary
-                .opacity(minimizeBackgroundOpacity)
-                .ignoresSafeArea()
-        )
+        .background(Color.Brand.primary.ignoresSafeArea())
+        // Preview of the hand-off: translation, and nothing else.
+        //
+        // Applied out here, *outside* the background, so the screen and
+        // its background travel together and what opens up above them is
+        // simply nothing — the cover's clear background, and the list
+        // behind that. Inside the background the content slid over a
+        // stationary slab of colour instead.
+        //
+        // No `scaleEffect` — scaling this subtree resizes the hosted
+        // `VLCPlayerHostView`, whose `layoutSubviews` reacts to a bounds
+        // change by rebinding VLC's drawable, so the video strobes for the
+        // length of the drag. No `opacity` either: a non-opaque group
+        // composites the live video layer offscreen every frame. `offset`
+        // is a render-time translation, so neither the host's bounds nor
+        // its compositing change.
+        //
+        // The translation tracks the finger 1:1; anything less feels like
+        // the screen is resisting.
+        .offset(y: minimizeDrag)
         // Every iOS route presents this screen in a `.fullScreenCover`, so
         // the list it was opened from is still there behind it. The cover's
         // own background is opaque by default, which would leave the fade
