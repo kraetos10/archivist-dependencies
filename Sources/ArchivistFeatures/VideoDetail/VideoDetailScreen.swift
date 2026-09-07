@@ -38,6 +38,11 @@ public struct VideoDetailScreen: View {
     private static let minimizeCommitDistance: CGFloat = 100
     /// Predicted travel that counts as a downward flick.
     private static let minimizeFlickDistance: CGFloat = 240
+    /// Distance over which the screen's own background fades away as it is
+    /// dragged down, so it reads as lifting off the app behind it. Set
+    /// slightly beyond `minimizeCommitDistance` so a fully transparent
+    /// background also tells the user that releasing will now minimise.
+    private static let minimizeFadeDistance: CGFloat = 150
 
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
@@ -45,6 +50,17 @@ public struct VideoDetailScreen: View {
 
     var isCompact: Bool {
         sizeClass == .compact
+    }
+
+    /// Opacity of the screen's own background during the minimise drag:
+    /// solid at rest, fully clear once the drag is past the commit point.
+    ///
+    /// Only the background layer fades — the content on top of it stays
+    /// opaque. Fading the whole subtree would composite the live video
+    /// layer offscreen every frame, which is what made an earlier version
+    /// of this drag stutter.
+    private var minimizeBackgroundOpacity: Double {
+        Double(1 - min(max(minimizeDrag / Self.minimizeFadeDistance, 0), 1))
     }
 
     /// Vertical drag on the player that hands playback to the mini player.
@@ -223,7 +239,11 @@ public struct VideoDetailScreen: View {
             // like the screen is resisting.
             .offset(y: minimizeDrag)
         }
-        .background(Color.Brand.primary.ignoresSafeArea())
+        .background(
+            Color.Brand.primary
+                .opacity(minimizeBackgroundOpacity)
+                .ignoresSafeArea()
+        )
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
