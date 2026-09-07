@@ -25,15 +25,19 @@ public struct VideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
     @Environment(\.horizontalSizeClass) private var sizeClass
     @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
-    /// Live translation of the drag-to-minimise gesture on the player.
-    /// Only the downward component is tracked; it drives the shrink-away
-    /// preview and is reset (or handed to the reducer) on release.
+    /// How far down the drag-to-minimise gesture has travelled. Drives the
+    /// preview, and is reset (or handed to the reducer) on release.
     @State private var minimizeDrag: CGFloat = 0
+    /// Whether the in-flight drag is a minimise. `nil` until the direction
+    /// settles; `false` means this drag belongs to something else and is
+    /// ignored for the rest of its life. Decided once per gesture — see
+    /// `minimizeGesture`.
+    @State private var isMinimizeDrag: Bool?
 
     /// Downward distance past which releasing commits to the mini player.
     private static let minimizeCommitDistance: CGFloat = 100
-    /// Distance over which the drag preview fades out completely.
-    private static let minimizeTravel: CGFloat = 320
+    /// Predicted travel that counts as a downward flick.
+    private static let minimizeFlickDistance: CGFloat = 240
 
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
@@ -43,41 +47,47 @@ public struct VideoDetailScreen: View {
         sizeClass == .compact
     }
 
-    /// 0 at rest, 1 when the drag has travelled far enough to read as
-    /// fully handed off. Drives the fade only — see `body` for why the
-    /// preview can't scale.
-    private var minimizeProgress: CGFloat {
-        min(max(minimizeDrag / Self.minimizeTravel, 0), 1)
-    }
-
     /// Vertical drag on the player that hands playback to the mini player.
     ///
+    /// Two things here are load-bearing, and getting either wrong makes the
+    /// drag stutter rather than track the finger:
+    ///
+    /// **`coordinateSpace: .global`.** The gesture is attached to the
+    /// player, but the offset it produces moves the player's ancestor — so
+    /// in the default `.local` space the frame the translation is measured
+    /// against moves with the finger. That feedback loop makes the
+    /// translation oscillate. Global space is fixed, so it doesn't.
+    ///
+    /// **The direction is decided once.** Re-testing vertical dominance on
+    /// every event means a slightly diagonal drag flips in and out of the
+    /// gesture as the ratio crosses over, snapping the screen back to rest
+    /// each time. It settles on the first event past `minimumDistance` and
+    /// stays settled until the finger lifts.
+    ///
     /// Attached as a *simultaneous* gesture so the transport controls
-    /// underneath keep working — the seek scrubber is a horizontal drag, so
-    /// the vertical-dominance check below is what keeps the two apart.
+    /// underneath keep working; the seek scrubber's drag is horizontal, so
+    /// the one-time dominance check is what keeps the two apart.
     private var minimizeGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
             .onChanged { value in
                 guard store.isPlaying else { return }
-                let translation = value.translation
-                // Horizontal drags belong to the seek scrubber, and an
-                // upward correction should hand the screen back rather
-                // than freeze it part-way down.
-                guard translation.height > 0,
-                      translation.height > abs(translation.width)
-                else {
-                    minimizeDrag = 0
-                    return
+                if isMinimizeDrag == nil {
+                    isMinimizeDrag = value.translation.height > 0
+                        && value.translation.height > abs(value.translation.width)
                 }
-                minimizeDrag = translation.height
+                guard isMinimizeDrag == true else { return }
+                // Clamped rather than reset: pulling back up above the
+                // start should settle the screen at rest, not re-arm.
+                minimizeDrag = max(0, value.translation.height)
             }
             .onEnded { value in
-                guard store.isPlaying, minimizeDrag > 0 else {
+                defer { isMinimizeDrag = nil }
+                guard store.isPlaying, isMinimizeDrag == true else {
                     minimizeDrag = 0
                     return
                 }
                 let committed = value.translation.height > Self.minimizeCommitDistance
-                    || value.predictedEndTranslation.height > Self.minimizeTravel * 0.75
+                    || value.predictedEndTranslation.height > Self.minimizeFlickDistance
                 if committed {
                     HapticFeedback.light.play()
                     minimizeDrag = 0
@@ -198,20 +208,20 @@ public struct VideoDetailScreen: View {
                         send(.minimizeRequested)
                     }
             }
-            // Preview of the hand-off. Translation and opacity only —
-            // deliberately no `scaleEffect`.
+            // Preview of the hand-off: translation, and nothing else.
             //
-            // Scaling this subtree resizes the hosted `VLCPlayerHostView`,
-            // whose `layoutSubviews` reacts to a bounds change by
-            // rebinding VLC's drawable. Mid-drag that fires continuously
-            // and the video strobes, which reads as the screen fighting
-            // the gesture. `offset` is a render-time translation, so the
-            // host's bounds never move.
+            // No `scaleEffect` — scaling this subtree resizes the hosted
+            // `VLCPlayerHostView`, whose `layoutSubviews` reacts to a
+            // bounds change by rebinding VLC's drawable, so the video
+            // strobes for the length of the drag. No `opacity` either:
+            // a non-opaque group composites the live video layer
+            // offscreen every frame. `offset` is a render-time
+            // translation, so neither the host's bounds nor its
+            // compositing change.
             //
             // The translation tracks the finger 1:1; anything less feels
             // like the screen is resisting.
             .offset(y: minimizeDrag)
-            .opacity(1 - 0.4 * minimizeProgress)
         }
         .background(Color.Brand.primary.ignoresSafeArea())
         .toolbar(.hidden, for: .bottomBar)
