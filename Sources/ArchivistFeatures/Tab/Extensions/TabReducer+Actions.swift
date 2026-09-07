@@ -8,19 +8,19 @@ extension TabReducer {
         #if os(iOS)
         return .merge(
             .send(.settings(.activeTask(.view(.startPolling)))),
-            // Detail screens publish their minimise request here rather
-            // than through a delegate chain — see `MinimizePlayerClient`
+            // Detail screens publish their mini-player requests here
+            // rather than through a delegate chain — see `MiniPlayerClient`
             // for why. This subscription is what makes the tab the owner
             // of the mini player regardless of which tab the detail was
             // pushed onto.
-            .run { [minimizePlayer] send in
-                for await detail in await minimizePlayer.subscribe() {
-                    guard let detail else { continue }
-                    await minimizePlayer.consume()
-                    await send(.minimizePlayerRequested(detail))
+            .run { [miniPlayerClient] send in
+                for await request in await miniPlayerClient.subscribe() {
+                    guard let request else { continue }
+                    await miniPlayerClient.consume()
+                    await send(.miniPlayerRequested(request))
                 }
             }
-            .cancellable(id: CancelID.minimizeRequests, cancelInFlight: true)
+            .cancellable(id: CancelID.miniPlayerRequests, cancelInFlight: true)
         )
         #else
         return .send(.settings(.activeTask(.view(.startPolling))))
@@ -41,14 +41,55 @@ extension TabReducer {
     #if os(iOS)
     // MARK: - Mini Player
 
+    func handleMiniPlayerRequest(
+        _ request: MiniPlayerRequest,
+        state: inout State
+    ) -> Effect<Action> {
+        switch request {
+        case .minimise(let detail):
+            return handleMinimiseRequested(detail, state: &state)
+        case .detailAppeared(let videoId):
+            return handleDetailAppeared(videoId: videoId, state: &state)
+        }
+    }
+
+    /// A video detail screen came on screen while the mini player was up.
+    /// Both host the same player surface, so the mini player stands down.
+    ///
+    /// If the screen is for the video the mini player was playing, hand the
+    /// running playback over rather than stopping it — the screen's
+    /// `viewDidAppear` adopts it, and the user sees it carry on. Any other
+    /// video means the mini player's video is genuinely finished with, so
+    /// stop it and write a resume position.
+    func handleDetailAppeared(
+        videoId: String,
+        state: inout State
+    ) -> Effect<Action> {
+        guard let mini = state.miniPlayer else { return .none }
+        guard mini.video.videoId == videoId else {
+            return handleMiniPlayerClosed(state: &state)
+        }
+        state.miniPlayer = nil
+        state.isMiniPlayerMinimised = true
+        return .merge(
+            .cancel(id: CancelID.miniPlayerSupersession),
+            .run { _ in
+                await MainActor.run {
+                    PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
+                }
+            }
+        )
+    }
+
     /// Takes ownership of a detail screen that was dragged down, so its
     /// video keeps playing in the floating mini player.
-    func handleMinimizePlayerRequested(
+    func handleMinimiseRequested(
         _ detail: VideoDetailReducer.State,
         state: inout State
     ) -> Effect<Action> {
         var detail = detail
         detail.isHostedInMiniPlayer = true
+        detail.isMiniPlayerCollapsed = true
         state.miniPlayer = detail
         state.isMiniPlayerMinimised = true
         return .merge(
@@ -133,6 +174,7 @@ extension TabReducer {
     func handleMiniPlayerTapped(state: inout State) -> Effect<Action> {
         guard state.miniPlayer != nil else { return .none }
         state.isMiniPlayerMinimised = false
+        state.miniPlayer?.isMiniPlayerCollapsed = false
         return .run { _ in
             await MainActor.run {
                 PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
@@ -144,6 +186,7 @@ extension TabReducer {
     func handleMiniPlayerReminimised(state: inout State) -> Effect<Action> {
         guard state.miniPlayer != nil else { return .none }
         state.isMiniPlayerMinimised = true
+        state.miniPlayer?.isMiniPlayerCollapsed = true
         return .none
     }
 

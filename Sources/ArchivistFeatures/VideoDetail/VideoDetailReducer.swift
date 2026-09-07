@@ -73,6 +73,12 @@ public struct VideoDetailReducer {
         /// must not drive `@Dependency(\.dismiss)` — the tab tears it down
         /// in response to the delegate action instead.
         var isHostedInMiniPlayer = false
+        /// True only while this state is being rendered *as* the small
+        /// floating player. Distinct from `isHostedInMiniPlayer`, which
+        /// stays true when the user taps the mini player back up to full
+        /// screen — at which point the ordinary full-screen behaviours,
+        /// auto-advance included, apply again.
+        var isMiniPlayerCollapsed = false
         /// Set the first time the software-decode warning is shown. The
         /// limitation is a property of the device, not of any one video, so
         /// it's worth saying once and never again.
@@ -222,7 +228,7 @@ public struct VideoDetailReducer {
     @Dependency(\.persistentDownloadManager) var persistentDownloadManager
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
     @Dependency(\.playNextDatabase) var playNextDatabase
-    @Dependency(\.minimizePlayer) var minimizePlayer
+    @Dependency(\.miniPlayerClient) var miniPlayerClient
 
     public var body: some Reducer<State, Action> {
         BindingReducer()

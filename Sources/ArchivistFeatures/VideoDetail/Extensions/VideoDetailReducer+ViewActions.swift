@@ -122,6 +122,17 @@ extension VideoDetailReducer {
         let videoId = state.video.videoId
         var effects: [Effect<Action>] = []
 
+        // A detail screen and the mini player can't both host the player,
+        // so opening one retires the other. The mini player's own expanded
+        // screen is the exception — it *is* the mini player.
+        if !state.isHostedInMiniPlayer {
+            effects.append(
+                .run { [miniPlayerClient] _ in
+                    await miniPlayerClient.request(.detailAppeared(videoId: videoId))
+                }
+            )
+        }
+
         state.isDownloaded = localVideoStorage.isDownloaded(videoId: videoId)
         state.isCached = PlaybackCache.isCached(videoId: videoId)
 
@@ -357,11 +368,11 @@ extension VideoDetailReducer {
         }
 
         let detail = state
-        return .run { [dismiss, minimizePlayer] send in
+        return .run { [dismiss, miniPlayerClient] send in
             await MainActor.run {
                 PlayerManager.shared.activePlayerSurfaceRole = .mini
             }
-            await minimizePlayer.request(detail)
+            await miniPlayerClient.request(.minimise(detail))
             await send(.delegate(.didRequestMinimize))
             await dismiss()
         }
@@ -554,6 +565,15 @@ extension VideoDetailReducer {
 
     private func handleVideoPlaybackDidEnd(state: inout State) -> Effect<Action> {
         let saveEffect = saveProgressEffect(state: state)
+        // Nothing auto-advances while collapsed into the mini player.
+        // It's a background surface the user isn't watching, so rolling
+        // on into another video there would start something they never
+        // asked for — `autoPlayExhausted` stops the player, and
+        // `TabReducer` takes that as the cue to retire the mini player.
+        // Expanded back to full screen it auto-advances as normal.
+        guard !state.isMiniPlayerCollapsed else {
+            return .merge(saveEffect, .send(.autoPlayExhausted))
+        }
         @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
         guard autoPlayEnabled else {
             return .merge(saveEffect, .send(.autoPlayExhausted))

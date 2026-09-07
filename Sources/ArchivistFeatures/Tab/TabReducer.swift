@@ -125,7 +125,7 @@ public struct TabReducer {
         #endif
         case settings(SettingsReducer.Action)
         #if os(iOS)
-        case minimizePlayerRequested(VideoDetailReducer.State)
+        case miniPlayerRequested(MiniPlayerRequest)
         case miniPlayerTapped
         case miniPlayerCloseTapped
         case miniPlayerFinished
@@ -145,17 +145,17 @@ public struct TabReducer {
         /// player is up. Kept on the tab's own ID rather than the video
         /// detail's, whose `CancelID.playback` the incoming video cancels.
         case miniPlayerSupersession
-        /// Subscription to `MinimizePlayerClient`. `.appeared` can fire
-        /// more than once, and a second subscription would install the
-        /// same mini player twice.
-        case minimizeRequests
+        /// Subscription to `MiniPlayerClient`. `.appeared` can fire more
+        /// than once, and a second subscription would act on the same
+        /// request twice.
+        case miniPlayerRequests
     }
     #endif
 
     @Dependency(\.continuousClock) var clock
     @Dependency(\.videoService) var videoService
     #if os(iOS)
-    @Dependency(\.minimizePlayer) var minimizePlayer
+    @Dependency(\.miniPlayerClient) var miniPlayerClient
     #endif
 
     public var body: some Reducer<State, Action> {
@@ -240,8 +240,8 @@ public struct TabReducer {
             // off via `PlayerManager.startPiPIfAvailable()` and falls
             // through to a normal `didDismiss`.
             #if os(iOS)
-            case .minimizePlayerRequested(let detail):
-                return handleMinimizePlayerRequested(detail, state: &state)
+            case .miniPlayerRequested(let request):
+                return handleMiniPlayerRequest(request, state: &state)
             case .miniPlayerTapped:
                 return handleMiniPlayerTapped(state: &state)
             case .miniPlayerCloseTapped:
