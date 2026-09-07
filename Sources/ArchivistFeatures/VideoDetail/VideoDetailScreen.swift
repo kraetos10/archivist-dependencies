@@ -244,6 +244,13 @@ public struct VideoDetailScreen: View {
                 .opacity(minimizeBackgroundOpacity)
                 .ignoresSafeArea()
         )
+        // Every iOS route presents this screen in a `.fullScreenCover`, so
+        // the list it was opened from is still there behind it. The cover's
+        // own background is opaque by default, which would leave the fade
+        // above revealing nothing but system background; clearing it means
+        // the drag actually uncovers the app underneath. No effect at rest,
+        // where the background above is fully opaque.
+        .presentationBackground(.clear)
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
