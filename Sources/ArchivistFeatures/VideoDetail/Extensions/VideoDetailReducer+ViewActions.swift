@@ -331,6 +331,9 @@ extension VideoDetailReducer {
             // keep it playing, so there's no PiP hand-off here any more.
             await MainActor.run {
                 PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
+                // This screen owns the countdown mirror and is about to
+                // stop existing, so nothing else can clear it.
+                PlayerManager.shared.autoPlayCountdown = nil
                 PlayerManager.shared.stop()
             }
             await send(.delegate(.didDismiss(videoId)))

@@ -472,6 +472,18 @@ public final class PlayerManager: NSObject {
         videoId: String? = nil,
         expectedSize: Int64? = nil
     ) {
+        // A new video invalidates any pending auto-play countdown. The
+        // mirror below is written by the VideoDetail reducer's `onChange`,
+        // which cannot fire once that screen has gone — so a countdown
+        // still showing when the user closed the video would otherwise sit
+        // here and be drawn over the next video the moment it goes
+        // fullscreen.
+        //
+        // Cleared here rather than in `stop()`: the countdown *starts* with
+        // a `stop(dismissFullscreen: false)` in the same effect that sets
+        // it, so clearing there would race the card it is meant to show.
+        autoPlayCountdown = nil
+
         announceSupersession(by: videoId)
 
         // Auto-advance routes through `load()`; keep any presented
