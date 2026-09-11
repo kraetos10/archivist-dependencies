@@ -142,13 +142,51 @@ public enum MiniPlayerCorner: Sendable {
     }
 }
 
+// MARK: - Mini Player Metrics
+
+/// Sizing for the floating mini player.
+///
+/// A fixed point size can't serve both idioms: 200pt is about half an
+/// iPhone's width and a fifth of an iPad's, so what reads as a substantial
+/// picture-in-picture on the phone looks like a postage stamp on a 12.9".
+/// Taking a share of the container instead keeps it proportionate across
+/// both, and across rotation and iPad multitasking, since the container is
+/// the window rather than the screen.
+///
+/// Declared outside `DraggableMiniPlayerOverlay` because Swift doesn't
+/// allow static stored properties on a generic type.
+enum MiniPlayerMetrics {
+    /// Share of the container's width the mini player occupies.
+    static let widthFraction: CGFloat = 0.32
+    /// Floor, so it stays usable on the narrowest phone — this is what
+    /// iPhone sizes land on, preserving the size it has always had there.
+    static let minWidth: CGFloat = 200
+    /// Ceiling, so a 12.9" in landscape doesn't hand over a third of the
+    /// screen to a player the user has just put aside.
+    static let maxWidth: CGFloat = 440
+    /// Gap between the mini player and the container's edges.
+    static let padding: CGFloat = 12
+
+    static func size(in container: CGSize) -> CGSize {
+        let preferred = container.width * widthFraction
+        let bounded = min(max(preferred, minWidth), maxWidth)
+        // The floor can still exceed a very narrow container — a slide-over
+        // window, say — so let the container win that argument.
+        let width = min(bounded, container.width - padding * 2).rounded()
+        return CGSize(width: width, height: (width * 9 / 16).rounded())
+    }
+}
+
 // MARK: - Draggable Mini Player Overlay
 
 /// Positions a `MiniPlayerView` at one of the four corners and lets the user
 /// drag it to a different corner. Drag uses `.offset` (cheap, no relayout)
 /// and snaps to the nearest corner on release.
+///
+/// The mini player's size comes from `MiniPlayerMetrics` rather than the
+/// caller, so it scales with the container on every platform without each
+/// tab screen having to know the rule.
 public struct DraggableMiniPlayerOverlay<Content: View>: View {
-    public let miniSize: CGSize
     public let bottomInset: CGFloat
     public let content: Content
 
@@ -156,21 +194,20 @@ public struct DraggableMiniPlayerOverlay<Content: View>: View {
     @State private var dragTranslation: CGSize = .zero
 
     public init(
-        miniSize: CGSize,
         bottomInset: CGFloat = 60,
         @ViewBuilder content: () -> Content
     ) {
-        self.miniSize = miniSize
         self.bottomInset = bottomInset
         self.content = content()
     }
 
     public var body: some View {
         GeometryReader { geo in
+            let miniSize = MiniPlayerMetrics.size(in: geo.size)
             let origin = corner.origin(
                 in: geo.size,
                 miniSize: miniSize,
-                padding: 12,
+                padding: MiniPlayerMetrics.padding,
                 topInset: geo.safeAreaInsets.top,
                 bottomInset: bottomInset
             )

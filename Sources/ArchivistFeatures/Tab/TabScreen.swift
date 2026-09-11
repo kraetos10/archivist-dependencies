@@ -69,11 +69,7 @@ public struct TabScreen: View {
             ExpandedMiniPlayerOverlay(store: store)
         }
         .overlay {
-            MiniPlayerHostOverlay(
-                store: store,
-                miniSize: CGSize(width: 200, height: 200 * 9 / 16),
-                bottomInset: 60
-            )
+            MiniPlayerHostOverlay(store: store, bottomInset: 60)
         }
         #endif
         .tint(Color.Accent.dark)

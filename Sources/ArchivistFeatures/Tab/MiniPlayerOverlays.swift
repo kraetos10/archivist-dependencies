@@ -11,16 +11,12 @@ import SwiftUI
 /// video carry on playing across the transition.
 struct MiniPlayerHostOverlay: View {
     let store: StoreOf<TabReducer>
-    let miniSize: CGSize
     let bottomInset: CGFloat
 
     var body: some View {
         Group {
             if let detail = store.miniPlayer, store.isMiniPlayerMinimised {
-                DraggableMiniPlayerOverlay(
-                    miniSize: miniSize,
-                    bottomInset: bottomInset
-                ) {
+                DraggableMiniPlayerOverlay(bottomInset: bottomInset) {
                     MiniPlayerView(
                         title: detail.video.title,
                         onTap: { store.send(.miniPlayerTapped) },
