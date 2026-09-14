@@ -136,6 +136,22 @@ public final class PlayerManager: NSObject {
     /// Control Center / the notification shade, where the surface is intact
     /// and a rebind would only cause a needless flash.
     @ObservationIgnored private var didBackground = false
+    /// Set when PiP was running at any point since the app last went to the
+    /// background. Audio keeps flowing through PiP, so coming back from it
+    /// must not rebuild VLC's audio unit: that rebuild is itself a
+    /// multi-second silence, and it was the whole of the gap users heard on
+    /// restoring from PiP.
+    @ObservationIgnored private var pipActiveSinceBackground = false
+    /// Whether the current interruption paused playback that was running.
+    /// Decides whether its `.ended` resumes: without it, a Siri request over
+    /// a video the user had already paused would start it playing.
+    @ObservationIgnored private var pausedForInterruption = false
+    /// The video that was playing when the interruption paused it, so a
+    /// video closed or replaced while Siri was talking isn't resumed.
+    @ObservationIgnored private var interruptedVideoID: String?
+    /// In-flight resume after an interruption ends. Cancelled if another
+    /// interruption begins before the session could be reactivated.
+    @ObservationIgnored private var interruptionResumeTask: Task<Void, Never>?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -269,35 +285,97 @@ public final class PlayerManager: NSObject {
 
                 switch type {
                 case .began:
-                    // Siri, an incoming call, a timer/alarm, another app's
-                    // audio — actually pause the backend. Just clearing
-                    // `isPlaying` left VLC's video running silently behind
-                    // the interruption.
-                    if self.isPlaying {
-                        self.pause()
-                    }
+                    self.handleInterruptionBegan()
                 case .ended:
-                    // Reactivate the session and rebuild VLC's audio unit.
-                    // A transient interruption can leave the audio output
-                    // dead while the video vout keeps running (silent
-                    // video), and we only pause on `.began` when we caught
-                    // `isPlaying` — so recover audio here whether or not
-                    // the system asks us to resume.
-                    try? AVAudioSession.sharedInstance().setActive(true)
-                    if let optionsValue {
-                        let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-                        if options.contains(.shouldResume), self.backend != nil {
-                            self.resume()
-                        }
-                    }
-                    if self.isPlaying {
-                        self.backend?.refreshAudio()
-                    }
+                    let options = optionsValue.map(AVAudioSession.InterruptionOptions.init(rawValue:))
+                    self.handleInterruptionEnded(
+                        shouldResume: options?.contains(.shouldResume) ?? false
+                    )
                 @unknown default:
                     break
                 }
             }
         }
+    }
+
+    /// Siri, an incoming call, a timer or alarm — actually pause the
+    /// backend. Just clearing `isPlaying` left VLC's video running silently
+    /// behind the interruption.
+    private func handleInterruptionBegan() {
+        // A second interruption can land while the first is still waiting
+        // for the session back; it owns the resume decision now.
+        interruptionResumeTask?.cancel()
+        interruptionResumeTask = nil
+
+        let wasPlaying = isPlaying || backend?.isPlaying == true
+        guard wasPlaying else {
+            // iOS doesn't promise an `.ended` for every `.began` — another
+            // app taking over audio never sends one. Clear any pause a lost
+            // `.ended` left behind, or this interruption's `.ended` would
+            // resume a video the user has since paused themselves.
+            pausedForInterruption = false
+            interruptedVideoID = nil
+            return
+        }
+        pausedForInterruption = true
+        interruptedVideoID = currentVideoID
+        pause()
+    }
+
+    /// Resume what the interruption paused, once the session is really ours
+    /// again.
+    ///
+    /// Two things used to go wrong here. The session was reactivated with a
+    /// bare `try?` the instant `.ended` arrived — but Siri routinely still
+    /// holds the route for a moment, so that threw, the failure was
+    /// swallowed, and playback resumed into a dead session. And VLC's audio
+    /// unit was rebuilt straight after resuming, which is a multi-second
+    /// silence of its own, heard exactly when the user expects sound back.
+    ///
+    /// Pausing and playing through libvlc stops and restarts the audio unit
+    /// cleanly, so when this path did the pausing no rebuild is needed. It
+    /// is kept for the one case that still needs it: playback running
+    /// through an interruption this code didn't pause.
+    private func handleInterruptionEnded(shouldResume: Bool) {
+        let shouldResumePlayback = pausedForInterruption
+            && shouldResume
+            && backend != nil
+            && currentVideoID == interruptedVideoID
+        pausedForInterruption = false
+        interruptedVideoID = nil
+
+        interruptionResumeTask?.cancel()
+        interruptionResumeTask = Task { @MainActor [weak self] in
+            let reactivated = await Self.reactivateAudioSession()
+            guard let self, !Task.isCancelled else { return }
+            self.interruptionResumeTask = nil
+            // Still unable to take the session back after the retries means
+            // something else owns audio now — a call that carried on, or
+            // another app. Playing into that would be silent at best, so
+            // stay paused and leave it to the user.
+            guard reactivated else { return }
+            if shouldResumePlayback {
+                self.resume()
+            } else if self.isPlaying {
+                self.backend?.refreshAudio()
+            }
+        }
+    }
+
+    /// Reactivate the audio session, retrying briefly while the interrupting
+    /// audio lets go of the route. Returns whether it succeeded.
+    private static func reactivateAudioSession() async -> Bool {
+        let attempts = 8
+        for attempt in 1...attempts {
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                return true
+            } catch {
+                guard attempt < attempts, !Task.isCancelled else { break }
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+        return false
     }
 
     private func observeRouteChanges() {
@@ -357,7 +435,14 @@ public final class PlayerManager: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.didBackground = true }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.didBackground = true
+                // Reset rather than left sticky, so a PiP session that ended
+                // long ago can't suppress the rebuild after a later lock.
+                // PiP starting after this point sets it again.
+                self.pipActiveSinceBackground = self.isInPiP
+            }
         }
         becomeActiveObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
@@ -367,14 +452,21 @@ public final class PlayerManager: NSObject {
             Task { @MainActor [weak self] in
                 guard let self, self.didBackground else { return }
                 self.didBackground = false
+                // Read before the sleep: PiP's teardown can clear `isInPiP`
+                // in the meantime.
+                let returningFromPiP = self.pipActiveSinceBackground || self.isInPiP
+                self.pipActiveSinceBackground = false
                 try? AVAudioSession.sharedInstance().setActive(true)
                 // One runloop hop after activation so the window/surface
                 // have settled before we retarget the drawable.
                 try? await Task.sleep(for: .milliseconds(50))
                 self.refreshVideoOutput()
-                // Lock/unlock also tears down VLC's audio unit; rebuild it
-                // so we don't come back to a silent-but-playing video.
-                if self.isPlaying {
+                // Lock/unlock tears down VLC's audio unit; rebuild it so we
+                // don't come back to a silent-but-playing video. Not after
+                // PiP: audio played straight through it, and the rebuild
+                // would *cause* a few seconds of silence rather than cure
+                // one.
+                if self.isPlaying, !returningFromPiP {
                     self.backend?.refreshAudio()
                 }
             }
@@ -926,6 +1018,9 @@ public final class PlayerManager: NSObject {
         backend.onPiPStateChanged = { [weak self] enabled in
             guard let self else { return }
             self.isInPiP = enabled
+            if enabled {
+                self.pipActiveSinceBackground = true
+            }
             // Pull fresh play/buffer state from the backend — VLCKit's
             // state callbacks can land mid-transition while the host view
             // is between containers and get missed, leaving the controls

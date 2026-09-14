@@ -49,9 +49,9 @@ struct ExpandedMiniPlayerOverlay: View {
             if let miniStore = store.scope(state: \.miniPlayer, action: \.miniPlayer),
                !store.isMiniPlayerMinimised {
                 // No background of its own: `VideoDetailScreen` paints an
-                // opaque one at rest and fades it out as it is dragged
-                // down, and a slab of colour here would be all that fade
-                // ever revealed. Without it the drag uncovers the tabs.
+                // opaque one that slides down with it when dragged, and a
+                // slab of colour here would be all that slide ever
+                // uncovered. Without it the drag reveals the tabs.
                 NavigationStack {
                     VideoDetailScreen(store: miniStore)
                 }
