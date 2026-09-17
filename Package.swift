@@ -18,13 +18,18 @@ let package = Package(
         .library(name: "VLCPlayerCore", targets: ["VLCPlayerCore"])
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.20.2"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.26.0"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.9.0"),
         .package(url: "https://github.com/pointfreeco/swift-identified-collections", from: "1.1.0"),
         .package(url: "https://github.com/airbnb/lottie-ios.git", from: "4.4.3"),
-        .package(url: "https://github.com/pointfreeco/sqlite-data", from: "1.0.0"),
+        .package(url: "https://github.com/pointfreeco/sqlite-data", from: "1.12.0"),
         .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2"),
-        .package(url: "https://github.com/realm/SwiftLint", from: "0.58.0")
+        // The binary-only plugin package rather than realm/SwiftLint itself. The
+        // full package pins swift-syntax to an exact prerelease in every release,
+        // which cannot co-resolve with the swift-syntax *range* the Point-Free
+        // packages require from TCA 1.26 (the first to build on Xcode 27). Same
+        // SwiftLintBuildToolPlugin, no source dependencies.
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.62.2")
     ],
     targets: [
         .target(
@@ -36,7 +41,7 @@ let package = Package(
                 .product(name: "KeychainAccess", package: "KeychainAccess")
             ],
             plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
         ),
         .target(
@@ -52,7 +57,7 @@ let package = Package(
                 .process("Resources")
             ],
             plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
         ),
         .target(
@@ -64,7 +69,7 @@ let package = Package(
                 .product(name: "SQLiteData", package: "sqlite-data")
             ],
             plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
         ),
         .target(
@@ -77,7 +82,7 @@ let package = Package(
                 .process("Resources")
             ],
             plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
         ),
         // VLCKit 4.0.0-a24 (tagged 2026-08-31), consumed as the official
