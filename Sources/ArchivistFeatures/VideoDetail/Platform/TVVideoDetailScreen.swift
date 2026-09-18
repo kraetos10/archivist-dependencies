@@ -14,185 +14,224 @@ public struct TVVideoDetailScreen: View {
     @FetchAll(PlayNextItem.all.order(by: \.id))
     private var playNextItems
 
+    /// The control focus returns to whenever this screen's content changes
+    /// underneath the user. Without an explicit target the focus engine
+    /// guesses — see `body`.
+    @FocusState private var focusedControl: FocusedControl?
+
+    private enum FocusedControl: Hashable {
+        case play
+    }
+
+    /// Scroll anchor for the top of the screen.
+    private static let topAnchor = "top"
+
     public init(store: StoreOf<VideoDetailReducer>) {
         self.store = store
     }
 
     public var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Top: thumbnail + info side by side
-                HStack(alignment: .top, spacing: 48) {
-                    // Thumbnail
-                    thumbnailView
-                        .frame(width: 640, height: 360)
+        ScrollViewReader { scrollProxy in
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Top: thumbnail + info side by side
+                    HStack(alignment: .top, spacing: 48) {
+                        // Thumbnail
+                        thumbnailView
+                            .frame(width: 640, height: 360)
 
-                    // Info
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(store.video.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .lineLimit(3)
+                        // Info
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(store.video.title)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .lineLimit(3)
 
-                        HStack(spacing: 8) {
-                            ChannelThumbView(url: store.channelThumbURL, size: 40)
+                            HStack(spacing: 8) {
+                                ChannelThumbView(url: store.channelThumbURL, size: 40)
 
-                            Text(store.video.channelName)
-                                .fontWeight(.semibold)
-
-                            if let views = store.video.formattedViewCount {
-                                Text("·")
-                                Text("\(views) views")
-                            }
-
-                            if let published = store.video.publishedRelative {
-                                Text("·")
-                                Text(published)
-                            }
-
-                            if let duration = store.video.durationStr {
-                                Text("·")
-                                Text(duration)
-                            }
-
-                            if let quality = store.video.qualityLabel {
-                                Text(quality)
-                                    .font(.caption)
+                                Text(store.video.channelName)
                                     .fontWeight(.semibold)
-                                    .foregroundStyle(Color.Text.primary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(Color.Surface.highlight)
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
 
-                        Button {
-                            send(.playTapped)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: store.video.watchProgress > 0 ? "play.circle.fill" : "play.fill")
-                                Text(
-                                    store.video.watchProgress > 0
-                                        ? String.localised("video.resume", table: .videos)
-                                        : String.localised("video.play", table: .videos)
-                                )
-                            }
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 16)
-                        }
-                        .buttonStyle(.borderedProminent)
+                                if let views = store.video.formattedViewCount {
+                                    Text("·")
+                                    Text("\(views) views")
+                                }
 
-                        Button {
-                            send(.toggleWatchedTapped)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: store.isWatched ? "eye.fill" : "eye")
-                                Text(
-                                    store.isWatched
-                                        ? String.localised("video.markAsUnwatched", table: .videos)
-                                        : String.localised("video.markAsWatched", table: .videos)
-                                )
-                            }
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 16)
-                        }
-                        .buttonStyle(.bordered)
+                                if let published = store.video.publishedRelative {
+                                    Text("·")
+                                    Text(published)
+                                }
 
-                        if let linkedDescription = store.video.linkedDescription {
-                            Text(linkedDescription)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(store.isDescriptionExpanded ? nil : 4)
+                                if let duration = store.video.durationStr {
+                                    Text("·")
+                                    Text(duration)
+                                }
 
-                            Button {
-                                send(.toggleDescription, animation: .default)
-                            } label: {
-                                Text(
-                                    store.isDescriptionExpanded
-                                        ? String.localised("generic.showLess", table: .generic)
-                                        : String.localised("generic.showMore", table: .generic)
-                                )
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 48)
-                .padding(.top, 32)
-
-                // Play Next
-                if !playNextItems.isEmpty {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(String.localised("video.playNext", table: .videos))
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 48)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 40) {
-                                ForEach(playNextItems) { item in
-                                    playNextCard(item)
-                                        .playNextTransition()
+                                if let quality = store.video.qualityLabel {
+                                    Text(quality)
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.Text.primary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Color.Surface.highlight)
+                                        .clipShape(Capsule())
                                 }
                             }
-                            .animation(.default, value: playNextItems.map(\.id))
-                            .padding(.horizontal, 48)
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+
+                            Button {
+                                send(.playTapped)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: store.video.watchProgress > 0 ? "play.circle.fill" : "play.fill")
+                                    Text(
+                                        store.video.watchProgress > 0
+                                            ? String.localised("video.resume", table: .videos)
+                                            : String.localised("video.play", table: .videos)
+                                    )
+                                }
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .focused($focusedControl, equals: .play)
+
+                            Button {
+                                send(.toggleWatchedTapped)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: store.isWatched ? "eye.fill" : "eye")
+                                    Text(
+                                        store.isWatched
+                                            ? String.localised("video.markAsUnwatched", table: .videos)
+                                            : String.localised("video.markAsWatched", table: .videos)
+                                    )
+                                }
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(.bordered)
+
+                            if let linkedDescription = store.video.linkedDescription {
+                                Text(linkedDescription)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(store.isDescriptionExpanded ? nil : 4)
+
+                                Button {
+                                    send(.toggleDescription, animation: .default)
+                                } label: {
+                                    Text(
+                                        store.isDescriptionExpanded
+                                            ? String.localised("generic.showLess", table: .generic)
+                                            : String.localised("generic.showMore", table: .generic)
+                                    )
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.top, 48)
-                    .padding(.bottom, 24)
-                }
+                    .padding(.horizontal, 48)
+                    .padding(.top, 32)
+                    .id(Self.topAnchor)
 
-                // Up Next
-                if !store.nextVideos.isEmpty {
-                    VStack(alignment: .leading, spacing: 24) {
-                        Text(String.localised("video.upNext", table: .videos))
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 48)
+                    // Play Next
+                    if !playNextItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(String.localised("video.playNext", table: .videos))
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 48)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 32) {
-                                ForEach(store.nextVideos.prefix(10)) { video in
-                                    TVVideoCardView(
-                                        video: video,
-                                        serverConfig: store.serverConfig
-                                    ) {
-                                        send(.nextUpVideoTapped(video))
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyHStack(spacing: 40) {
+                                    ForEach(playNextItems) { item in
+                                        playNextCard(item)
+                                            .playNextTransition()
                                     }
-                                    .frame(width: 400)
-                                    .contextMenu {
-                                        Button {
-                                            send(.addUpNextToPlayNextTapped(video))
-                                        } label: {
-                                            Label(
-                                                String.localised("video.playNext", table: .videos),
-                                                systemImage: "text.line.first.and.arrowtriangle.forward"
-                                            )
+                                }
+                                .animation(.default, value: playNextItems.map(\.id))
+                                .padding(.horizontal, 48)
+                            }
+                        }
+                        .padding(.top, 48)
+                        .padding(.bottom, 24)
+                    }
+
+                    // Up Next
+                    if !store.nextVideos.isEmpty {
+                        VStack(alignment: .leading, spacing: 24) {
+                            Text(String.localised("video.upNext", table: .videos))
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 48)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyHStack(spacing: 32) {
+                                    ForEach(store.nextVideos.prefix(10)) { video in
+                                        TVVideoCardView(
+                                            video: video,
+                                            serverConfig: store.serverConfig
+                                        ) {
+                                            send(.nextUpVideoTapped(video))
+                                        }
+                                        .frame(width: 400)
+                                        .contextMenu {
+                                            Button {
+                                                send(.addUpNextToPlayNextTapped(video))
+                                            } label: {
+                                                Label(
+                                                    String.localised("video.playNext", table: .videos),
+                                                    systemImage: "text.line.first.and.arrowtriangle.forward"
+                                                )
+                                            }
                                         }
                                     }
                                 }
+                                .padding(.horizontal, 48)
+                                .padding(.vertical, 24)
                             }
-                            .padding(.horizontal, 48)
-                            .padding(.vertical, 24)
                         }
+                        .padding(.bottom, 24)
                     }
-                    .padding(.bottom, 24)
-                }
 
-                // Bottom: similar videos horizontal scroll
-                similarSection
-                    .padding(.top, 48)
-                    .padding(.bottom, 80)
+                    // Bottom: similar videos horizontal scroll
+                    similarSection
+                        .padding(.top, 48)
+                        .padding(.bottom, 80)
+                }
+            }
+            // Land on Play when the screen first appears, rather than wherever
+            // the focus engine's reading-order guess happens to put it.
+            .defaultFocus($focusedControl, .play)
+            // Picking a Similar, Up Next or Play Next video — or auto-advance —
+            // swaps this screen's video in place rather than pushing a new
+            // screen. The card that had focus is gone, its row reloading, and the
+            // scroll was left wherever that row sat, so focus fell to whatever
+            // the engine found. Start the new video's screen the way the first
+            // one started: at the top, on Play.
+            .onChange(of: store.video.videoId) {
+                withAnimation {
+                    scrollProxy.scrollTo(Self.topAnchor, anchor: .top)
+                }
+                focusedControl = .play
+            }
+            // Back from the player (Menu), put focus on Play/Resume. Auto-advance
+            // may have changed the video while the player was up, so the control
+            // focused before presenting isn't guaranteed to still mean anything.
+            .onChange(of: store.isPlaying) { _, isPlaying in
+                if !isPlaying {
+                    focusedControl = .play
+                }
             }
         }
         .fullScreenCover(isPresented: Binding(

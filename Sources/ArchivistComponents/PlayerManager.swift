@@ -1018,9 +1018,13 @@ public final class PlayerManager: NSObject {
         backend.onPiPStateChanged = { [weak self] enabled in
             guard let self else { return }
             self.isInPiP = enabled
+            #if !os(tvOS)
+            // The flag lives with the rest of the background/foreground
+            // audio handling, which tvOS doesn't compile.
             if enabled {
                 self.pipActiveSinceBackground = true
             }
+            #endif
             // Pull fresh play/buffer state from the backend — VLCKit's
             // state callbacks can land mid-transition while the host view
             // is between containers and get missed, leaving the controls
