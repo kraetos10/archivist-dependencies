@@ -41,6 +41,8 @@ extension VideoDetailReducer {
         case .cacheStatusChanged(let isCached):
             state.isCached = isCached
             return .none
+        case .playbackFailed:
+            return handlePlaybackFailed(state: &state)
         case .adoptInflightPlayback:
             state.isPlaying = true
             return .none
@@ -130,6 +132,36 @@ extension VideoDetailReducer {
             state.watchedOverride = !(state.watchedOverride ?? state.video.isWatched)
         }
         return .none
+    }
+
+    /// The video stopped without ever reaching its end.
+    ///
+    /// Deliberately not the `videoPlaybackDidEnd` path: that marks the video
+    /// watched, clears its resume position and auto-advances, which is the
+    /// opposite of what a video that wouldn't play deserves. Stop, say so,
+    /// and offer another go.
+    private func handlePlaybackFailed(state: inout State) -> Effect<Action> {
+        state.isPlaying = false
+        state.autoPlayCountdown = nil
+        state.alert = AlertState {
+            TextState(String.localised("video.playbackFailed.title", table: .videos))
+        } actions: {
+            ButtonState(action: .retryPlayback) {
+                TextState(String.localised("video.playbackFailed.retry", table: .videos))
+            }
+            ButtonState(role: .cancel, action: .dismissed) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.playbackFailed.message", table: .videos))
+        }
+        return .merge(
+            .cancel(id: CancelID.playback),
+            .cancel(id: CancelID.autoPlayCountdown),
+            .run { _ in
+                await MainActor.run { PlayerManager.shared.stop() }
+            }
+        )
     }
 
     private func handleAutoPlayExhausted(state: inout State) -> Effect<Action> {

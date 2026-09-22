@@ -1039,6 +1039,13 @@ public final class PlayerManager: NSObject {
             }
         }
 
+        backend.onPlaybackFailed = { [weak self] in
+            guard let self else { return }
+            self.isPlaying = false
+            self.isBuffering = false
+            self.emit(.playbackFailed(videoId: self.currentVideoID))
+        }
+
         backend.onPlaybackEnd = { [weak self] in
             // Begin a background task immediately (on main thread) so iOS
             // doesn't suspend the app before the next video can start.

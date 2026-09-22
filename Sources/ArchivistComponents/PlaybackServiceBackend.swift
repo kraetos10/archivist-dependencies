@@ -31,6 +31,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     public var onTimeUpdate: ((Double) -> Void)?
     public var onStateChange: (() -> Void)?
     public var onPlaybackEnd: (() -> Void)?
+    public var onPlaybackFailed: (() -> Void)?
     public var onPiPStateChanged: ((Bool) -> Void)?
 
     private var playbackEndContinuation: AsyncStream<Void>.Continuation?
@@ -43,6 +44,37 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     /// so neither fires against a stream that hasn't started yet.
     private var hasReachedPlaying = false
 
+    /// Furthest point playback actually reached, rather than the last value
+    /// libvlc reported. The end-of-media check reads this because a stray
+    /// low or zero position update as the stream tears down would otherwise
+    /// make a finished video look like one that stopped early.
+    private var furthestTime: Double = 0
+
+    /// Set while *we* are tearing the current media down — an explicit stop,
+    /// or the cache swap replacing the source mid-playback. libvlc reports
+    /// those as `.stopped` exactly like reaching the end of a video, and
+    /// reporting them as an ending marks the video watched and auto-advances.
+    private var isTransitioningMedia = false
+
+    /// How close to the end a stop has to be to count as reaching the end.
+    /// libvlc's last position update lands a beat before the true end.
+    private static let endOfMediaTolerance: Double = 10
+
+    /// Whether a `.stopped` means the video finished, rather than failed.
+    ///
+    /// A stop before ever reaching `.playing` is a failed load — a dead URL,
+    /// an unreachable server, an unplayable file. Without this check that was
+    /// reported as an ending, which is why a video that wouldn't load looked
+    /// like it skipped instantly to the end: it was marked watched, its
+    /// resume position deleted, and auto-advance moved on.
+    private var didReachEndOfMedia: Bool {
+        guard hasReachedPlaying else { return false }
+        // No duration to judge against — keep the old assumption rather than
+        // refuse to advance at the end of media libvlc can't measure.
+        guard duration > 0 else { return true }
+        return furthestTime >= duration - Self.endOfMediaTolerance
+    }
+
     private var service: PlaybackService { .sharedInstance() }
 
     override public init() {
@@ -53,6 +85,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         isBuffering = true
         isPlaying = true
         hasReachedPlaying = false
+        furthestTime = 0
         if let startPosition, startPosition > 0 {
             currentTime = startPosition
             onTimeUpdate?(currentTime)
@@ -92,6 +125,8 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     }
 
     public func stop() {
+        isTransitioningMedia = true
+        furthestTime = 0
         service.stopPlayback()
         service.delegate = nil
         service.videoOutputView = nil
@@ -216,6 +251,10 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // cache swap the total and current times collapsed to "time left"
         // instead of the true duration. Loading the file whole keeps the
         // timeline absolute so the seek lands against the real length.
+        // Replacing the media stops the outgoing one, and libvlc reports that
+        // stop the same way it reports reaching the end.
+        isTransitioningMedia = true
+
         let media = VLCMedia(url: fileURL)!
         let list = VLCMediaList()
         list.add(media)
@@ -277,6 +316,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // length differs slightly from the stream's.
         if pendingResumeSec > 0 {
             currentTime = pendingResumeSec
+            furthestTime = max(furthestTime, currentTime)
             onTimeUpdate?(currentTime)
             guard service.isSeekable, duration >= pendingResumeSec else { return }
             service.playbackPosition = Float(min(max(pendingResumeSec / duration, 0), 1))
@@ -286,12 +326,16 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
 
         let timeMs = service.playbackTime.intValue
         currentTime = Double(timeMs) / 1000.0
+        furthestTime = max(furthestTime, currentTime)
         onTimeUpdate?(currentTime)
     }
 
     private func handleStateChange(_ currentState: VLCMediaPlayerState) {
         switch currentState {
         case .opening:
+            // The replacement media is opening, so the outgoing one's stop
+            // has been and gone.
+            isTransitioningMedia = false
             // VLCKit 4.0.0-a22 dropped the `.buffering` state; buffer fill
             // now arrives via `mediaPlayerBufferingChanged:`. We only ever
             // showed the spinner between `.opening` and the first
@@ -308,9 +352,20 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         case .stopped:
             isPlaying = false
             isBuffering = false
+            let reachedEnd = didReachEndOfMedia
+            let wasOurTeardown = isTransitioningMedia
             hasReachedPlaying = false
-            playbackEndContinuation?.yield()
-            onPlaybackEnd?()
+            isTransitioningMedia = false
+            if wasOurTeardown {
+                // We asked for this stop; it says nothing about the video.
+                break
+            }
+            if reachedEnd {
+                playbackEndContinuation?.yield()
+                onPlaybackEnd?()
+            } else {
+                onPlaybackFailed?()
+            }
         case .stopping:
             // Stop was requested and libvlc is tearing the stream down.
             // Playback-end is signalled on `.stopped`, so don't yield here.
@@ -319,6 +374,9 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         case .error:
             isPlaying = false
             isBuffering = false
+            hasReachedPlaying = false
+            isTransitioningMedia = false
+            onPlaybackFailed?()
         @unknown default:
             break
         }

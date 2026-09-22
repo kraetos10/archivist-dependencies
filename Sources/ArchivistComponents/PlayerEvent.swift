@@ -30,6 +30,12 @@ public enum PlayerEvent: Sendable, Equatable {
     /// here rather than from the screen.
     case playbackCompleted(videoId: String?)
 
+    /// Playback stopped without reaching the end: the media never opened, or
+    /// the engine errored. Observers must not treat this as a completion —
+    /// marking the video watched and advancing is exactly the wrong response
+    /// to a video that wouldn't play.
+    case playbackFailed(videoId: String?)
+
     /// The parallel prebuffer download finished and the backend swapped to
     /// the local file.
     case cacheCompleted(videoId: String)

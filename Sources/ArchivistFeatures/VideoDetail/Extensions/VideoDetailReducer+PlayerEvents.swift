@@ -60,6 +60,10 @@ extension VideoDetailReducer {
                     videoService: videoService
                 )
 
+            case .playbackFailed(let eventVideoId):
+                guard eventVideoId == videoId else { continue }
+                await send(.playbackFailed)
+
             case .cacheCompleted(let completedId):
                 guard completedId == videoId else { continue }
                 await send(.cacheStatusChanged(true))

@@ -1221,6 +1221,72 @@
           }
         }
       }
+    },
+    "video.playbackFailed.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't play video"
+          }
+        }
+      }
+    },
+    "video.playbackFailed.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video didn't start. Check your connection to the server and try again."
+          }
+        }
+      }
+    },
+    "video.playbackFailed.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Again"
+          }
+        }
+      }
+    },
+    "video.resumePrompt.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume playback?"
+          }
+        }
+      }
+    },
+    "video.resumePrompt.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You've already watched part of this video."
+          }
+        }
+      }
+    },
+    "video.startFromBeginning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start From Beginning"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

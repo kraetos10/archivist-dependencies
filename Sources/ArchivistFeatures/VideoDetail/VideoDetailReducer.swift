@@ -62,6 +62,10 @@ public struct VideoDetailReducer {
         var isCached = false
         var isDeletingFromServer = false
         var isDescriptionExpanded = false
+        /// Set when the user answers the tvOS resume prompt with "start from
+        /// beginning", and consumed by the next play so it seeks to 0 rather
+        /// than the stored resume position.
+        var playbackStartsAtBeginning = false
         var showAllComments = false
         var currentCommentIndex = 0
         var watchedOverride: Bool?
@@ -138,6 +142,7 @@ public struct VideoDetailReducer {
             downloadError = nil
             isDeletingFromServer = false
             isDescriptionExpanded = false
+            playbackStartsAtBeginning = false
             showAllComments = false
             currentCommentIndex = 0
             watchedOverride = nil
@@ -150,6 +155,9 @@ public struct VideoDetailReducer {
         case dismissed
         case confirmDeleteFromServer
         case confirmSoftwareDecodePlayback
+        case retryPlayback
+        case playFromBeginning
+        case resumeFromPosition
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -172,6 +180,9 @@ public struct VideoDetailReducer {
         case playlistLoopAdvanced(VideoResponse, nextVideos: [VideoResponse])
         case autoPlayCountdownTick
         case cacheStatusChanged(Bool)
+        /// Playback stopped without reaching the end — a failed load, or an
+        /// engine error.
+        case playbackFailed
         case pipRestoreRequested(VideoResponse)
         case adoptInflightPlayback
         /// Re-attach to playback that is already running for this video.
@@ -244,8 +255,15 @@ public struct VideoDetailReducer {
                 return .none
             case .alert(.presented(.confirmDeleteFromServer)):
                 return handleConfirmedDeleteFromServer(state: &state)
-            case .alert(.presented(.confirmSoftwareDecodePlayback)):
+            case .alert(.presented(.confirmSoftwareDecodePlayback)),
+                 .alert(.presented(.retryPlayback)):
                 return handlePlayTapped(state: &state)
+            case .alert(.presented(.playFromBeginning)):
+                state.playbackStartsAtBeginning = true
+                return handlePlayTappedWarningIfNeeded(state: &state)
+            case .alert(.presented(.resumeFromPosition)):
+                state.playbackStartsAtBeginning = false
+                return handlePlayTappedWarningIfNeeded(state: &state)
             case .alert:
                 return .none
             default:

@@ -47,6 +47,10 @@ public protocol PlayerBackend: AnyObject {
     var onTimeUpdate: ((Double) -> Void)? { get set }
     var onStateChange: (() -> Void)? { get set }
     var onPlaybackEnd: (() -> Void)? { get set }
+    /// Fires when playback stopped without reaching the end of the video — a
+    /// failed load, or an engine error. Distinct from `onPlaybackEnd`, which
+    /// means the video finished and so marks it watched and auto-advances.
+    var onPlaybackFailed: (() -> Void)? { get set }
     /// Fires when the underlying engine reports a PiP state transition.
     /// `true` on entry, `false` on exit (whether the user dismissed PiP
     /// from system controls or it ended via our `stopPiP` path). Backends

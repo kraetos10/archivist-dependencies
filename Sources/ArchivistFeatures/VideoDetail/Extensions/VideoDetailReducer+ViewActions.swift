@@ -18,7 +18,7 @@ extension VideoDetailReducer {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
         case .playTapped:
-            return handlePlayTappedWarningIfNeeded(state: &state)
+            return handlePlayTappedResumeChoiceIfNeeded(state: &state)
         case .stopPlayback:
             return handleStopPlayback(state: &state)
         case .downloadTapped:
@@ -226,6 +226,41 @@ extension VideoDetailReducer {
         }
     }
 
+    /// Asks whether to resume or start over, on tvOS only.
+    ///
+    /// The Apple TV convention for a partly-watched video: the button just
+    /// says Play, and the choice is made here. Everywhere else the button
+    /// itself says Resume, so tapping it has already answered the question.
+    ///
+    /// `handlePlayTappedWarningIfNeeded` runs either way, so the
+    /// software-decode warning still gets its say after this one.
+    private func handlePlayTappedResumeChoiceIfNeeded(state: inout State) -> Effect<Action> {
+        #if os(tvOS)
+        guard let resumePosition = state.video.resumePositionSeconds,
+              resumePosition > 0
+        else { return handlePlayTappedWarningIfNeeded(state: &state) }
+
+        state.alert = AlertState {
+            TextState(String.localised("video.resumePrompt.title", table: .videos))
+        } actions: {
+            ButtonState(action: .resumeFromPosition) {
+                TextState(String.localised("video.resume", table: .videos))
+            }
+            ButtonState(action: .playFromBeginning) {
+                TextState(String.localised("video.startFromBeginning", table: .videos))
+            }
+            ButtonState(role: .cancel, action: .dismissed) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.resumePrompt.message", table: .videos))
+        }
+        return .none
+        #else
+        return handlePlayTappedWarningIfNeeded(state: &state)
+        #endif
+    }
+
     /// Warns once, on the first 4K VP9/AV1 video the user plays, that the
     /// device has to decode it in software.
     ///
@@ -233,7 +268,7 @@ extension VideoDetailReducer {
     /// limitation belongs to the hardware, so repeating it every time
     /// would just train the user to dismiss it. Playing is still the
     /// default action — the warning informs, it doesn't block.
-    private func handlePlayTappedWarningIfNeeded(state: inout State) -> Effect<Action> {
+    func handlePlayTappedWarningIfNeeded(state: inout State) -> Effect<Action> {
         guard state.video.requiresSoftwareDecodingAtHighResolution,
               !state.hasSeenSoftwareDecodeWarning
         else { return handlePlayTapped(state: &state) }
@@ -257,7 +292,10 @@ extension VideoDetailReducer {
     func handlePlayTapped(state: inout State) -> Effect<Action> {
         guard let url = mediaURL(state: state) else { return .none }
         state.isPlaying = true
-        let startPosition = state.video.resumePositionSeconds
+        let startPosition = state.playbackStartsAtBeginning
+            ? nil
+            : state.video.resumePositionSeconds
+        state.playbackStartsAtBeginning = false
         let config = state.serverConfig
         let videoId = state.video.videoId
         let video = state.video

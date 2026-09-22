@@ -86,12 +86,11 @@ public struct TVVideoDetailScreen: View {
                                 send(.playTapped)
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: store.video.watchProgress > 0 ? "play.circle.fill" : "play.fill")
-                                    Text(
-                                        store.video.watchProgress > 0
-                                            ? String.localised("video.resume", table: .videos)
-                                            : String.localised("video.play", table: .videos)
-                                    )
+                                    // Always Play: a partly-watched video asks
+                                    // resume-or-restart once pressed, so the
+                                    // button can't promise either.
+                                    Image(systemName: "play.fill")
+                                    Text(String.localised("video.play", table: .videos))
                                 }
                                 .font(.title3)
                                 .fontWeight(.semibold)
