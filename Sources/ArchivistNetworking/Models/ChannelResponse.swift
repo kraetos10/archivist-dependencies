@@ -204,3 +204,26 @@ public nonisolated struct ChannelNavItem: Decodable, Sendable, Equatable {
         case channelName = "channel_name"
     }
 }
+
+extension ChannelResponse {
+    /// The channel as embedded in a video, for opening its detail screen
+    /// without another fetch. A video's copy carries no download overrides,
+    /// and nothing that uses this needs them.
+    public init(videoChannel: VideoChannel) {
+        self.init(
+            channelId: videoChannel.channelId,
+            channelName: videoChannel.channelName,
+            channelDescription: videoChannel.channelDescription,
+            channelSubs: videoChannel.channelSubs,
+            channelActive: videoChannel.channelActive ?? true,
+            channelSubscribed: videoChannel.channelSubscribed ?? false,
+            channelTags: videoChannel.channelTags,
+            channelTabs: videoChannel.channelTabs,
+            channelOverwrites: nil,
+            channelLastRefresh: videoChannel.channelLastRefresh,
+            channelBannerUrl: videoChannel.channelBannerUrl,
+            channelThumbUrl: videoChannel.channelThumbUrl,
+            channelTvartUrl: videoChannel.channelTvartUrl
+        )
+    }
+}

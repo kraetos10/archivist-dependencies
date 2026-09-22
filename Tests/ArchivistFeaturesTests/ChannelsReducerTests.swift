@@ -198,4 +198,46 @@ struct ChannelsReducerTests {
             $0.hasLoaded = true
         }
     }
+
+    // MARK: - Open from a video
+
+    @Test func openChannelReplacesThePushedStack() async {
+        var initialState = ChannelsReducer.State(serverConfig: config)
+        initialState.path.append(
+            .channelDetail(ChannelDetailReducer.State(serverConfig: config, channel: TestFixtures.channel2))
+        )
+        let store = TestStore(initialState: initialState) {
+            ChannelsReducer()
+        }
+        let channel = ChannelResponse(videoChannel: TestFixtures.video1.channel)
+        let detail = ChannelDetailReducer.State(serverConfig: config, channel: channel)
+
+        await store.send(.openChannel(channel)) {
+            $0.selectedChannel = detail
+            $0.path = StackState([.channelDetail(detail)])
+        }
+    }
+
+    @Test func openChannelInSplitViewSelectsWithoutPushing() async {
+        var initialState = ChannelsReducer.State(serverConfig: config)
+        initialState.useSplitView = true
+        let store = TestStore(initialState: initialState) {
+            ChannelsReducer()
+        }
+        let channel = ChannelResponse(videoChannel: TestFixtures.video1.channel)
+
+        await store.send(.openChannel(channel)) {
+            $0.selectedChannel = ChannelDetailReducer.State(serverConfig: config, channel: channel)
+        }
+    }
+
+    @Test func channelFromAVideoKeepsItsIdentityAndDefaultsTheRest() {
+        let channel = ChannelResponse(videoChannel: TestFixtures.video1.channel)
+
+        #expect(channel.channelId == "UC_channel1")
+        #expect(channel.channelName == "Test Channel 1")
+        #expect(channel.channelActive)
+        #expect(!channel.channelSubscribed)
+        #expect(channel.channelOverwrites == nil)
+    }
 }

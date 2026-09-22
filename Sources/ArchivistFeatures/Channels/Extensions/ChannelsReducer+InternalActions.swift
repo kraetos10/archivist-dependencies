@@ -26,6 +26,8 @@ extension ChannelsReducer {
             return .none
         case .unsubscribeResult(.failure):
             return .none
+        case .openChannel(let channel):
+            return handleOpenChannel(channel, state: &state)
         case .unwatchedChannelIdsLoaded(let ids):
             state.channelIdsWithUnwatchedVideos = ids
             state.isLoadingUnwatchedIds = false
@@ -87,5 +89,24 @@ extension ChannelsReducer {
     private func handleSubscribeSucceeded(state: inout State) -> Effect<Action> {
         state.addChannel = nil
         return .send(.view(.pullToRefreshTriggered))
+    }
+
+    /// Shows the channel on its own over the list, replacing whatever was
+    /// pushed, so Back returns to the channel list rather than to a screen
+    /// the user left before opening the video.
+    private func handleOpenChannel(
+        _ channel: ChannelResponse,
+        state: inout State
+    ) -> Effect<Action> {
+        let detailState = ChannelDetailReducer.State(
+            serverConfig: state.serverConfig,
+            channel: channel
+        )
+        state.selectedChannel = detailState
+        state.path.removeAll()
+        if !state.useSplitView {
+            state.path.append(.channelDetail(detailState))
+        }
+        return .none
     }
 }

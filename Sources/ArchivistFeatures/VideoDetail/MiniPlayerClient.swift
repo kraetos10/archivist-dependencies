@@ -13,6 +13,14 @@ public enum MiniPlayerRequest: Sendable {
     /// apart: a *different* video means stop and save a resume position, the
     /// *same* video means hand the running playback back to the screen.
     case detailAppeared(videoId: String)
+
+    /// The user tapped the channel name. The tab opens the channel in the
+    /// Channels tab. `minimising` carries the screen's state when its video
+    /// was playing, so it carries on in the mini player — one request rather
+    /// than a `.minimise` followed by this, because the client holds a
+    /// single pending value and a second request could overwrite the first
+    /// before the tab reads it.
+    case showChannel(ChannelResponse, minimising: VideoDetailReducer.State?)
 }
 
 /// Carries mini-player requests from whichever `VideoDetail` screen raised

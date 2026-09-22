@@ -284,7 +284,8 @@ public struct VideoDetailScreen: View {
                 channelThumbURL: store.channelThumbURL,
                 channelName: store.video.channelName,
                 viewCount: store.video.formattedViewCount,
-                publishedRelative: store.video.publishedRelative
+                publishedRelative: store.video.publishedRelative,
+                onChannelTapped: { send(.channelTapped) }
             )
 
             VideoInfoRow(

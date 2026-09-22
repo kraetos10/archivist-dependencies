@@ -50,7 +50,29 @@ extension TabReducer {
             return handleMinimiseRequested(detail, state: &state)
         case .detailAppeared(let videoId):
             return handleDetailAppeared(videoId: videoId, state: &state)
+        case .showChannel(let channel, let minimising):
+            return handleShowChannel(channel, minimising: minimising, state: &state)
         }
+    }
+
+    /// The channel name on a video detail screen was tapped: open the
+    /// channel in the Channels tab, carrying a playing video over to the
+    /// mini player first.
+    func handleShowChannel(
+        _ channel: ChannelResponse,
+        minimising detail: VideoDetailReducer.State?,
+        state: inout State
+    ) -> Effect<Action> {
+        let minimise: Effect<Action> = if let detail {
+            handleMinimiseRequested(detail, state: &state)
+        } else {
+            .none
+        }
+        return .merge(
+            minimise,
+            .send(.selectTab(.channels)),
+            .send(.channels(.openChannel(channel)))
+        )
     }
 
     /// A video detail screen came on screen while the mini player was up.

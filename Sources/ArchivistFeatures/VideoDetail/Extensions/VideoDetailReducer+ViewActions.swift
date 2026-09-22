@@ -60,6 +60,8 @@ extension VideoDetailReducer {
         switch action {
         case .dismissTapped:
             return handleDismissTapped(state: &state)
+        case .channelTapped:
+            return handleChannelTapped(state: &state)
         case .minimizeRequested:
             return handleMinimizeRequested(state: &state)
         default:
@@ -417,6 +419,52 @@ extension VideoDetailReducer {
             await send(.delegate(.didRequestMinimize))
             await dismiss()
         }
+    }
+
+    /// Opens the video's channel in the Channels tab. A playing video moves
+    /// to the mini player and keeps going, the way a drag down would; one
+    /// that isn't playing closes like the X. Either way this screen is
+    /// gone, since the channel opens in a tab behind it.
+    private func handleChannelTapped(state: inout State) -> Effect<Action> {
+        #if os(iOS)
+        let channel = ChannelResponse(videoChannel: state.video.channel)
+
+        // Already the tab's mini-player state, only expanded: collapse it
+        // back to the floating player, then open the channel.
+        if state.isHostedInMiniPlayer {
+            return .run { [miniPlayerClient] send in
+                await MainActor.run {
+                    PlayerManager.shared.activePlayerSurfaceRole = .mini
+                }
+                await send(.delegate(.didRequestMinimize))
+                await miniPlayerClient.request(.showChannel(channel, minimising: nil))
+            }
+        }
+
+        guard state.isPlaying else {
+            return .merge(
+                handleDismissTapped(state: &state),
+                .run { [miniPlayerClient] _ in
+                    await miniPlayerClient.request(.showChannel(channel, minimising: nil))
+                }
+            )
+        }
+
+        // As `handleMinimizeRequested`: the surface role switches before
+        // the request so the mini player adopts the live surface on mount.
+        let detail = state
+        return .run { [dismiss, miniPlayerClient] send in
+            await MainActor.run {
+                PlayerManager.shared.activePlayerSurfaceRole = .mini
+            }
+            await miniPlayerClient.request(.showChannel(channel, minimising: detail))
+            await send(.delegate(.didRequestMinimize))
+            await dismiss()
+        }
+        #else
+        // tvOS has no mini player and no channel link on this screen.
+        return .none
+        #endif
     }
 
     private func saveProgressEffect(state: State) -> Effect<Action> {

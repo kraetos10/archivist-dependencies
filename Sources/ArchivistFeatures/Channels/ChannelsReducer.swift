@@ -80,6 +80,9 @@ public struct ChannelsReducer {
 
         case addChannel(PresentationAction<AddChannelReducer.Action>)
         case refreshPendingDownloads
+        /// Open a channel's detail from outside the tab — the channel name
+        /// on a video detail screen.
+        case openChannel(ChannelResponse)
 
         case searchResult(Result<[ChannelResponse], Error>)
         case unsubscribeResult(Result<String, Error>)

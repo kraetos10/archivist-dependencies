@@ -207,6 +207,7 @@ public struct VideoDetailReducer {
             case stopPlayback
             case dismissTapped
             case minimizeRequested
+            case channelTapped
             case downloadTapped
             case deleteDownloadTapped
             case deleteFromServerTapped

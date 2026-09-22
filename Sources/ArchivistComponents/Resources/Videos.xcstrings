@@ -1101,6 +1101,17 @@
         }
       }
     },
+    "video.openChannelHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the channel"
+          }
+        }
+      }
+    },
     "video.pictureInPicture": {
       "extractionState": "manual",
       "localizations": {
