@@ -23,9 +23,7 @@ public struct TVLoginScreen: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text(String.localised("login.apiKey.disableStaticAuthNotice", table: .login))
-                .font(.footnote)
-                .multilineTextAlignment(.center)
+            StaticAuthNoticeView(variable: store.staticAuthVariable)
                 .frame(maxWidth: 720)
 
             TextField(

@@ -28,13 +28,7 @@ public struct LoginScreen: View {
                         .multilineTextAlignment(.center)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(String.localised("login.apiKey.disableStaticAuthNotice", table: .login))
-                            .font(.footnote)
-                            .foregroundStyle(Color.Text.primary)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.Surface.highlight)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        StaticAuthNoticeView(variable: store.staticAuthVariable)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(String.localised("login.apiKey", table: .login))

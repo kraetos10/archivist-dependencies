@@ -188,13 +188,68 @@
         }
       }
     },
-    "login.apiKey.disableStaticAuthNotice" : {
+    "login.staticAuth.confirmAction" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your server must be started with the environment variable DISABLE_STATIC_AUTH=true so that the app can access media and images using the API key alone."
+            "value" : "Yes, Continue"
+          }
+        }
+      }
+    },
+    "login.staticAuth.confirmMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app can only load videos and images if your TubeArchivist server runs with DISABLE_STATIC_AUTH=true. Have you set it and restarted the server?"
+          }
+        }
+      }
+    },
+    "login.staticAuth.confirmTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Is static auth disabled?"
+          }
+        }
+      }
+    },
+    "login.staticAuth.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your TubeArchivist server must run with this environment variable, or videos and images won't load. Set it and restart the server before logging in:"
+          }
+        }
+      }
+    },
+    "login.staticAuth.notYet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Yet"
+          }
+        }
+      }
+    },
+    "login.staticAuth.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server setup required"
           }
         }
       }

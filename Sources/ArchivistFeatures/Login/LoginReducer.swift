@@ -10,7 +10,15 @@ public struct LoginReducer {
         @Shared var registrationDetails: RegistrationDetails
         var apiToken = ""
         var isLoading = false
+        /// Set once the user confirms their server runs with
+        /// `DISABLE_STATIC_AUTH=true`, so a retry after a failed login
+        /// doesn't ask again.
+        var hasConfirmedStaticAuthDisabled = false
         @Presents var alert: AlertState<AlertAction>?
+
+        /// The server setting the app needs, shown verbatim — it's an
+        /// environment variable, so it's never translated.
+        let staticAuthVariable = "DISABLE_STATIC_AUTH=true"
 
         public init(registrationDetails: Shared<RegistrationDetails>) {
             _registrationDetails = registrationDetails
@@ -19,6 +27,7 @@ public struct LoginReducer {
 
     public enum AlertAction: Equatable, Sendable {
         case dismissed
+        case staticAuthDisabledConfirmed
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -42,6 +51,8 @@ public struct LoginReducer {
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .alert(.presented(.staticAuthDisabledConfirmed)):
+                return handleStaticAuthDisabledConfirmed(state: &state)
             case .alert, .loginSucceeded, .binding:
                 return .none
             default:
