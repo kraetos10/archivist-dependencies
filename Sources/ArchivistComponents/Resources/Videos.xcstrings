@@ -1112,6 +1112,17 @@
         }
       }
     },
+    "video.playbackSpeed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback Speed"
+          }
+        }
+      }
+    },
     "video.rotate": {
       "extractionState": "manual",
       "localizations": {

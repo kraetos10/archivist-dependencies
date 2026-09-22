@@ -109,6 +109,8 @@ public struct PlayerControlsOverlay: View {
             }
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 12) {
+                    speedButton
+
                     roundedControlButton(
                         systemImage: "pip.enter",
                         label: String.localised("video.pictureInPicture", table: .videos),
@@ -168,6 +170,43 @@ public struct PlayerControlsOverlay: View {
                 bottomInfoAndSeek
                     .padding(.bottom, safeArea.bottom)
             }
+    }
+
+    // MARK: - Speed
+
+    /// Shows the current speed and opens the picker. The picker is a
+    /// confirmation dialog rather than a `Menu` because the controls
+    /// auto-hide: a `Menu` gives no signal that it's open, so the hide timer
+    /// would pull the button out from under it. The dialog's presentation is
+    /// state `PlayerManager` can see, and it holds the controls up meanwhile.
+    private var speedButton: some View {
+        Button {
+            playerManager.showSpeedPicker()
+        } label: {
+            Text(playerManager.playbackSpeedLabel)
+                .font(.system(size: 15, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 42, minHeight: 42)
+                .background(.black.opacity(0.45))
+                .background(.ultraThinMaterial.opacity(0.6))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String.localised("video.playbackSpeed", table: .videos))
+        .accessibilityValue(playerManager.playbackSpeedLabel)
+        .confirmationDialog(
+            String.localised("video.playbackSpeed", table: .videos),
+            isPresented: $playerManager.isSpeedPickerPresented,
+            titleVisibility: .visible
+        ) {
+            ForEach(PlaybackSpeed.options, id: \.self) { speed in
+                Button(PlaybackSpeed.label(for: speed)) {
+                    playerManager.setPlaybackSpeed(speed)
+                }
+            }
+        }
     }
 
     // MARK: - Tap areas

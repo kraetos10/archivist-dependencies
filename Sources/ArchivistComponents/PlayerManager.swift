@@ -798,11 +798,33 @@ public final class PlayerManager: NSObject {
         if isPlaying { pause() } else { resume() }
     }
 
-    /// Apply a playback-rate multiplier to the active backend. Used by
-    /// the tvOS fast-forward press-and-hold: rate 4.0 while held, back
-    /// to 1.0 on release. Safe no-op when no backend is mounted.
+    /// Apply a temporary playback-rate multiplier to the active backend,
+    /// without changing the saved speed. Used by the tvOS fast-forward
+    /// press-and-hold: rate 4.0 while held, then `restorePlaybackSpeed()`
+    /// on release. Safe no-op when no backend is mounted.
     public func setPlaybackRate(_ rate: Float) {
         backend?.setPlaybackRate(rate)
+    }
+
+    /// The speed the user picked, applied to every video. See
+    /// `PlaybackSpeed` for how new loads pick it up.
+    public private(set) var playbackSpeed: Float = PlaybackSpeed.saved
+
+    public var playbackSpeedLabel: String {
+        PlaybackSpeed.label(for: playbackSpeed)
+    }
+
+    /// Choose a new speed: saved for later videos and applied to this one.
+    public func setPlaybackSpeed(_ speed: Float) {
+        playbackSpeed = speed
+        PlaybackSpeed.save(speed)
+        backend?.setPlaybackRate(speed)
+    }
+
+    /// Put the active backend back on the saved speed after a temporary
+    /// `setPlaybackRate`.
+    public func restorePlaybackSpeed() {
+        backend?.setPlaybackRate(playbackSpeed)
     }
 
     /// Playback duration, falling back to the known metadata duration while
@@ -867,6 +889,23 @@ public final class PlayerManager: NSObject {
 
     public func cancelVLCHideControls() {
         vlcHideControlsTask?.cancel()
+    }
+
+    public func showSpeedPicker() {
+        isSpeedPickerPresented = true
+    }
+
+    /// The speed picker is open. Hiding the controls would tear down the
+    /// button it's anchored to, so the auto-hide waits until it closes.
+    public var isSpeedPickerPresented = false {
+        didSet {
+            guard isSpeedPickerPresented != oldValue else { return }
+            if isSpeedPickerPresented {
+                cancelVLCHideControls()
+            } else {
+                scheduleHideVLCControls()
+            }
+        }
     }
 
     #if os(iOS)

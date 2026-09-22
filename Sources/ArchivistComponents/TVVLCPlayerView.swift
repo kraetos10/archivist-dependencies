@@ -48,7 +48,7 @@ public struct TVVLCPlayerView: View {
             hideTask?.cancel()
             // Restore the rate in case the view is dismissed mid-hold,
             // otherwise the next playback session inherits 4× speed.
-            playerManager.setPlaybackRate(1.0)
+            playerManager.restorePlaybackSpeed()
         }
     }
 
@@ -85,7 +85,7 @@ public struct TVVLCPlayerView: View {
     private func handleHoldEnded(_ type: UIPress.PressType) {
         switch type {
         case .rightArrow:
-            playerManager.setPlaybackRate(1.0)
+            playerManager.restorePlaybackSpeed()
             poke()
         default:
             break
@@ -144,6 +144,11 @@ public struct TVVLCPlayerView: View {
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))
                     Spacer()
+                    if playerManager.playbackSpeed != 1 {
+                        Text(playerManager.playbackSpeedLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
                     Text(formatTime(playerManager.duration))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))

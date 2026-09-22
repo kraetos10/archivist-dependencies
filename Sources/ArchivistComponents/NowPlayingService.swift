@@ -25,7 +25,7 @@ public final class NowPlayingService: Sendable {
             MPMediaItemPropertyArtist: artist,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(PlaybackSpeed.saved) : 0.0
         ]
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
@@ -56,7 +56,9 @@ public final class NowPlayingService: Sendable {
     ) {
         guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        // The lock screen extrapolates elapsed time at this rate between
+        // updates, so it has to be the real speed, not 1.
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? Double(PlaybackSpeed.saved) : 0.0
         info[MPMediaItemPropertyPlaybackDuration] = duration
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
