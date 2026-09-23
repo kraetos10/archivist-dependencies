@@ -107,6 +107,10 @@ public struct SimilarVideoRow: View {
                 if let views = video.formattedViewCount {
                     Text("· \(views) views")
                 }
+
+                if let published = video.publishedRelative {
+                    Text("· \(published)")
+                }
             }
             .font(.caption2)
             .foregroundStyle(Color.Brand.secondary)

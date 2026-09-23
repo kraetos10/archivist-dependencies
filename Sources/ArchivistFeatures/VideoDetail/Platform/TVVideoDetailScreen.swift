@@ -319,9 +319,16 @@ public struct TVVideoDetailScreen: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
 
-                Text(item.channelName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(item.channelName)
+
+                    if let published = item.publishedRelative {
+                        Text("· \(published)")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
             .frame(width: 400)
         }

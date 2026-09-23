@@ -70,6 +70,12 @@ public struct TubeData: Sendable {
                 """).execute(db)
         }
 
+        migrator.registerMigration("Add published to playNextItems") { db in
+            try #sql("""
+                ALTER TABLE "playNextItems" ADD COLUMN "published" TEXT
+                """).execute(db)
+        }
+
         return migrator
     }
 

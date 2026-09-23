@@ -115,11 +115,18 @@ extension VideoDetailScreen {
                 .foregroundStyle(Color.Brand.secondary)
                 .lineLimit(1)
 
-            if let duration = item.duration {
-                Text(duration)
-                    .font(.caption2)
-                    .foregroundStyle(Color.Brand.secondary)
+            HStack(spacing: 4) {
+                if let duration = item.duration {
+                    Text(duration)
+                }
+
+                if let published = item.publishedRelative {
+                    Text(item.duration == nil ? published : "· \(published)")
+                }
             }
+            .font(.caption2)
+            .foregroundStyle(Color.Brand.secondary)
+            .lineLimit(1)
         }
     }
 

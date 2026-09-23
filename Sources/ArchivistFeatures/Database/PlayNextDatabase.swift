@@ -31,6 +31,7 @@ extension PlayNextDatabase: DependencyKey {
                                 channelName: video.channelName,
                                 thumbUrl: video.vidThumbUrl,
                                 duration: video.durationStr,
+                                published: video.published,
                                 addedAt: Date().timeIntervalSince1970
                             )
                         }

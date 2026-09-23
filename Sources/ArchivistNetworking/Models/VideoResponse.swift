@@ -134,14 +134,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
     }
 
     public var publishedDate: Date? {
-        guard let published else { return nil }
-        if let date = isoFormatter.date(from: published) {
-            return date
-        }
-        let dateOnly = DateFormatter()
-        dateOnly.dateFormat = "yyyy-MM-dd"
-        dateOnly.locale = Locale(identifier: "en_US_POSIX")
-        return dateOnly.date(from: published)
+        PublishedDate.date(from: published)
     }
 
     public var publishedFormatted: String? {
@@ -150,8 +143,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
     }
 
     public var publishedRelative: String? {
-        guard let date = publishedDate else { return nil }
-        return relativeFormatter.localizedString(for: date, relativeTo: Date())
+        PublishedDate.relative(from: published)
     }
 
     public var formattedViewCount: String? {

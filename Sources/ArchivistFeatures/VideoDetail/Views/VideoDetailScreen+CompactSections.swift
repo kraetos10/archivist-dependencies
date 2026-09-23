@@ -26,6 +26,7 @@ extension VideoDetailScreen {
                                     channelName: item.channelName,
                                     thumbUrl: item.thumbUrl,
                                     duration: item.duration,
+                                    publishedRelative: item.publishedRelative,
                                     serverConfig: store.serverConfig
                                 ) {
                                     send(

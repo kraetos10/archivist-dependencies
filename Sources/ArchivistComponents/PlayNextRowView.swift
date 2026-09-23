@@ -6,6 +6,7 @@ public struct PlayNextRowView: View {
     public let channelName: String
     public let thumbUrl: String?
     public let duration: String?
+    public let publishedRelative: String?
     public let serverConfig: ServerConfig
     public let onRemove: () -> Void
 
@@ -14,6 +15,7 @@ public struct PlayNextRowView: View {
         channelName: String,
         thumbUrl: String?,
         duration: String?,
+        publishedRelative: String? = nil,
         serverConfig: ServerConfig,
         onRemove: @escaping () -> Void
     ) {
@@ -21,6 +23,7 @@ public struct PlayNextRowView: View {
         self.channelName = channelName
         self.thumbUrl = thumbUrl
         self.duration = duration
+        self.publishedRelative = publishedRelative
         self.serverConfig = serverConfig
         self.onRemove = onRemove
     }
@@ -43,12 +46,18 @@ public struct PlayNextRowView: View {
                     .foregroundStyle(Color.Brand.secondary)
                     .lineLimit(1)
 
-                if let duration {
-                    Text(duration)
-                        .font(.caption2)
-                        .foregroundStyle(Color.Brand.secondary)
-                        .lineLimit(1)
+                HStack(spacing: 4) {
+                    if let duration {
+                        Text(duration)
+                    }
+
+                    if let publishedRelative {
+                        Text(duration == nil ? publishedRelative : "· \(publishedRelative)")
+                    }
                 }
+                .font(.caption2)
+                .foregroundStyle(Color.Brand.secondary)
+                .lineLimit(1)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 8)

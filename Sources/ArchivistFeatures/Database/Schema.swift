@@ -34,7 +34,16 @@ public struct PlayNextItem: Identifiable, Equatable, Sendable {
     var channelName: String
     var thumbUrl: String?
     var duration: String?
+    /// The video's raw `published` string, kept so the queue's rows can show
+    /// the same relative date as the rest of the app.
+    var published: String?
     var addedAt: Double
+}
+
+extension PlayNextItem {
+    public var publishedRelative: String? {
+        PublishedDate.relative(from: published)
+    }
 }
 
 // MARK: - Server Connection
