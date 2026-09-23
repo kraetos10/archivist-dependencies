@@ -77,14 +77,17 @@ public struct DownloadsScreen: View {
     // MARK: - Queue Content
 
     private var queueContent: some View {
-        Group {
-            if store.hasLoaded && store.filteredDownloads.isEmpty && store.searchQuery.isEmpty {
+        // Read once per pass rather than per row.
+        let filtered = store.filteredDownloads
+
+        return Group {
+            if store.hasLoaded && filtered.isEmpty && store.searchQuery.isEmpty {
                 EmptyStateView(
                     icon: "arrow.down.circle",
                     title: String.localised("video.empty.noDownloads", table: .videos),
                     description: String.localised("video.empty.downloadsDescription", table: .videos)
                 )
-            } else if store.hasLoaded && store.filteredDownloads.isEmpty && !store.searchQuery.isEmpty {
+            } else if store.hasLoaded && filtered.isEmpty && !store.searchQuery.isEmpty {
                 EmptyStateView(
                     icon: "magnifyingglass",
                     title: String.localised("video.empty.noSearchResults", table: .videos),
@@ -109,7 +112,7 @@ public struct DownloadsScreen: View {
                             #endif
                         }
                     } else {
-                        ForEach(store.filteredDownloads) { download in
+                        ForEach(filtered) { download in
                             #if os(tvOS)
                             TVVideoCardView(
                                 download: download,
@@ -118,7 +121,10 @@ public struct DownloadsScreen: View {
                                 send(.downloadTapped(download))
                             }
                             .onAppear {
-                                if download.id == store.downloads.last?.id {
+                                // `downloads` is the unfiltered page buffer:
+                                // while searching, its last item isn't
+                                // rendered, so paging never fired.
+                                if download.id == filtered.last?.id {
                                     send(.lastItemAppeared)
                                 }
                             }
@@ -129,7 +135,10 @@ public struct DownloadsScreen: View {
                                 onDelete: { send(.deleteTapped(download)) }
                             )
                             .onAppear {
-                                if download.id == store.downloads.last?.id {
+                                // `downloads` is the unfiltered page buffer:
+                                // while searching, its last item isn't
+                                // rendered, so paging never fired.
+                                if download.id == filtered.last?.id {
                                     send(.lastItemAppeared)
                                 }
                             }
@@ -137,7 +146,7 @@ public struct DownloadsScreen: View {
                         }
                     }
                 }
-                .animation(.default, value: store.filteredDownloads.map(\.id))
+                .animation(.default, value: filtered.map(\.id))
                 .padding()
 
                 if store.isLoadingMore {

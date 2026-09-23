@@ -19,8 +19,12 @@ public struct FilteredVideoListScreen: View {
     }
 
     public var body: some View {
-        ScrollView {
-            if store.hasLoaded && store.displayedVideos.isEmpty {
+        // Read once per pass: `displayedVideos` filters, searches and maps
+        // the whole list on every access.
+        let displayed = store.displayedVideos
+
+        return ScrollView {
+            if store.hasLoaded && displayed.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: store.filter.icon)
                         .scaledSystemFont(size: 48, relativeTo: .largeTitle)
@@ -39,7 +43,7 @@ public struct FilteredVideoListScreen: View {
                                 .redacted(reason: .placeholder)
                         }
                     } else {
-                        ForEach(store.displayedVideos) { item in
+                        ForEach(displayed) { item in
                             VideoCardView(
                                 video: item.video,
                                 serverConfig: store.serverConfig,
@@ -62,7 +66,12 @@ public struct FilteredVideoListScreen: View {
                             }
                             .pressable { send(.videoTapped(item.video)) }
                             .onAppear {
-                                if item.video.id == store.videos.last?.id {
+                                // Anchored on the list actually shown:
+                                // `videos` is the unfiltered page buffer,
+                                // whose last item a filtered or searched list
+                                // usually never renders — so paging stopped
+                                // after page 1.
+                                if item.id == displayed.last?.id {
                                     send(.lastItemAppeared)
                                 }
                             }

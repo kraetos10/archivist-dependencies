@@ -15,15 +15,19 @@ public struct iPhonePlaylistsScreen: View {
     private let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
 
     public var body: some View {
-        NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
+        // Read once per pass: `filteredPlaylists` merges the search results
+        // with a locale-aware filter over every playlist.
+        let filtered = store.filteredPlaylists
+
+        return NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
-                if store.hasLoaded && store.filteredPlaylists.isEmpty && store.searchQuery.isEmpty {
+                if store.hasLoaded && filtered.isEmpty && store.searchQuery.isEmpty {
                     EmptyStateView(
                         icon: "music.note.list",
                         title: String.localised("login.noPlaylists", table: .login),
                         description: String.localised("login.subscribePlaylistsDescription", table: .login)
                     )
-                } else if store.hasLoaded && store.filteredPlaylists.isEmpty && !store.searchQuery.isEmpty {
+                } else if store.hasLoaded && filtered.isEmpty && !store.searchQuery.isEmpty {
                     EmptyStateView(
                         icon: "magnifyingglass",
                         title: String.localised("video.empty.noSearchResults", table: .videos),
@@ -40,7 +44,7 @@ public struct iPhonePlaylistsScreen: View {
                                 .redacted(reason: .placeholder)
                             }
                         } else {
-                            ForEach(store.filteredPlaylists) { playlist in
+                            ForEach(filtered) { playlist in
                                 PlaylistCardView(
                                     playlist: playlist,
                                     serverConfig: store.serverConfig
@@ -49,7 +53,10 @@ public struct iPhonePlaylistsScreen: View {
                                     send(.playlistCardTapped(playlist))
                                 }
                                 .onAppear {
-                                    if playlist.id == store.playlists.last?.id {
+                                    // `playlists` is the unfiltered page
+                                    // buffer: while searching, its last item
+                                    // isn't rendered, so paging never fired.
+                                    if playlist.id == filtered.last?.id {
                                         send(.lastItemAppeared)
                                     }
                                 }

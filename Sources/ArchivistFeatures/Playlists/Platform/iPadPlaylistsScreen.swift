@@ -65,14 +65,18 @@ public struct iPadPlaylistsScreen: View {
     // MARK: - List Content
 
     private var playlistListContent: some View {
-        ScrollView {
-            if store.hasLoaded && store.filteredPlaylists.isEmpty && store.searchQuery.isEmpty {
+        // Read once per pass: `filteredPlaylists` merges the search results
+        // with a locale-aware filter over every playlist.
+        let filtered = store.filteredPlaylists
+
+        return ScrollView {
+            if store.hasLoaded && filtered.isEmpty && store.searchQuery.isEmpty {
                 EmptyStateView(
                     icon: "music.note.list",
                     title: String.localised("login.noPlaylists", table: .login),
                     description: String.localised("login.subscribePlaylistsDescription", table: .login)
                 )
-            } else if store.hasLoaded && store.filteredPlaylists.isEmpty && !store.searchQuery.isEmpty {
+            } else if store.hasLoaded && filtered.isEmpty && !store.searchQuery.isEmpty {
                 EmptyStateView(
                     icon: "magnifyingglass",
                     title: String.localised("video.empty.noSearchResults", table: .videos),
@@ -89,7 +93,7 @@ public struct iPadPlaylistsScreen: View {
                             .redacted(reason: .placeholder)
                         }
                     } else {
-                        ForEach(store.filteredPlaylists) { playlist in
+                        ForEach(filtered) { playlist in
                             let isSelected = store.selectedPlaylist?.playlist.playlistId == playlist.playlistId
                             PlaylistCardView(
                                 playlist: playlist,
@@ -103,7 +107,9 @@ public struct iPadPlaylistsScreen: View {
                                 send(.playlistCardTapped(playlist))
                             }
                             .onAppear {
-                                if playlist.id == store.playlists.last?.id {
+                                // See iPhonePlaylistsScreen: anchor on the
+                                // list actually shown.
+                                if playlist.id == filtered.last?.id {
                                     send(.lastItemAppeared)
                                 }
                             }

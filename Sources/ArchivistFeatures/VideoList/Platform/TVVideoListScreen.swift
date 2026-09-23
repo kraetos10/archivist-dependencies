@@ -81,7 +81,10 @@ public struct TVVideoListScreen: View {
     }
 
     private var videoCards: some View {
-        ForEach(store.displayedVideos) { item in
+        // Read once per pass rather than per row.
+        let displayed = store.displayedVideos
+
+        return ForEach(displayed) { item in
             TVVideoCardView(
                 video: item.video,
                 serverConfig: store.serverConfig
@@ -89,7 +92,9 @@ public struct TVVideoListScreen: View {
                 send(.videoTapped(item.video))
             }
             .onAppear {
-                if item.video.id == store.videos.last?.id {
+                // Anchored on the list actually shown — see
+                // FilteredVideoListScreen.
+                if item.id == displayed.last?.id {
                     send(.lastItemAppeared)
                 }
             }

@@ -19,7 +19,11 @@ public struct TVFilteredVideoListScreen: View {
     private let columns = [GridItem(.adaptive(minimum: 400), spacing: 48)]
 
     public var body: some View {
-        ScrollView {
+        // Read once per pass: `displayedVideos` filters, searches and maps
+        // the whole list on every access.
+        let displayed = store.displayedVideos
+
+        return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 Label(store.filter.label, systemImage: store.filter.icon)
                     .font(.title2)
@@ -27,7 +31,7 @@ public struct TVFilteredVideoListScreen: View {
                     .padding(.horizontal, 48)
                     .padding(.top, 32)
 
-                if store.hasLoaded && store.displayedVideos.isEmpty {
+                if store.hasLoaded && displayed.isEmpty {
                     emptyStateView
                 } else {
                     LazyVGrid(columns: columns, spacing: 48) {
@@ -40,7 +44,7 @@ public struct TVFilteredVideoListScreen: View {
                                 .redacted(reason: .placeholder)
                             }
                         } else {
-                            ForEach(store.displayedVideos) { item in
+                            ForEach(displayed) { item in
                                 TVVideoCardView(
                                     video: item.video,
                                     serverConfig: store.serverConfig
@@ -68,7 +72,9 @@ public struct TVFilteredVideoListScreen: View {
                                     }
                                 }
                                 .onAppear {
-                                    if item.video.id == store.videos.last?.id {
+                                    // Anchored on the list actually shown —
+                                    // see FilteredVideoListScreen.
+                                    if item.id == displayed.last?.id {
                                         send(.lastItemAppeared)
                                     }
                                 }
