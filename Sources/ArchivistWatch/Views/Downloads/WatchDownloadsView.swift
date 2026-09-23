@@ -56,19 +56,7 @@ public struct WatchDownloadsView: View {
                 if !viewModel.records.isEmpty {
                     Section {
                         ForEach(viewModel.records) { record in
-                            NavigationLink {
-                                WatchNowPlayingView(
-                                    viewModel: WatchAudioPlayerViewModel(
-                                        videoId: record.id,
-                                        title: record.title,
-                                        channelName: record.channelName,
-                                        thumbPath: record.thumbPath,
-                                        fileURL: viewModel.fileURL(for: record.id),
-                                        serverConfig: config,
-                                        startPosition: record.lastPlayedPosition
-                                    )
-                                )
-                            } label: {
+                            NavigationLink(value: record.id) {
                                 WatchVideoRow(
                                     title: record.title,
                                     thumbPath: record.thumbPath,
@@ -113,6 +101,11 @@ public struct WatchDownloadsView: View {
                 }
             }
             .navigationTitle(String(localized: "tab.downloads", bundle: Bundle.module))
+            .navigationDestination(for: String.self) { videoId in
+                if let player = viewModel.player(for: videoId, config: config) {
+                    WatchNowPlayingView(viewModel: player)
+                }
+            }
             .confirmationDialog(
                 String(localized: "download.cancelTitle", bundle: Bundle.module),
                 isPresented: $showCancelConfirmation

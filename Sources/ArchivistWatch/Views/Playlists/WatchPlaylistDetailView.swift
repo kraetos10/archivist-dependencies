@@ -48,12 +48,7 @@ public struct WatchPlaylistDetailView: View {
             }
         }
         .navigationDestination(item: $viewModel.loadedVideo) { video in
-            WatchNowPlayingView(
-                viewModel: WatchAudioPlayerViewModel(
-                    video: video,
-                    serverConfig: viewModel.config
-                )
-            )
+            WatchNowPlayingView(viewModel: viewModel.player(for: video))
         }
         .refreshable {
             await viewModel.refresh()

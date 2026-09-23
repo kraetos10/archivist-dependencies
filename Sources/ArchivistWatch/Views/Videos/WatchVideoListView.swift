@@ -45,12 +45,7 @@ public struct WatchVideoListView: View {
             }
             .navigationTitle(String(localized: "tab.videos", bundle: .module))
             .navigationDestination(for: VideoResponse.self) { video in
-                WatchNowPlayingView(
-                    viewModel: WatchAudioPlayerViewModel(
-                        video: video,
-                        serverConfig: viewModel.config
-                    )
-                )
+                WatchNowPlayingView(viewModel: viewModel.player(for: video))
             }
             .refreshable {
                 await viewModel.refresh()

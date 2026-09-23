@@ -49,12 +49,7 @@ public struct WatchChannelDetailView: View {
         }
         .navigationTitle(channel.channelName)
         .navigationDestination(for: VideoResponse.self) { video in
-            WatchNowPlayingView(
-                viewModel: WatchAudioPlayerViewModel(
-                    video: video,
-                    serverConfig: viewModel.config
-                )
-            )
+            WatchNowPlayingView(viewModel: viewModel.player(for: video))
         }
         .refreshable {
             await viewModel.refresh()

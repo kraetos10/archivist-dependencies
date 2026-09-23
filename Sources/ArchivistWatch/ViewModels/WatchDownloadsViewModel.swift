@@ -1,4 +1,5 @@
 #if os(watchOS)
+import ArchivistNetworking
 import Foundation
 
 @MainActor
@@ -44,6 +45,27 @@ public final class WatchDownloadsViewModel {
 
     public func fileURL(for videoId: String) -> URL {
         storage.localFileURL(for: videoId)
+    }
+
+    /// Built when a row is pushed, never while the list is drawn: creating a
+    /// player activates the audio session, decodes the file and takes over the
+    /// system Now Playing card, which a row label must not do.
+    public func player(
+        for videoId: String,
+        config: ServerConfig
+    ) -> WatchAudioPlayerViewModel? {
+        guard let record = catalog.record(for: videoId) else { return nil }
+        return WatchNowPlayingState.shared.player(for: videoId) {
+            WatchAudioPlayerViewModel(
+                videoId: record.id,
+                title: record.title,
+                channelName: record.channelName,
+                thumbPath: record.thumbPath,
+                fileURL: storage.localFileURL(for: record.id),
+                serverConfig: config,
+                startPosition: record.lastPlayedPosition
+            )
+        }
     }
 
     public func cancelActiveDownload() {

@@ -40,6 +40,15 @@ public final class WatchChannelDetailViewModel {
         loadNextPage()
     }
 
+    /// The same player for the same video: a navigation destination is rebuilt
+    /// every time this screen re-renders, and a new player there would restart
+    /// playback and take over the system Now Playing card.
+    public func player(for video: VideoResponse) -> WatchAudioPlayerViewModel {
+        WatchNowPlayingState.shared.player(for: video.videoId) {
+            WatchAudioPlayerViewModel(video: video, serverConfig: config)
+        }
+    }
+
     // MARK: - Private
 
     private func loadVideos() async {

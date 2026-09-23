@@ -4,6 +4,29 @@ import ArchivistNetworking
 import Foundation
 import MediaPlayer
 
+/// Registrations that have to be undone when a player goes away: the periodic
+/// time observer and the handlers this player put on the *shared* remote
+/// command centre. `deinit` is nonisolated and so cannot reach `@MainActor`
+/// state — these closures can be run from it, and are released with the box if
+/// `teardown()` never ran.
+private final class WatchPlayerTeardownHandles: @unchecked Sendable {
+    private var releases: [() -> Void] = []
+
+    func add(_ release: @escaping () -> Void) {
+        releases.append(release)
+    }
+
+    func releaseAll() {
+        let pending = releases
+        releases = []
+        pending.forEach { $0() }
+    }
+
+    deinit {
+        releaseAll()
+    }
+}
+
 @MainActor
 @Observable
 public final class WatchAudioPlayerViewModel {
@@ -23,13 +46,14 @@ public final class WatchAudioPlayerViewModel {
         WatchDownloadManager.shared.progress
     }
 
-    private let videoId: String
+    public let videoId: String
     private var mediaUrl: String?
     public let serverConfig: ServerConfig
     private var avPlayer: AVPlayer?
     private var localPlayer: AVAudioPlayer?
-    private var progressTimer: Timer?
-    private var timeObserver: Any?
+    private var progressTask: Task<Void, Never>?
+    private var lastPersistedPosition: TimeInterval = 0
+    private let teardownHandles = WatchPlayerTeardownHandles()
     private let videoService: VideoService
     public let isStreaming: Bool
 
@@ -110,12 +134,12 @@ public final class WatchAudioPlayerViewModel {
             if localPlayer.isPlaying {
                 localPlayer.pause()
                 isPlaying = false
-                stopProgressTimer()
+                stopProgressUpdates()
                 syncProgressToServer()
             } else {
                 localPlayer.play()
                 isPlaying = true
-                startProgressTimer()
+                startProgressUpdates()
                 WatchNowPlayingState.shared.setPlayer(self)
             }
         }
@@ -148,6 +172,7 @@ public final class WatchAudioPlayerViewModel {
 
     public func syncProgressToServer() {
         guard duration > 0 else { return }
+        persistLocalPosition()
         Task {
             try? await videoService.setProgress(
                 config: serverConfig,
@@ -155,6 +180,31 @@ public final class WatchAudioPlayerViewModel {
                 position: Int(elapsed)
             )
         }
+    }
+
+    /// Leaving the screen doesn't end the session — playback carries on and the
+    /// Now Playing tab keeps showing it. A player that was never started has
+    /// nothing keeping it alive, so it releases its registrations here.
+    public func viewDidDisappear() {
+        syncProgressToServer()
+        if !WatchNowPlayingState.shared.isActive(self) {
+            teardown()
+        }
+    }
+
+    /// Releases everything that outlives this instance: the periodic time
+    /// observer, the progress loop and the handlers on the shared remote
+    /// command centre. `deinit` cannot touch `@MainActor` state, so a session
+    /// ends through here.
+    public func teardown() {
+        stopProgressUpdates()
+        persistLocalPosition()
+        avPlayer?.pause()
+        localPlayer?.stop()
+        isPlaying = false
+        teardownHandles.releaseAll()
+        updateNowPlayingPlaybackState()
+        WatchNowPlayingState.shared.clearIfMatching(self)
     }
 
     public func downloadAudio() async {
@@ -192,6 +242,8 @@ public final class WatchAudioPlayerViewModel {
     public func deleteDownload() async {
         try? await WatchDownloadManager.shared.deleteDownload(videoId: videoId)
         isDownloaded = false
+        // The file this player was reading is gone, so the session ends with it.
+        teardown()
     }
 
     // MARK: - Streaming Setup
@@ -231,18 +283,18 @@ public final class WatchAudioPlayerViewModel {
                 await player.seek(to: CMTime(seconds: Double(watchPosition), preferredTimescale: 1))
             }
 
-            // Periodic time observer
-            timeObserver = player.addPeriodicTimeObserver(
+            // Periodic time observer. The block is `@Sendable` and nonisolated,
+            // but it is delivered on the main queue, so it can assume the main
+            // actor rather than write to it from off it.
+            let observer = player.addPeriodicTimeObserver(
                 forInterval: CMTime(seconds: 1, preferredTimescale: 1),
                 queue: .main
             ) { [weak self] time in
-                guard let self else { return }
-                self.elapsed = CMTimeGetSeconds(time)
-                if self.duration > 0 {
-                    self.progress = self.elapsed / self.duration
+                MainActor.assumeIsolated {
+                    self?.updateStreamingProgress(seconds: CMTimeGetSeconds(time))
                 }
-                self.updateNowPlayingElapsed()
             }
+            teardownHandles.add { player.removeTimeObserver(observer) }
 
             isLoading = false
             configureNowPlaying()
@@ -266,6 +318,7 @@ public final class WatchAudioPlayerViewModel {
             if startPosition > 0 {
                 localPlayer?.currentTime = startPosition
             }
+            lastPersistedPosition = startPosition
             updateLocalProgress()
             isLoading = false
             configureNowPlaying()
@@ -277,16 +330,20 @@ public final class WatchAudioPlayerViewModel {
 
     // MARK: - Progress
 
-    private func startProgressTimer() {
-        progressTimer?.invalidate()
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateLocalProgress()
+    private func startProgressUpdates() {
+        stopProgressUpdates()
+        progressTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                self?.updateLocalProgress()
+            }
         }
     }
 
-    private func stopProgressTimer() {
-        progressTimer?.invalidate()
-        progressTimer = nil
+    private func stopProgressUpdates() {
+        progressTask?.cancel()
+        progressTask = nil
     }
 
     private func updateLocalProgress() {
@@ -294,6 +351,32 @@ public final class WatchAudioPlayerViewModel {
         elapsed = localPlayer.currentTime
         progress = elapsed / duration
         updateNowPlayingElapsed()
+        persistLocalPositionIfDue()
+    }
+
+    private func updateStreamingProgress(seconds: TimeInterval) {
+        elapsed = seconds
+        if duration > 0 {
+            progress = elapsed / duration
+        }
+        updateNowPlayingElapsed()
+        persistLocalPositionIfDue()
+    }
+
+    /// The server position isn't readable offline, so a downloaded video keeps
+    /// its own copy — without it every download restarted from the beginning.
+    private func persistLocalPosition() {
+        guard !isStreaming || isDownloaded else { return }
+        lastPersistedPosition = elapsed
+        WatchDownloadCatalog.shared.updatePosition(
+            videoId: videoId,
+            position: elapsed
+        )
+    }
+
+    private func persistLocalPositionIfDue() {
+        guard abs(elapsed - lastPersistedPosition) >= 10 else { return }
+        persistLocalPosition()
     }
 
     // MARK: - Audio Session & Now Playing
@@ -326,28 +409,28 @@ public final class WatchAudioPlayerViewModel {
 
     private func configureRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
-
-        center.playCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
-            return .success
-        }
-
-        center.pauseCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
-            return .success
-        }
-
         center.skipForwardCommand.preferredIntervals = [30]
-        center.skipForwardCommand.addTarget { [weak self] _ in
-            self?.skipForward()
-            return .success
-        }
-
         center.skipBackwardCommand.preferredIntervals = [15]
-        center.skipBackwardCommand.addTarget { [weak self] _ in
-            self?.skipBackward()
+
+        // The command centre is shared, so drop whatever an earlier player left
+        // on it and remember our own registrations for `teardown()`.
+        addRemoteTarget(to: center.playCommand) { $0.togglePlayPause() }
+        addRemoteTarget(to: center.pauseCommand) { $0.togglePlayPause() }
+        addRemoteTarget(to: center.skipForwardCommand) { $0.skipForward() }
+        addRemoteTarget(to: center.skipBackwardCommand) { $0.skipBackward() }
+    }
+
+    private func addRemoteTarget(
+        to command: MPRemoteCommand,
+        handler: @escaping @MainActor (WatchAudioPlayerViewModel) -> Void
+    ) {
+        command.removeTarget(nil)
+        let token = command.addTarget { [weak self] _ in
+            guard let self else { return .noSuchContent }
+            handler(self)
             return .success
         }
+        teardownHandles.add { command.removeTarget(token) }
     }
 
     private func formatTime(_ time: TimeInterval) -> String {

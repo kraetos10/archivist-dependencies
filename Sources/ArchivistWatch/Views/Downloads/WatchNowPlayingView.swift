@@ -2,7 +2,7 @@
 import SwiftUI
 
 public struct WatchNowPlayingView: View {
-    @State var viewModel: WatchAudioPlayerViewModel
+    @Bindable var viewModel: WatchAudioPlayerViewModel
     @Environment(\.dismiss) private var dismiss
 
     public init(viewModel: WatchAudioPlayerViewModel) {
@@ -113,7 +113,7 @@ public struct WatchNowPlayingView: View {
             .padding()
         }
         .onDisappear {
-            viewModel.syncProgressToServer()
+            viewModel.viewDidDisappear()
         }
         .confirmationDialog(
             String(localized: "action.deleteDownload", bundle: Bundle.module),
