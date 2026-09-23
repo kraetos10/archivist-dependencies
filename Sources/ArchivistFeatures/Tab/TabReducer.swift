@@ -2,6 +2,8 @@ import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
+internal import SQLiteData
+import StructuredQueries
 import SwiftUI
 
 public enum AppTab: Hashable, Sendable {
@@ -30,6 +32,15 @@ public struct TabReducer {
         public var deviceDownloads: DeviceDownloadsReducer.State
         #endif
         public var settings: SettingsReducer.State
+        #if !os(tvOS)
+        /// Videos currently downloading to the device, so the Saved tab can
+        /// badge them. Live query: it updates as downloads start and finish
+        /// without the tab asking.
+        @FetchAll(DeviceDownload.where { $0.status.eq(DeviceDownloadStatus.downloading) })
+        public var activeDeviceDownloads
+
+        public var activeDeviceDownloadCount: Int { activeDeviceDownloads.count }
+        #endif
         @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
         @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
         public var settingsUnlocked: Bool = false

@@ -61,6 +61,9 @@ public struct TabScreen: View {
                     )
                 }
             }
+            // A zero count draws nothing, so this is only visible while
+            // something is actually downloading.
+            .badge(store.activeDeviceDownloadCount)
 
             settingsTab
         }

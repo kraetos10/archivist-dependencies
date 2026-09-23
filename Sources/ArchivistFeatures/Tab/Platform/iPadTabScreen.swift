@@ -45,6 +45,9 @@ public struct iPadTabScreen: View {
                     )
                 }
             }
+            // A zero count draws nothing, so this is only visible while
+            // something is actually downloading.
+            .badge(store.activeDeviceDownloadCount)
 
             Tab(
                 String.localised("generic.settings", table: .generic),
