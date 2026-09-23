@@ -102,7 +102,14 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // only "what's left" and a progress bar pinned at 0. Loading the
         // full media keeps the timeline absolute so the deferred seek lands
         // the resume point against the true duration.
-        let media = VLCMedia(url: url)!
+        // libvlc rejects some URLs outright; report that like any other
+        // playback failure rather than trapping.
+        guard let media = VLCMedia(url: url) else {
+            isBuffering = false
+            isPlaying = false
+            onPlaybackFailed?()
+            return
+        }
         let list = VLCMediaList()
         list.add(media)
 
@@ -255,7 +262,12 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // stop the same way it reports reaching the end.
         isTransitioningMedia = true
 
-        let media = VLCMedia(url: fileURL)!
+        // The swap is an optimisation: if libvlc won't take the local file,
+        // leave the streaming media playing rather than trapping.
+        guard let media = VLCMedia(url: fileURL) else {
+            isTransitioningMedia = false
+            return
+        }
         let list = VLCMediaList()
         list.add(media)
         service.playMediaList(list, firstIndex: 0, subtitlesFilePath: nil)

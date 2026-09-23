@@ -1094,9 +1094,15 @@ public final class PlayerManager: NSObject {
                     UIApplication.shared.endBackgroundTask(task)
                 }
             }
-            self?.playbackTransitionTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+            // The expiration handler has to end the assertion itself —
+            // iOS terminates an app that lets one expire unended. Capturing
+            // the id locally keeps that true even if `self` has gone.
+            var taskID: UIBackgroundTaskIdentifier = .invalid
+            taskID = UIApplication.shared.beginBackgroundTask { [weak self] in
+                UIApplication.shared.endBackgroundTask(taskID)
                 self?.playbackTransitionTask = .invalid
             }
+            self?.playbackTransitionTask = taskID
             #endif
 
             // Notify observers (typically the VideoDetail reducer) that the
