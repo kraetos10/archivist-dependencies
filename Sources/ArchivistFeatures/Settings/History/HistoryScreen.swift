@@ -11,14 +11,20 @@ public struct HistoryScreen: View {
         self.store = store
     }
 
-    #if os(tvOS)
-    private let columns = [GridItem(.adaptive(minimum: 400), spacing: 48)]
-    #endif
-
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     public var body: some View {
         ScrollView {
+            #if os(tvOS)
+            // tvOS settings sub-screens title themselves in the content
+            // (the navigation bar title is blanked under the tab bar).
+            Text(String.localised("settings.history", table: .settings))
+                .font(.title2)
+                .fontWeight(.bold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, TVLayout.rowVerticalPadding)
+            #endif
+
             if store.hasLoaded && store.continueVideos.isEmpty && store.watchedVideos.isEmpty {
                 emptyState
             } else {
@@ -145,11 +151,12 @@ public struct HistoryScreen: View {
 
     #if os(tvOS)
     private var tvContent: some View {
-        LazyVGrid(columns: columns, spacing: 48) {
+        LazyVGrid(columns: TVLayout.cardGridColumns, spacing: TVLayout.cardSpacing) {
             if store.isLoading && !store.hasLoaded {
                 ForEach(VideoResponse.placeholders) { video in
                     TVVideoCardView(video: video, serverConfig: store.serverConfig)
                         .redacted(reason: .placeholder)
+                        .disabled(true)
                 }
             } else {
                 if !store.continueVideos.isEmpty {
@@ -182,13 +189,23 @@ public struct HistoryScreen: View {
                 }
             }
         }
-        .padding(48)
+        .padding(.bottom, TVLayout.rowVerticalPadding)
     }
     #endif
 
     // MARK: - Shared
 
     private func sectionHeader(_ title: String) -> some View {
+        #if os(tvOS)
+        // The tvOS section header convention shared with the other screens.
+        Text(title)
+            .font(.title3)
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.Text.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, TVLayout.sectionHeaderSpacing)
+            .padding(.bottom, TVLayout.sectionHeaderSpacing)
+        #else
         HStack {
             Text(title)
                 .font(.headline)
@@ -198,6 +215,7 @@ public struct HistoryScreen: View {
         .padding(.horizontal, 16)
         .padding(.top, 16)
         .padding(.bottom, 4)
+        #endif
     }
 
     private var emptyState: some View {

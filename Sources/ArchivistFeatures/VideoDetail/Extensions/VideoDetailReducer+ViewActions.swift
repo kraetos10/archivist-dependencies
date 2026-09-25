@@ -64,6 +64,8 @@ extension VideoDetailReducer {
             return handleChannelTapped(state: &state)
         case .minimizeRequested:
             return handleMinimizeRequested(state: &state)
+        case .playerPresentationChanged(let isPresented):
+            return handlePlayerPresentationChanged(isPresented, state: &state)
         default:
             return nil
         }
@@ -145,10 +147,13 @@ extension VideoDetailReducer {
         effects.append(refreshVideoEffect(config: config, videoId: videoId))
         effects.append(observeDownloadEffect(videoId: videoId))
 
+        // tvOS has no comments UI, so don't pay for the request there.
+        #if !os(tvOS)
         if !state.isLoadingComments && state.comments.isEmpty {
             state.isLoadingComments = true
             effects.append(fetchCommentsEffect(config: config, videoId: videoId))
         }
+        #endif
 
         if !state.isLoadingSimilar && state.similarVideos.isEmpty {
             state.isLoadingSimilar = true
@@ -351,6 +356,16 @@ extension VideoDetailReducer {
                 await MainActor.run { PlayerManager.shared.stop() }
             }
         )
+    }
+
+    /// The tvOS player is a full-screen cover bound to `isPlaying`. The
+    /// cover going away (Menu in the player) is the user stopping playback.
+    private func handlePlayerPresentationChanged(
+        _ isPresented: Bool,
+        state: inout State
+    ) -> Effect<Action> {
+        guard !isPresented, state.isPlaying else { return .none }
+        return handleStopPlayback(state: &state)
     }
 
     private func handleDismissTapped(state: inout State) -> Effect<Action> {

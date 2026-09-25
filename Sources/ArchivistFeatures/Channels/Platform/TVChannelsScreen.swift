@@ -12,61 +12,26 @@ public struct TVChannelsScreen: View {
         self.store = store
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 300), spacing: 48)]
-
     public var body: some View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
-                // Segmented filter picker
-                Picker("", selection: Binding(store.$filter).animation()) {
-                    Text(String.localised("generic.all", table: .generic))
-                        .tag(ChannelListFilter.all)
-                    Text(String.localised("generic.unwatched", table: .generic))
-                        .tag(ChannelListFilter.withUnwatched)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 48)
-                .padding(.top, 24)
+                VStack(alignment: .leading, spacing: TVLayout.cardSpacing) {
+                    filterRow
 
-                if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
-                    emptyUnwatchedView
-                } else if store.hasLoaded && store.filteredChannels.isEmpty {
-                    emptyStateView
-                } else {
-                    LazyVGrid(columns: columns, spacing: 48) {
-                        if store.isLoading && store.filteredChannels.isEmpty {
-                            ForEach(ChannelResponse.placeholders) { channel in
-                                TVChannelCardView(
-                                    channel: channel,
-                                    serverConfig: store.serverConfig
-                                )
-                                .redacted(reason: .placeholder)
-                            }
-                        } else {
-                            ForEach(store.filteredChannels) { channel in
-                                TVChannelCardView(
-                                    channel: channel,
-                                    serverConfig: store.serverConfig
-                                ) {
-                                    send(.channelTapped(channel))
-                                }
-                                // Paginate on the unfiltered list so additional
-                                // pages are fetched regardless of the active filter.
-                                .onAppear {
-                                    if channel.id == store.channels.last?.id {
-                                        send(.lastItemAppeared)
-                                    }
-                                }
-                            }
+                    if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
+                        emptyUnwatchedView
+                    } else if store.hasLoaded && store.filteredChannels.isEmpty {
+                        emptyStateView
+                    } else {
+                        channelGrid
+
+                        if store.isLoadingMore {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
                         }
                     }
-                    .padding(48)
-
-                    if store.isLoadingMore {
-                        ProgressView()
-                            .padding()
-                    }
                 }
+                .padding(.vertical, TVLayout.rowVerticalPadding)
             }
             .navigationTitle("")
         } destination: { store in
@@ -83,6 +48,76 @@ public struct TVChannelsScreen: View {
             }
             .background(Color.Brand.primary)
         }
+    }
+
+    // MARK: - Filter
+
+    /// Capsule chips rather than a segmented picker: a tvOS segmented
+    /// control changes selection as focus sweeps across it, reshuffling
+    /// the grid on every swipe. A chip only applies on select.
+    private var filterRow: some View {
+        HStack(spacing: 12) {
+            filterChip(
+                .all,
+                title: String.localised("generic.all", table: .generic)
+            )
+            filterChip(
+                .withUnwatched,
+                title: String.localised("generic.unwatched", table: .generic)
+            )
+        }
+        .focusSection()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String.localised("login.channelFilter", table: .login))
+    }
+
+    private func filterChip(
+        _ filter: ChannelListFilter,
+        title: String
+    ) -> some View {
+        let isSelected = store.filter == filter
+        return Button {
+            send(.filterChanged(filter), animation: .default)
+        } label: {
+            Text(title)
+        }
+        .buttonStyle(TVCapsuleButtonStyle(isSelected: isSelected))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: - Grid
+
+    private var channelGrid: some View {
+        LazyVGrid(columns: TVLayout.channelGridColumns, spacing: TVLayout.cardSpacing) {
+            if store.isLoading && store.filteredChannels.isEmpty {
+                ForEach(ChannelResponse.placeholders) { channel in
+                    TVChannelCardView(
+                        channel: channel,
+                        serverConfig: store.serverConfig
+                    )
+                    .redacted(reason: .placeholder)
+                    .disabled(true)
+                }
+            } else {
+                ForEach(store.filteredChannels) { channel in
+                    TVChannelCardView(
+                        channel: channel,
+                        serverConfig: store.serverConfig
+                    ) {
+                        send(.channelTapped(channel))
+                    }
+                    // Anchor on the rendered list: under the Unwatched
+                    // filter the unfiltered list's last channel is never
+                    // drawn, so paging would stop at page one.
+                    .onAppear {
+                        if channel.id == store.filteredChannels.last?.id {
+                            send(.lastItemAppeared)
+                        }
+                    }
+                }
+            }
+        }
+        .focusSection()
     }
 
     // MARK: - Empty states

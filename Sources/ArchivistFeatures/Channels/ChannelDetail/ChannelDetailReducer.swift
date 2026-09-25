@@ -56,6 +56,12 @@ public struct ChannelDetailReducer: Sendable {
             guard let path = channel.channelBannerUrl else { return nil }
             return serverConfig.fullURL(for: path)
         }
+
+        /// The description split into non-empty lines, one focus stop each
+        /// on the tvOS full-description screen.
+        var descriptionBlocks: [String] {
+            (channel.channelDescription ?? "").descriptionBlocks()
+        }
     }
 
     public enum AlertAction: Equatable, Sendable {
@@ -64,8 +70,9 @@ public struct ChannelDetailReducer: Sendable {
         case confirmClearFiltered
     }
 
-    public enum Action: ViewAction {
+    public enum Action: ViewAction, BindableAction {
         case view(View)
+        case binding(BindingAction<State>)
         case delegate(Delegate)
         case alert(PresentationAction<AlertAction>)
         case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
@@ -109,10 +116,13 @@ public struct ChannelDetailReducer: Sendable {
     @Dependency(\.playNextDatabase) var playNextDatabase
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .binding:
+                return .none
             case .delegate:
                 return .none
             case .downloadDetail(.presented(.view(.dismissTapped))):

@@ -3,6 +3,8 @@ import ArchivistComponents
 import ArchivistNetworking
 import SwiftUI
 
+/// Loading stand-ins for the home rows. Disabled so they can't take focus:
+/// focus parked on a placeholder is lost when the real row replaces it.
 struct TVHomeVideoRowPlaceholder: View {
     let title: String
     let icon: String
@@ -11,20 +13,20 @@ struct TVHomeVideoRowPlaceholder: View {
     var body: some View {
         TVHomeSectionContainer(title: title, icon: icon) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 48) {
+                LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
                     ForEach(VideoResponse.placeholders.prefix(5)) { video in
                         TVVideoCardView(
                             video: video,
                             serverConfig: serverConfig
                         )
-                        .frame(width: 400)
+                        .frame(width: TVLayout.cardWidth)
                         .redacted(reason: .placeholder)
                     }
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 30)
+                .padding(.vertical, TVLayout.rowVerticalPadding)
             }
             .scrollClipDisabled()
+            .disabled(true)
         }
     }
 }
@@ -34,11 +36,11 @@ struct TVHomeChannelsRowPlaceholder: View {
 
     var body: some View {
         TVHomeSectionContainer(
-            title: String(localized: "Channels"),
+            title: String.localised("generic.channels", table: .generic),
             icon: "antenna.radiowaves.left.and.right"
         ) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 48) {
+                LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
                     ForEach(ChannelResponse.placeholders) { channel in
                         TVChannelCardView(
                             channel: channel,
@@ -47,10 +49,10 @@ struct TVHomeChannelsRowPlaceholder: View {
                         .redacted(reason: .placeholder)
                     }
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 30)
+                .padding(.vertical, TVLayout.rowVerticalPadding)
             }
             .scrollClipDisabled()
+            .disabled(true)
         }
     }
 }

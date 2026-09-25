@@ -34,16 +34,14 @@ public struct TVVideoCardView: View {
         Button {
             onTap?()
         } label: {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
                 thumbnailView
+                    .tvCardFocusEffect(isFocused)
                 infoView
             }
         }
         .buttonStyle(TVCardButtonStyle())
         .focused($isFocused)
-        .scaleEffect(isFocused ? 1.05 : 1.0)
-        .shadow(color: isFocused ? .white.opacity(0.5) : .clear, radius: isFocused ? 20 : 0)
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 
     private var thumbnailView: some View {
@@ -73,7 +71,7 @@ public struct TVVideoCardView: View {
                     Spacer()
                     if let durationStr = data.duration {
                         Text(durationStr)
-                            .font(.caption)
+                            .font(.callout)
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8)
@@ -92,26 +90,27 @@ public struct TVVideoCardView: View {
             }
         }
         .aspectRatio(16 / 9, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: TVLayout.cornerRadius))
     }
 
     private var infoView: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Two lines, always reserved, so every card in a row is the
+            // same height and long titles aren't cut to a few words.
             Text(data.title)
                 .font(.headline)
+                .lineLimit(2, reservesSpace: true)
+
+            // Optional lines keep their height when empty for the same reason.
+            Text(data.channelName ?? " ")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
 
-            if let channelName = data.channelName {
-                Text(channelName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let published = data.publishedRelative {
-                Text(published)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text(data.publishedRelative ?? " ")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 

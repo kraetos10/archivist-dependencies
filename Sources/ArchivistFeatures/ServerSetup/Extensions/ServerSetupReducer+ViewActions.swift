@@ -18,7 +18,10 @@ extension ServerSetupReducer {
     // MARK: - Private Handlers
 
     private func handleNextButtonTapped(state: inout State) -> Effect<Action> {
-        guard !state.registrationDetails.serverAddress.isEmpty else {
+        // The button stays focusable while the health check runs, so
+        // ignore repeat presses here.
+        guard !state.isLoading,
+              !state.registrationDetails.serverAddress.isEmpty else {
             return .none
         }
         state.isLoading = true

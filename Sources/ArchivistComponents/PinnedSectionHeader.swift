@@ -13,8 +13,9 @@ public struct PinnedSectionHeader: View {
             .font(.title3)
             .fontWeight(.semibold)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 48)
-            .padding(.vertical, 16)
+            // No horizontal inset: tvOS content already sits inside the
+            // overscan safe area.
+            .padding(.vertical, TVLayout.sectionHeaderSpacing)
         #else
         Text(title)
             .font(.headline)

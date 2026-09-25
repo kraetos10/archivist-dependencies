@@ -14,6 +14,10 @@ public enum AppTab: Hashable, Sendable {
     #if !os(tvOS)
     case deviceDownloads
     #endif
+    #if os(tvOS)
+    /// tvOS has a Search tab in place of the Channels and Playlists tabs.
+    case search
+    #endif
     case settings
 }
 
@@ -244,7 +248,14 @@ public struct TabReducer {
                 return .send(.settings(.activeTask(.view(.startPolling))))
 
             case .settings(.activeTask(.downloadCompleted)):
+                #if os(tvOS)
+                return .merge(
+                    .send(.channels(.refreshPendingDownloads)),
+                    .send(.search(.refreshPendingDownloads))
+                )
+                #else
                 return .send(.channels(.refreshPendingDownloads))
+                #endif
 
             // Mini-player minimize hooks were removed when we switched to
             // system PiP for minimize. Each VideoDetail dismiss now hands
@@ -282,6 +293,23 @@ public struct TabReducer {
                     state: &state
                 )
             #endif
+            #if os(tvOS)
+            // Search opens channels and playlists over its own tab, so the
+            // only thing it hands up is the server work the home screen's
+            // context menu already does.
+            case .search(.delegate(.markAsWatchedRequested(let video))):
+                return .send(.videoList(.view(.markAsWatchedTapped(video))))
+            case .search(.delegate(.deleteFromServerRequested(let video))):
+                return .send(.videoList(.view(.deleteFromServerTapped(video))))
+            case .search(.channelDetail(.presented(.downloadDetail(.presented(.downloadResult(.success)))))):
+                return .send(.settings(.activeTask(.view(.startPolling))))
+            case .search:
+                return .none
+            // A mark-watched from Search lands here once the server has
+            // the new state; pass it on so the result card updates too.
+            case .videoList(.videoRefreshed(let video)):
+                return .send(.search(.videoUpdated(video)))
+            #endif
             case .videoList, .channels, .playlists, .queue, .settings:
                 return .none
             #if !os(tvOS)
@@ -289,12 +317,6 @@ public struct TabReducer {
                 return .none
             #endif
             #if os(tvOS)
-            case .search(.delegate(.showChannel(let channel))):
-                return .send(.homeChannelTapped(channel))
-            case .search(.delegate(.showPlaylist(let playlist))):
-                return .send(.homePlaylistTapped(playlist))
-            case .search:
-                return .none
             case .setPresentingAllChannels(let presenting):
                 state.presentingAllChannels = presenting
                 return .none

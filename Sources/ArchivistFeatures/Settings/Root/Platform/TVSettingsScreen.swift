@@ -121,6 +121,18 @@ public struct TVSettingsScreen: View {
 
             ThemePickerSection()
 
+            // Above Log Out rather than in a trailing footer: the list only
+            // scrolls to reveal focusable rows, so text after the last
+            // button never came into view.
+            Section {
+                LabeledContent(String.localised("settings.appVersion", table: .settings)) {
+                    Text(appVersionString)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text(String.localised("settings.about", table: .settings))
+            }
+
             Section {
                 Button(role: .destructive) {
                     send(.logoutTapped)
@@ -131,13 +143,6 @@ public struct TVSettingsScreen: View {
                     }
                 }
             }
-
-            Section {
-            } footer: {
-                Text(appVersionString)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
-            }
         }
         .navigationTitle("")
     }
@@ -145,7 +150,7 @@ public struct TVSettingsScreen: View {
     private var appVersionString: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        return "Archivist v\(version) (\(build))"
+        return "\(version) (\(build))"
     }
 }
 #endif

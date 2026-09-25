@@ -14,14 +14,13 @@ public struct TVSearchScreen: View {
 
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 48) {
+            LazyVStack(alignment: .leading, spacing: 24) {
                 if store.isSearching {
                     ProgressView()
                         .tint(Color.Progress.tint)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 48)
-                } else if store.hasSearched && store.videoResults.isEmpty
-                            && store.channelResults.isEmpty && store.playlistResults.isEmpty {
+                } else if store.hasNoResults {
                     emptyState
                 } else {
                     if !store.videoResults.isEmpty {
@@ -35,9 +34,11 @@ public struct TVSearchScreen: View {
                     }
                 }
             }
-            .padding(.vertical, 48)
         }
-        .searchable(text: $store.searchQuery, prompt: String(localized: "Search videos, channels, playlists"))
+        .searchable(
+            text: $store.searchQuery,
+            prompt: String.localised("generic.searchPrompt", table: .generic)
+        )
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
                 TVVideoDetailScreen(store: detailStore)
@@ -45,122 +46,117 @@ public struct TVSearchScreen: View {
             }
             .background(Color.Brand.primary)
         }
+        .fullScreenCover(
+            item: $store.scope(state: \.channelDetail, action: \.channelDetail)
+        ) { channelDetailStore in
+            NavigationStack {
+                TVChannelDetailScreen(store: channelDetailStore)
+                    .background(Color.Brand.primary)
+            }
+            .background(Color.Brand.primary)
+            .fullScreenCover(
+                item: $store.scope(state: \.nestedVideoDetail, action: \.nestedVideoDetail)
+            ) { detailStore in
+                nestedVideoDetail(detailStore)
+            }
+        }
+        .fullScreenCover(
+            item: $store.scope(state: \.playlistDetail, action: \.playlistDetail)
+        ) { playlistDetailStore in
+            NavigationStack {
+                TVPlaylistDetailScreen(store: playlistDetailStore)
+                    .background(Color.Brand.primary)
+            }
+            .background(Color.Brand.primary)
+            .fullScreenCover(
+                item: $store.scope(state: \.nestedVideoDetail, action: \.nestedVideoDetail)
+            ) { detailStore in
+                nestedVideoDetail(detailStore)
+            }
+        }
     }
 
-    // MARK: - Videos
+    /// A video opened from a channel or playlist, over that cover — as the
+    /// home screen does it.
+    private func nestedVideoDetail(_ detailStore: StoreOf<VideoDetailReducer>) -> some View {
+        NavigationStack {
+            TVVideoDetailScreen(store: detailStore)
+                .background(Color.Brand.primary)
+        }
+        .background(Color.Brand.primary)
+    }
+
+    // MARK: - Sections
 
     private var videoResultsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String.localised("generic.videos", table: .generic))
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Text.primary)
-                .padding(.horizontal, 48)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 32) {
-                    ForEach(store.videoResults) { video in
-                        TVVideoCardView(
-                            video: video,
-                            serverConfig: store.serverConfig
-                        ) {
-                            send(.videoTapped(video))
-                        }
-                        .frame(width: 400)
-                    }
+        resultsSection(String.localised("generic.videos", table: .generic)) {
+            ForEach(store.videoResults) { video in
+                TVVideoCardView(
+                    video: video,
+                    serverConfig: store.serverConfig
+                ) {
+                    send(.videoTapped(video))
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 24)
+                .frame(width: TVLayout.cardWidth)
+                .tvVideoContextMenu(
+                    video: video,
+                    onMarkWatched: { send(.markAsWatchedTapped(video)) },
+                    onDelete: { send(.deleteFromServerTapped(video)) }
+                )
             }
-            .scrollClipDisabled()
         }
     }
-
-    // MARK: - Channels
 
     private var channelResultsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String.localised("generic.channels", table: .generic))
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Text.primary)
-                .padding(.horizontal, 48)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 32) {
-                    ForEach(store.channelResults) { channel in
-                        TVChannelCardView(
-                            channel: channel,
-                            serverConfig: store.serverConfig
-                        ) {
-                            send(.channelTapped(channel))
-                        }
-                        .frame(width: 250)
-                    }
+        resultsSection(String.localised("generic.channels", table: .generic)) {
+            ForEach(store.channelResults) { channel in
+                TVChannelCardView(
+                    channel: channel,
+                    serverConfig: store.serverConfig
+                ) {
+                    send(.channelTapped(channel))
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 24)
             }
-            .scrollClipDisabled()
         }
     }
 
-    // MARK: - Playlists
-
     private var playlistResultsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(String.localised("generic.playlists", table: .generic))
+        resultsSection(String.localised("generic.playlists", table: .generic)) {
+            ForEach(store.playlistResults) { playlist in
+                TVPlaylistCardView(
+                    playlist: playlist,
+                    serverConfig: store.serverConfig
+                ) {
+                    send(.playlistTapped(playlist))
+                }
+                .frame(width: TVLayout.cardWidth)
+            }
+        }
+    }
+
+    /// A titled horizontal row of result cards, laid out like the home rows.
+    private func resultsSection<Cards: View>(
+        _ title: String,
+        @ViewBuilder cards: () -> Cards
+    ) -> some View {
+        VStack(alignment: .leading, spacing: TVLayout.sectionHeaderSpacing) {
+            Text(title)
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Text.primary)
-                .padding(.horizontal, 48)
+                .padding(.top, 8)
+                .accessibilityAddTraits(.isHeader)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 32) {
-                    ForEach(store.playlistResults) { playlist in
-                        Button {
-                            send(.playlistTapped(playlist))
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                if let thumbURL = playlist.thumbURL(config: store.serverConfig) {
-                                    AsyncImage(url: thumbURL) { phase in
-                                        switch phase {
-                                        case .success(let image):
-                                            image
-                                                .resizable()
-                                                .aspectRatio(16 / 9, contentMode: .fill)
-                                        default:
-                                            Rectangle()
-                                                .fill(Color.Brand.secondary.opacity(0.3))
-                                                .aspectRatio(16 / 9, contentMode: .fill)
-                                        }
-                                    }
-                                    .frame(width: 300, height: 169)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                }
-
-                                Text(playlist.playlistName)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(Color.Text.primary)
-                                    .lineLimit(1)
-
-                                if let channel = playlist.playlistChannel {
-                                    Text(channel)
-                                        .font(.caption)
-                                        .foregroundStyle(Color.Brand.secondary)
-                                }
-                            }
-                            .frame(width: 300)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
+                    cards()
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 24)
+                .padding(.vertical, TVLayout.rowVerticalPadding)
             }
             .scrollClipDisabled()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .focusSection()
     }
 
     // MARK: - Empty State
@@ -172,7 +168,7 @@ public struct TVSearchScreen: View {
                 // Decorative: the adjacent label carries the meaning.
                 .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
-            Text(String(localized: "No results found"))
+            Text(String.localised("generic.noResults", table: .generic))
                 .font(.headline)
                 .foregroundStyle(Color.Brand.secondary)
         }

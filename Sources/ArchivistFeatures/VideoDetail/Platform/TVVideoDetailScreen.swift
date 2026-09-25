@@ -33,180 +33,13 @@ public struct TVVideoDetailScreen: View {
     public var body: some View {
         ScrollViewReader { scrollProxy in
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Top: thumbnail + info side by side
-                    HStack(alignment: .top, spacing: 48) {
-                        // Thumbnail
-                        thumbnailView
-                            .frame(width: 640, height: 360)
+                VStack(alignment: .leading, spacing: 40) {
+                    hero
+                        .id(Self.topAnchor)
 
-                        // Info
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(store.video.title)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .lineLimit(3)
-
-                            HStack(spacing: 8) {
-                                ChannelThumbView(url: store.channelThumbURL, size: 40)
-
-                                Text(store.video.channelName)
-                                    .fontWeight(.semibold)
-
-                                if let views = store.video.formattedViewCount {
-                                    Text("·")
-                                    Text("\(views) views")
-                                }
-
-                                if let published = store.video.publishedRelative {
-                                    Text("·")
-                                    Text(published)
-                                }
-
-                                if let duration = store.video.durationStr {
-                                    Text("·")
-                                    Text(duration)
-                                }
-
-                                if let quality = store.video.qualityLabel {
-                                    Text(quality)
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.Text.primary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 4)
-                                        .background(Color.Surface.highlight)
-                                        .clipShape(Capsule())
-                                }
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-
-                            Button {
-                                send(.playTapped)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    // Always Play: a partly-watched video asks
-                                    // resume-or-restart once pressed, so the
-                                    // button can't promise either.
-                                    Image(systemName: "play.fill")
-                                    Text(String.localised("video.play", table: .videos))
-                                }
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .focused($focusedControl, equals: .play)
-
-                            Button {
-                                send(.toggleWatchedTapped)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: store.isWatched ? "eye.fill" : "eye")
-                                    Text(
-                                        store.isWatched
-                                            ? String.localised("video.markAsUnwatched", table: .videos)
-                                            : String.localised("video.markAsWatched", table: .videos)
-                                    )
-                                }
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(.bordered)
-
-                            if let linkedDescription = store.video.linkedDescription {
-                                Text(linkedDescription)
-                                    .font(.body)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(store.isDescriptionExpanded ? nil : 4)
-
-                                Button {
-                                    send(.toggleDescription, animation: .default)
-                                } label: {
-                                    Text(
-                                        store.isDescriptionExpanded
-                                            ? String.localised("generic.showLess", table: .generic)
-                                            : String.localised("generic.showMore", table: .generic)
-                                    )
-                                        .font(.callout)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 48)
-                    .padding(.top, 32)
-                    .id(Self.topAnchor)
-
-                    // Play Next
-                    if !playNextItems.isEmpty {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(String.localised("video.playNext", table: .videos))
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 48)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 40) {
-                                    ForEach(playNextItems) { item in
-                                        playNextCard(item)
-                                            .playNextTransition()
-                                    }
-                                }
-                                .animation(.default, value: playNextItems.map(\.id))
-                                .padding(.horizontal, 48)
-                            }
-                        }
-                        .padding(.top, 48)
-                        .padding(.bottom, 24)
-                    }
-
-                    // Up Next
-                    if !store.nextVideos.isEmpty {
-                        VStack(alignment: .leading, spacing: 24) {
-                            Text(String.localised("video.upNext", table: .videos))
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 48)
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 32) {
-                                    ForEach(store.nextVideos.prefix(10)) { video in
-                                        TVVideoCardView(
-                                            video: video,
-                                            serverConfig: store.serverConfig
-                                        ) {
-                                            send(.nextUpVideoTapped(video))
-                                        }
-                                        .frame(width: 400)
-                                        .contextMenu {
-                                            Button {
-                                                send(.addUpNextToPlayNextTapped(video))
-                                            } label: {
-                                                Label(
-                                                    String.localised("video.playNext", table: .videos),
-                                                    systemImage: "text.line.first.and.arrowtriangle.forward"
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 48)
-                                .padding(.vertical, 24)
-                            }
-                        }
-                        .padding(.bottom, 24)
-                    }
-
-                    // Bottom: similar videos horizontal scroll
+                    playNextSection
+                    upNextSection
                     similarSection
-                        .padding(.top, 48)
-                        .padding(.bottom, 80)
                 }
             }
             // Land on Play when the screen first appears, rather than wherever
@@ -233,18 +66,120 @@ public struct TVVideoDetailScreen: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: Binding(
-            get: { store.isPlaying },
-            set: { if !$0 { send(.stopPlayback) } }
-        )) {
+        // Menu in the player dismisses this cover, which stops playback.
+        .fullScreenCover(isPresented: $store.isPlaying.sending(\.view.playerPresentationChanged)) {
             TVVLCPlayerView()
                 .ignoresSafeArea()
-            .onExitCommand {
-                send(.stopPlayback)
-            }
+        }
+        .fullScreenCover(isPresented: $store.isDescriptionExpanded) {
+            TVFullDescriptionView(
+                title: store.video.title,
+                blocks: store.descriptionBlocks
+            )
         }
         .onAppear { send(.viewDidAppear) }
         .alert($store.scope(state: \.alert, action: \.alert))
+    }
+
+    // MARK: - Hero
+
+    private var hero: some View {
+        HStack(alignment: .top, spacing: 48) {
+            thumbnailView
+                .frame(width: 640, height: 360)
+
+            VStack(alignment: .leading, spacing: 20) {
+                Text(store.video.title)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .lineLimit(2)
+
+                metadata
+
+                HStack(spacing: 24) {
+                    Button {
+                        send(.playTapped)
+                    } label: {
+                        // Always Play: a partly-watched video asks
+                        // resume-or-restart once pressed, so the
+                        // button can't promise either.
+                        Label(String.localised("video.play", table: .videos), systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .focused($focusedControl, equals: .play)
+
+                    Button {
+                        send(.toggleWatchedTapped)
+                    } label: {
+                        Label(
+                            store.isWatched
+                                ? String.localised("video.markAsUnwatched", table: .videos)
+                                : String.localised("video.markAsWatched", table: .videos),
+                            systemImage: store.isWatched ? "eye.fill" : "eye"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if let description = store.descriptionPreview {
+                    // Clamped here; the whole text opens in its own view,
+                    // where it can be scrolled with the remote.
+                    TVDescriptionCard(text: description) {
+                        send(.toggleDescription)
+                    }
+                    .accessibilityLabel(String.localised("video.description", table: .videos))
+                    .accessibilityValue(description)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Up/down inside the info column stays inside it rather than
+            // jumping diagonally to whatever lies below the thumbnail.
+            .focusSection()
+        }
+    }
+
+    private var metadata: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ChannelThumbView(url: store.channelThumbURL, size: 36)
+                    // Decorative: the channel name beside it says who it is.
+                    .accessibilityHidden(true)
+
+                Text(store.video.channelName)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                if let details = store.viewsAndPublishedText {
+                    Text("·")
+                        .accessibilityHidden(true)
+                    Text(details)
+                        .lineLimit(1)
+                }
+            }
+
+            if store.hasQualityOrDuration {
+                HStack(spacing: 12) {
+                    if let quality = store.video.qualityLabel {
+                        Text(quality)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Text.primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.Surface.highlight)
+                            .clipShape(Capsule())
+                    }
+
+                    if let duration = store.video.durationStr {
+                        Text(duration)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
     }
 
     // MARK: - Thumbnail
@@ -274,96 +209,85 @@ public struct TVVideoDetailScreen: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: TVLayout.cornerRadius))
     }
 
-    // MARK: - Play Next Card
+    // MARK: - Rows
 
-    private func playNextCard(_ item: PlayNextItem) -> some View {
-        Button {
-            send(.playNextItemTapped(item), animation: .default)
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .bottomTrailing) {
-                    if let thumbPath = item.thumbUrl,
-                       let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
-                        AsyncImage(url: thumbURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            default:
-                                Rectangle().fill(Color.Brand.secondary.opacity(0.3))
+    @ViewBuilder
+    private var playNextSection: some View {
+        if !playNextItems.isEmpty {
+            section(String.localised("video.playNext", table: .videos)) {
+                cardRow {
+                    ForEach(playNextItems) { item in
+                        TVVideoCardView(
+                            playNextItem: item,
+                            serverConfig: store.serverConfig
+                        ) {
+                            send(.playNextItemTapped(item), animation: .default)
+                        }
+                        .frame(width: TVLayout.cardWidth)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                send(.removeFromPlayNextTapped(item.id), animation: .default)
+                            } label: {
+                                Label(
+                                    String.localised("video.removeFromPlayNext", table: .videos),
+                                    systemImage: "minus.circle"
+                                )
                             }
                         }
-                    } else {
-                        Rectangle().fill(Color.Brand.secondary.opacity(0.3))
-                    }
-
-                    if let duration = item.duration {
-                        Text(duration)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.black.opacity(0.7))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                            .padding(6)
+                        .playNextTransition()
                     }
                 }
-                .frame(width: 400, height: 225)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                Text(item.title)
-                    .font(.callout)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    Text(item.channelName)
-
-                    if let published = item.publishedRelative {
-                        Text("· \(published)")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-            .frame(width: 400)
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button(role: .destructive) {
-                send(.removeFromPlayNextTapped(item.id), animation: .default)
-            } label: {
-                Label(String.localised("video.removeFromPlayNext", table: .videos), systemImage: "minus.circle")
+                .animation(.default, value: playNextItems.map(\.id))
             }
         }
     }
 
-    // MARK: - Similar Videos
-
-    private var similarSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text(String.localised("video.similarVideos", table: .videos))
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.horizontal, 48)
-
-            if store.isLoadingSimilar {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 32) {
-                        ForEach(VideoResponse.placeholders.prefix(4)) { video in
-                            TVVideoCardView(
-                                video: video,
-                                serverConfig: store.serverConfig
-                            )
-                            .frame(width: 400)
-                            .redacted(reason: .placeholder)
+    @ViewBuilder
+    private var upNextSection: some View {
+        if !store.nextVideos.isEmpty {
+            section(String.localised("video.upNext", table: .videos)) {
+                cardRow {
+                    ForEach(store.nextVideos.prefix(10)) { video in
+                        TVVideoCardView(
+                            video: video,
+                            serverConfig: store.serverConfig
+                        ) {
+                            send(.nextUpVideoTapped(video))
+                        }
+                        .frame(width: TVLayout.cardWidth)
+                        .contextMenu {
+                            Button {
+                                send(.addUpNextToPlayNextTapped(video))
+                            } label: {
+                                Label(
+                                    String.localised("video.playNext", table: .videos),
+                                    systemImage: "text.line.first.and.arrowtriangle.forward"
+                                )
+                            }
                         }
                     }
-                    .padding(.horizontal, 48)
+                }
+            }
+        }
+    }
+
+    private var similarSection: some View {
+        section(String.localised("video.similarVideos", table: .videos)) {
+            if store.isLoadingSimilar {
+                cardRow {
+                    ForEach(VideoResponse.placeholders.prefix(4)) { video in
+                        TVVideoCardView(
+                            video: video,
+                            serverConfig: store.serverConfig
+                        )
+                        .frame(width: TVLayout.cardWidth)
+                        .redacted(reason: .placeholder)
+                        // Placeholders must not take focus.
+                        .disabled(true)
+                    }
                 }
             } else if store.similarVideos.isEmpty {
                 VStack(spacing: 12) {
@@ -379,23 +303,79 @@ public struct TVVideoDetailScreen: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 48)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 32) {
-                        ForEach(store.similarVideos) { video in
-                            TVVideoCardView(
-                                video: video,
-                                serverConfig: store.serverConfig
-                            ) {
-                                send(.similarVideoTapped(video))
-                            }
-                            .frame(width: 400)
+                cardRow {
+                    ForEach(store.similarVideos) { video in
+                        TVVideoCardView(
+                            video: video,
+                            serverConfig: store.serverConfig
+                        ) {
+                            send(.similarVideoTapped(video))
                         }
+                        .frame(width: TVLayout.cardWidth)
                     }
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 24)
                 }
             }
         }
+    }
+
+    private func section<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: TVLayout.sectionHeaderSpacing) {
+            Text(title)
+                .font(.title3)
+                .fontWeight(.semibold)
+            content()
+        }
+    }
+
+    /// A horizontal row of cards: room above and below for the focus lift,
+    /// unclipped so lifted cards can overhang, and its own focus section so
+    /// up/down lands in the row rather than diagonally past it.
+    private func cardRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
+                content()
+            }
+            .padding(.vertical, TVLayout.rowVerticalPadding)
+        }
+        .scrollClipDisabled()
+        .focusSection()
+    }
+}
+
+// MARK: - Play Next card
+
+extension PlayNextItem {
+    /// The queue row in the shape the shared card takes.
+    var cardData: CardData {
+        CardData(
+            videoId: videoId,
+            title: title,
+            channelName: channelName,
+            thumbPath: thumbUrl,
+            duration: duration,
+            publishedRelative: publishedRelative,
+            isWatched: false,
+            isPartiallyWatched: false,
+            watchProgress: 0,
+            isPending: false
+        )
+    }
+}
+
+extension TVVideoCardView {
+    /// A Play Next queue row as the standard card, so the row matches Up
+    /// Next and Similar exactly.
+    init(
+        playNextItem: PlayNextItem,
+        serverConfig: ServerConfig,
+        onTap: (() -> Void)? = nil
+    ) {
+        self.data = playNextItem.cardData
+        self.serverConfig = serverConfig
+        self.onTap = onTap
     }
 }
 #endif

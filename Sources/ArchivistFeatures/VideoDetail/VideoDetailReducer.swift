@@ -207,6 +207,8 @@ public struct VideoDetailReducer {
             case stopPlayback
             case dismissTapped
             case minimizeRequested
+            /// The tvOS player cover was shown or dismissed.
+            case playerPresentationChanged(Bool)
             case channelTapped
             case downloadTapped
             case deleteDownloadTapped
@@ -303,3 +305,37 @@ public struct VideoDetailReducer {
         }
     }
 }
+
+#if os(tvOS)
+// MARK: - tvOS display
+
+extension VideoDetailReducer.State {
+    /// "1.2K views · 3 days ago", the tvOS hero's first metadata line after
+    /// the channel name.
+    var viewsAndPublishedText: String? {
+        let parts = [
+            video.formattedViewCount.map { String.localised("video.viewCount \($0)", table: .videos) },
+            video.publishedRelative
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Whether the hero's second metadata line (quality pill, duration) has
+    /// anything to show.
+    var hasQualityOrDuration: Bool {
+        video.qualityLabel != nil || video.durationStr != nil
+    }
+
+    /// The description as plain text, for the clamped preview in the hero.
+    var descriptionPreview: String? {
+        guard let text = video.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return nil }
+        return text
+    }
+
+    /// The description cut into focusable blocks for the full-text view.
+    var descriptionBlocks: [String] {
+        descriptionPreview?.descriptionBlocks() ?? []
+    }
+}
+#endif

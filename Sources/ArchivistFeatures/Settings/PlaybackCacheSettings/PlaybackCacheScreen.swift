@@ -89,27 +89,28 @@ public struct PlaybackCacheScreen: View {
     private var tvBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
+                // tvOS settings sub-screens title themselves in the content
+                // (the navigation bar title is blanked under the tab bar).
                 Text(String.localised("video.cache.title", table: .videos))
-                    .font(.largeTitle)
+                    .font(.title2)
                     .fontWeight(.bold)
-                    .padding(.top, 40)
 
                 tvPrebufferSection
 
                 tvCacheSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 80)
-            .padding(.bottom, 80)
+            .padding(.vertical, TVLayout.rowVerticalPadding)
         }
-        .background(Color.Brand.primary)
+        .background(Color.Brand.primary.ignoresSafeArea())
+        .navigationTitle("")
         .onAppear { send(.viewDidAppear) }
     }
 
     private var tvPrebufferSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: TVLayout.sectionHeaderSpacing) {
             Text(String.localised("video.prebuffer.header", table: .videos))
-                .font(.title2)
+                .font(.title3)
                 .fontWeight(.semibold)
 
             Toggle(isOn: Binding(store.withState { $0.$prebufferEnabled })) {
@@ -121,17 +122,42 @@ public struct PlaybackCacheScreen: View {
                 }
             }
 
+            // Reachable: the cache section's controls follow it.
             Text(String.localised("video.prebuffer.tv.footer", table: .videos))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
     }
 
+    /// Explanatory text and the read-only stats sit above the controls:
+    /// the focus engine only scrolls to reveal focusable views, so text
+    /// below the last control (or below a disabled Clear button) could
+    /// never be scrolled into view.
     private var tvCacheSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: TVLayout.sectionHeaderSpacing) {
             Text(String.localised("video.cache.header", table: .videos))
-                .font(.title2)
+                .font(.title3)
                 .fontWeight(.semibold)
+
+            Text(String.localised("video.cache.footer", table: .videos))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Text(String.localised("video.cache.totalSize", table: .videos))
+                Spacer()
+                Text(formattedSize)
+                    .foregroundStyle(Color.Brand.secondary)
+            }
+            .accessibilityElement(children: .combine)
+
+            HStack {
+                Text(String.localised("video.cache.videos", table: .videos))
+                Spacer()
+                Text("\(store.entryCount)")
+                    .foregroundStyle(Color.Brand.secondary)
+            }
+            .accessibilityElement(children: .combine)
 
             Picker(
                 String.localised("video.cache.sizeLimit", table: .videos),
@@ -142,19 +168,6 @@ public struct PlaybackCacheScreen: View {
                 }
             }
 
-            HStack {
-                Text(String.localised("video.cache.totalSize", table: .videos))
-                Spacer()
-                Text(formattedSize)
-                    .foregroundStyle(Color.Brand.secondary)
-            }
-            HStack {
-                Text(String.localised("video.cache.videos", table: .videos))
-                Spacer()
-                Text("\(store.entryCount)")
-                    .foregroundStyle(Color.Brand.secondary)
-            }
-
             Button(role: .destructive) {
                 send(.clearCacheTapped)
             } label: {
@@ -163,10 +176,6 @@ public struct PlaybackCacheScreen: View {
                     .padding(.vertical, 8)
             }
             .disabled(store.entryCount == 0)
-
-            Text(String.localised("video.cache.footer", table: .videos))
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
     }
     #endif

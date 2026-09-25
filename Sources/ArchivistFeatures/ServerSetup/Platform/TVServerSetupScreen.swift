@@ -29,11 +29,33 @@ public struct TVServerSetupScreen: View {
 private struct TVServerSetupContentView: View {
     @Bindable var store: StoreOf<ServerSetupReducer>
 
+    /// Keyboard submit walks the form: URL → port → Next.
+    private enum Field: Hashable {
+        case serverURL
+        case port
+        case next
+    }
+
+    @FocusState private var focusedField: Field?
+
     public var body: some View {
-        VStack(spacing: 48) {
+        // Scrolls when the content outgrows the ~960pt safe height (large
+        // Dynamic Type); centred otherwise.
+        GeometryReader { geometry in
+            ScrollView {
+                content
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+        }
+        .alert($store.scope(state: \.alert, action: \.alert))
+    }
+
+    private var content: some View {
+        VStack(spacing: 40) {
             LottieView(animation: LottieAnimationFile.server.animation)
                 .playing(loopMode: .playOnce)
-                .frame(width: 250, height: 250)
+                .frame(width: 160, height: 160)
+                .accessibilityHidden(true)
 
             VStack(spacing: 16) {
                 Text(String.localised("login.title", table: .login))
@@ -50,26 +72,48 @@ private struct TVServerSetupContentView: View {
                     String.localised("login.serverUrl", table: .login),
                     text: $store.registrationDetails.serverAddress
                 )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .textContentType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.next)
+                .focused($focusedField, equals: .serverURL)
+                .onSubmit { focusedField = .port }
 
-                TextField(String.localised("login.port", table: .login), text: $store.registrationDetails.port)
+                TextField(
+                    String.localised("login.port", table: .login),
+                    text: $store.registrationDetails.port
+                )
+                .keyboardType(.numberPad)
+                .submitLabel(.next)
+                .focused($focusedField, equals: .port)
+                .onSubmit { focusedField = .next }
 
-                Toggle(String.localised("login.useHttp", table: .login), isOn: $store.registrationDetails.useHTTP)
+                Toggle(
+                    String.localised("login.useHttp", table: .login),
+                    isOn: $store.registrationDetails.useHTTP
+                )
             }
             .frame(maxWidth: 500)
 
-            if store.isLoading {
-                ProgressView()
-            } else {
-                Button(String.localised("generic.next", table: .generic)) {
-                    send(.nextButtonTapped)
+            // The button stays in place during the health check, with the
+            // spinner inside it: swapping it for a ProgressView took away
+            // the focused view, so focus jumped away and didn't come back
+            // after an error. The reducer ignores presses while loading.
+            Button {
+                send(.nextButtonTapped)
+            } label: {
+                HStack(spacing: 16) {
+                    if store.isLoading {
+                        ProgressView()
+                    }
+                    Text(String.localised("generic.next", table: .generic))
                 }
-                .disabled(store.registrationDetails.serverAddress.isEmpty)
             }
+            .disabled(store.registrationDetails.serverAddress.isEmpty)
+            .focused($focusedField, equals: .next)
         }
-        .padding(64)
-        .alert($store.scope(state: \.alert, action: \.alert))
+        .padding(.vertical, 40)
     }
 }
 #endif

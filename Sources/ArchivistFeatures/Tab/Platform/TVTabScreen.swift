@@ -23,9 +23,9 @@ public struct TVTabScreen: View {
             }
 
             Tab(
-                String(localized: "Search"),
+                String.localised("generic.search", table: .generic),
                 systemImage: "magnifyingglass",
-                value: AppTab.channels
+                value: AppTab.search
             ) {
                 TVSearchScreen(store: store.scope(state: \.search, action: \.search))
             }

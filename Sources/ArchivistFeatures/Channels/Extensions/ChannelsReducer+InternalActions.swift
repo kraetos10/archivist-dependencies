@@ -43,7 +43,9 @@ extension ChannelsReducer {
         _ response: PaginatedResponse<ChannelResponse>,
         state: inout State
     ) -> Effect<Action> {
-        if state.isLoading {
+        let wasFirstPage = state.isLoading
+        let visibleCountBefore = wasFirstPage ? 0 : state.filteredChannels.count
+        if wasFirstPage {
             state.channels = IdentifiedArrayOf(uniqueElements: response.data)
         } else {
             for channel in response.data {
@@ -55,6 +57,16 @@ extension ChannelsReducer {
         state.isLoading = false
         state.isLoadingMore = false
         state.hasLoaded = true
+
+        // Paging is driven by the last *rendered* card appearing. Under a
+        // filter, a page can add nothing visible, so that card never
+        // re-appears and paging would stall — fetch on until something
+        // shows up or the pages run out.
+        if state.filter != .all,
+           state.filteredChannels.count == visibleCountBefore,
+           state.currentPage < state.lastPage {
+            return .send(.view(.lastItemAppeared))
+        }
         return .none
     }
 

@@ -123,11 +123,21 @@ extension DownloadsReducer {
     ) {
         guard let index = state.downloads.index(id: videoId) else { return }
         let nextIndex = state.downloads.index(after: index)
+        let neighbourID: String?
         if nextIndex < state.downloads.endIndex {
-            state.scrollPositionID = state.downloads[nextIndex].id
+            neighbourID = state.downloads[nextIndex].id
         } else if index > state.downloads.startIndex {
             let prevIndex = state.downloads.index(before: index)
-            state.scrollPositionID = state.downloads[prevIndex].id
+            neighbourID = state.downloads[prevIndex].id
+        } else {
+            neighbourID = nil
+        }
+        guard let neighbourID else { return }
+        state.scrollPositionID = neighbourID
+        // tvOS: the focused card is about to vanish, which would drop focus
+        // entirely; hand it to the card that takes its place.
+        if state.focusedDownloadID == videoId || state.focusedDownloadID == nil {
+            state.focusedDownloadID = neighbourID
         }
     }
 

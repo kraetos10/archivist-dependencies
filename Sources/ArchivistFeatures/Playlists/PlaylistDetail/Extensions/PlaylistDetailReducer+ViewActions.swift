@@ -40,7 +40,14 @@ extension PlaylistDetailReducer {
         case .loopToggled:
             state.$loopPlaylistEnabled.withLock { $0.toggle() }
             return .none
+        case .descriptionTapped:
+            return handleDescriptionTapped(state: &state)
         }
+    }
+
+    private func handleDescriptionTapped(state: inout State) -> Effect<Action> {
+        state.isShowingFullDescription = true
+        return .none
     }
 
     // MARK: - Private Handlers

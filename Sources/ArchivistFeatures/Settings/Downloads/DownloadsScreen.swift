@@ -13,9 +13,15 @@ public struct DownloadsScreen: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    #if os(tvOS)
+    /// Mirrors `store.focusedDownloadID`, so the reducer can hand focus to
+    /// the neighbouring card when the focused one leaves the queue.
+    @FocusState private var focusedDownloadID: String?
+    #endif
+
     private var columns: [GridItem] {
         #if os(tvOS)
-        [GridItem(.adaptive(minimum: 400), spacing: 48)]
+        TVLayout.cardGridColumns
         #else
         if horizontalSizeClass == .regular {
             Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
@@ -27,9 +33,22 @@ public struct DownloadsScreen: View {
 
     public var body: some View {
         ScrollView {
+            #if os(tvOS)
+            // tvOS settings sub-screens title themselves in the content
+            // (the navigation bar title is blanked under the tab bar).
+            Text(String.localised("settings.queue", table: .settings))
+                .font(.title2)
+                .fontWeight(.bold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, TVLayout.rowVerticalPadding)
+            #endif
+
             queueContent
         }
         .scrollPosition(id: $store.scrollPositionID, anchor: .center)
+        #if os(tvOS)
+        .bind($store.focusedDownloadID, to: $focusedDownloadID)
+        #endif
         .background(Color.Brand.primary.ignoresSafeArea())
         .refreshable { send(.pullToRefreshTriggered) }
         #if os(tvOS)
@@ -74,6 +93,14 @@ public struct DownloadsScreen: View {
         #endif
     }
 
+    private var gridSpacing: CGFloat {
+        #if os(tvOS)
+        TVLayout.cardSpacing
+        #else
+        16
+        #endif
+    }
+
     // MARK: - Queue Content
 
     private var queueContent: some View {
@@ -94,7 +121,7 @@ public struct DownloadsScreen: View {
                     description: String.localised("video.empty.tryDifferentSearch", table: .videos)
                 )
             } else {
-                LazyVGrid(columns: columns, spacing: 16) {
+                LazyVGrid(columns: columns, spacing: gridSpacing) {
                     if store.isLoading && store.downloads.isEmpty {
                         ForEach(DownloadResponse.placeholders) { download in
                             #if os(tvOS)
@@ -103,6 +130,7 @@ public struct DownloadsScreen: View {
                                 serverConfig: store.serverConfig
                             )
                             .redacted(reason: .placeholder)
+                            .disabled(true)
                             #else
                             VideoCardView(
                                 download: download,
@@ -120,6 +148,7 @@ public struct DownloadsScreen: View {
                             ) {
                                 send(.downloadTapped(download))
                             }
+                            .focused($focusedDownloadID, equals: download.id)
                             .onAppear {
                                 // `downloads` is the unfiltered page buffer:
                                 // while searching, its last item isn't
@@ -146,8 +175,15 @@ public struct DownloadsScreen: View {
                         }
                     }
                 }
+                // Without it `scrollPosition(id:)` has no ids to resolve,
+                // so the scroll after a removal did nothing.
+                .scrollTargetLayout()
                 .animation(.default, value: filtered.map(\.id))
+                #if os(tvOS)
+                .padding(.vertical, TVLayout.rowVerticalPadding)
+                #else
                 .padding()
+                #endif
 
                 if store.isLoadingMore {
                     ProgressView()

@@ -9,6 +9,8 @@ public struct TVChannelCardView: View {
 
     @FocusState private var isFocused: Bool
 
+    private static let avatarSize: CGFloat = 120
+
     public init(
         channel: ChannelResponse,
         serverConfig: ServerConfig,
@@ -23,18 +25,19 @@ public struct TVChannelCardView: View {
         Button(action: action) {
             VStack(spacing: 16) {
                 thumbnailView
+                    .tvCardFocusEffect(isFocused, cornerRadius: Self.avatarSize / 2)
                 infoView
             }
+            // A fixed width, so a long name truncates instead of widening
+            // the card and throwing off the row's spacing.
+            .frame(width: TVLayout.channelCardWidth)
         }
         .buttonStyle(TVCardButtonStyle())
         .focused($isFocused)
-        .scaleEffect(isFocused ? 1.05 : 1.0)
-        .shadow(color: isFocused ? .white.opacity(0.5) : .clear, radius: isFocused ? 20 : 0)
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 
     private var thumbnailView: some View {
-        ChannelThumbView(url: thumbnailURL, size: 120)
+        ChannelThumbView(url: thumbnailURL, size: Self.avatarSize)
     }
 
     private var infoView: some View {
@@ -43,11 +46,10 @@ public struct TVChannelCardView: View {
                 .font(.headline)
                 .lineLimit(1)
 
-            if let subs = channel.formattedSubs {
-                Text(String.localised("\(subs) subscribers"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text(channel.formattedSubs.map { String.localised("\($0) subscribers") } ?? " ")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 

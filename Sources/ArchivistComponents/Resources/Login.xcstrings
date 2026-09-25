@@ -627,6 +627,17 @@
           }
         }
       }
+    },
+    "login.channelFilter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Channel filter"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

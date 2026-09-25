@@ -14,6 +14,8 @@ public struct PlaylistDetailReducer {
         var isEditing = false
         var entryThumbnails: [String: String] = [:]
         var availableVideoIDs: Set<String> = []
+        /// tvOS: the full description is presented over the screen.
+        var isShowingFullDescription = false
         @Shared(.appStorage("loopPlaylist")) var loopPlaylistEnabled = false
         @Presents var alert: AlertState<AlertAction>?
         @Presents var videoPicker: VideoPickerReducer.State?
@@ -40,6 +42,16 @@ public struct PlaylistDetailReducer {
             return result
         }
 
+        /// The description split into non-empty lines, one focus stop each
+        /// on the tvOS full-description screen.
+        var descriptionBlocks: [String] {
+            (playlist.playlistDescription ?? "").descriptionBlocks()
+        }
+
+        func isEntryAvailable(_ entry: PlaylistEntry) -> Bool {
+            entry.youtubeId.map { availableVideoIDs.contains($0) } ?? false
+        }
+
         var isCustomPlaylist: Bool {
             playlist.playlistType == .custom
         }
@@ -56,8 +68,9 @@ public struct PlaylistDetailReducer {
         case confirmServerDownload(String)
     }
 
-    public enum Action: ViewAction {
+    public enum Action: ViewAction, BindableAction {
         case view(View)
+        case binding(BindingAction<State>)
         case alert(PresentationAction<AlertAction>)
         case delegate(Delegate)
         case playlistResult(Result<PlaylistResponse, Error>)
@@ -82,6 +95,7 @@ public struct PlaylistDetailReducer {
             case queueServerDownloadTapped(PlaylistEntry)
             case markAsWatchedTapped(PlaylistEntry)
             case loopToggled
+            case descriptionTapped
         }
 
         public enum Delegate: Equatable, Sendable {
@@ -100,10 +114,13 @@ public struct PlaylistDetailReducer {
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
+            case .binding:
+                return .none
             case .alert(.presented(.confirmUnsubscribe)):
                 return handleUnsubscribeConfirmed(state: &state)
             case .alert(.presented(.confirmServerDownload(let videoId))):

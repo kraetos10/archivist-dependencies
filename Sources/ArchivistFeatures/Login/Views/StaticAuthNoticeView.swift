@@ -7,6 +7,16 @@ import SwiftUI
 struct StaticAuthNoticeView: View {
     let variable: String
 
+    // tvOS sits at 10ft on a much larger canvas, so the card gets more
+    // room; iOS keeps its original metrics.
+    #if os(tvOS)
+    private let contentPadding: CGFloat = 32
+    private let cornerRadius: CGFloat = 20
+    #else
+    private let contentPadding: CGFloat = 16
+    private let cornerRadius: CGFloat = 12
+    #endif
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label {
@@ -34,12 +44,12 @@ struct StaticAuthNoticeView: View {
                 #endif
         }
         .foregroundStyle(Color.Text.primary)
-        .padding(16)
+        .padding(contentPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.Surface.highlight)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(Color.Brand.secondary, lineWidth: 2)
         }
     }

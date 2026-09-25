@@ -24,6 +24,9 @@ extension LoginReducer {
     // MARK: - Private Handlers
 
     private func handleLoginButtonTapped(state: inout State) -> Effect<Action> {
+        // The button stays focusable (and the field submittable) while a
+        // login is in flight, so ignore repeats here.
+        guard !state.isLoading else { return .none }
         guard state.hasConfirmedStaticAuthDisabled else {
             state.alert = .confirmStaticAuthDisabled
             return .none

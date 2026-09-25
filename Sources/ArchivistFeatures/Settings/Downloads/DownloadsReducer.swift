@@ -24,6 +24,9 @@ public struct DownloadsReducer {
         var searchResults: IdentifiedArrayOf<DownloadResponse> = []
         var isSearching = false
         var scrollPositionID: String?
+        /// tvOS: the focused card, bound to the screen's focus state so a
+        /// removal can move focus to the neighbouring card.
+        var focusedDownloadID: String?
         @Presents var downloadDetail: DownloadDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 

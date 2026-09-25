@@ -12,15 +12,13 @@ public struct TVPlaylistsScreen: View {
         self.store = store
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 400), spacing: 48)]
-
     public var body: some View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             ScrollView {
                 if store.hasLoaded && store.playlists.isEmpty {
                     emptyStateView
                 } else {
-                    LazyVGrid(columns: columns, spacing: 48) {
+                    LazyVGrid(columns: TVLayout.cardGridColumns, spacing: TVLayout.cardSpacing) {
                         if store.isLoading && store.playlists.isEmpty {
                             ForEach(PlaylistResponse.placeholders) { playlist in
                                 TVPlaylistCardView(
@@ -28,6 +26,7 @@ public struct TVPlaylistsScreen: View {
                                     serverConfig: store.serverConfig
                                 )
                                 .redacted(reason: .placeholder)
+                                .disabled(true)
                             }
                         } else {
                             ForEach(store.playlists) { playlist in
@@ -45,7 +44,8 @@ public struct TVPlaylistsScreen: View {
                             }
                         }
                     }
-                    .padding(48)
+                    .focusSection()
+                    .padding(.vertical, TVLayout.rowVerticalPadding)
 
                     if store.isLoadingMore {
                         ProgressView()

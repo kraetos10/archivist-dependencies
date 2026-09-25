@@ -18,6 +18,22 @@ public struct TVSearchReducer {
         var hasSearched = false
         var lastSearchedQuery: String = ""
         @Presents var videoDetail: VideoDetailReducer.State?
+        /// Channels and playlists open over the Search tab itself, not
+        /// through the home screen's covers — those aren't on screen while
+        /// Search is the selected tab.
+        @Presents var channelDetail: ChannelDetailReducer.State?
+        @Presents var playlistDetail: PlaylistDetailReducer.State?
+        /// A video opened from inside `channelDetail` or `playlistDetail`.
+        /// Kept apart from `videoDetail` because it's presented over those
+        /// covers rather than over the results.
+        @Presents var nestedVideoDetail: VideoDetailReducer.State?
+
+        var hasNoResults: Bool {
+            hasSearched
+                && videoResults.isEmpty
+                && channelResults.isEmpty
+                && playlistResults.isEmpty
+        }
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -26,6 +42,14 @@ public struct TVSearchReducer {
         case delegate(Delegate)
         case searchResult(Result<SearchResponse, Error>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
+        case channelDetail(PresentationAction<ChannelDetailReducer.Action>)
+        case playlistDetail(PresentationAction<PlaylistDetailReducer.Action>)
+        case nestedVideoDetail(PresentationAction<VideoDetailReducer.Action>)
+        /// A video changed elsewhere (marked watched from a result's
+        /// context menu), so its result card shows the new state.
+        case videoUpdated(VideoResponse)
+        /// A server download finished; an open channel reloads its list.
+        case refreshPendingDownloads
 
         @CasePathable
         public enum View {
@@ -33,11 +57,15 @@ public struct TVSearchReducer {
             case videoTapped(VideoResponse)
             case channelTapped(ChannelResponse)
             case playlistTapped(PlaylistResponse)
+            case markAsWatchedTapped(VideoResponse)
+            case deleteFromServerTapped(VideoResponse)
         }
 
         public enum Delegate: Equatable, Sendable {
-            case showChannel(ChannelResponse)
-            case showPlaylist(PlaylistResponse)
+            /// The parent owns the server write — the same one the home
+            /// screen's context menu uses.
+            case markAsWatchedRequested(VideoResponse)
+            case deleteFromServerRequested(VideoResponse)
         }
     }
 
@@ -54,81 +82,67 @@ public struct TVSearchReducer {
                 return handleSearchQueryChanged(state: &state)
             case .binding:
                 return .none
-            case .view(.searchSubmitted):
-                return performSearch(state: &state)
-            case .view(.videoTapped(let video)):
-                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
-                state.videoDetail = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video,
-                    nextVideos: [],
-                    shouldAutoPlayNextVideo: autoPlayEnabled
-                )
-                return .none
-            case .view(.channelTapped(let channel)):
-                return .send(.delegate(.showChannel(channel)))
-            case .view(.playlistTapped(let playlist)):
-                return .send(.delegate(.showPlaylist(playlist)))
-            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
-                state.videoDetail = nil
-                return .none
-            case .videoDetail(.presented(.delegate(.didDismiss))):
+            case .view(let viewAction):
+                return handleViewAction(viewAction, state: &state)
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))),
+                 .videoDetail(.presented(.delegate(.didDismiss))):
                 state.videoDetail = nil
                 return .none
             case .videoDetail:
                 return .none
+            case .channelDetail(.presented(.delegate(.videoSelected(let video, let nextVideos)))):
+                return handleChannelVideoSelected(
+                    video,
+                    nextVideos: nextVideos,
+                    state: &state
+                )
+            case .channelDetail(.presented(.unsubscribeResult(.success))):
+                state.channelDetail = nil
+                return .none
+            case .channelDetail:
+                return .none
+            case .playlistDetail(.presented(.delegate(
+                .showVideo(let video, let nextVideos, let loopVideoIds)
+            ))):
+                return handlePlaylistVideoSelected(
+                    video,
+                    nextVideos: nextVideos,
+                    loopVideoIds: loopVideoIds,
+                    state: &state
+                )
+            case .playlistDetail(.presented(.unsubscribeResult(.success))):
+                state.playlistDetail = nil
+                return .none
+            case .playlistDetail:
+                return .none
+            case .nestedVideoDetail(.presented(.delegate(.didRequestMinimize))),
+                 .nestedVideoDetail(.presented(.delegate(.didDismiss))):
+                state.nestedVideoDetail = nil
+                return .none
+            case .nestedVideoDetail:
+                return .none
             case .delegate:
                 return .none
-            case .searchResult(.success(let response)):
-                state.videoResults = response.videoResults ?? []
-                state.channelResults = response.channelResults ?? []
-                state.playlistResults = response.playlistResults ?? []
-                state.isSearching = false
-                state.hasSearched = true
-                return .none
-            case .searchResult(.failure):
-                state.isSearching = false
-                state.hasSearched = true
-                return .none
+            case .searchResult(let result):
+                return handleSearchResult(result, state: &state)
+            case .videoUpdated(let video):
+                return handleVideoUpdated(video, state: &state)
+            case .refreshPendingDownloads:
+                return handleRefreshPendingDownloads(state: &state)
             }
         }
         .ifLet(\.$videoDetail, action: \.videoDetail) {
             VideoDetailReducer()
         }
-    }
-
-    private func handleSearchQueryChanged(state: inout State) -> Effect<Action> {
-        let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            state.lastSearchedQuery = ""
-            state.videoResults = []
-            state.channelResults = []
-            state.playlistResults = []
-            state.hasSearched = false
-            return .cancel(id: CancelID.search)
+        .ifLet(\.$channelDetail, action: \.channelDetail) {
+            ChannelDetailReducer()
         }
-        // Don't re-search if the query hasn't changed (e.g. focus moved)
-        guard query != state.lastSearchedQuery else { return .none }
-        return .run { [clock] send in
-            try await clock.sleep(for: .milliseconds(600))
-            await send(.view(.searchSubmitted))
+        .ifLet(\.$playlistDetail, action: \.playlistDetail) {
+            PlaylistDetailReducer()
         }
-        .cancellable(id: CancelID.search, cancelInFlight: true)
-    }
-
-    private func performSearch(state: inout State) -> Effect<Action> {
-        let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return .none }
-        state.isSearching = true
-        state.lastSearchedQuery = query
-        let config = state.serverConfig
-        return .run { [searchService] send in
-            let result = await Result {
-                try await searchService.search(config: config, query: query)
-            }
-            await send(.searchResult(result))
+        .ifLet(\.$nestedVideoDetail, action: \.nestedVideoDetail) {
+            VideoDetailReducer()
         }
-        .cancellable(id: CancelID.search, cancelInFlight: true)
     }
 }
 #endif

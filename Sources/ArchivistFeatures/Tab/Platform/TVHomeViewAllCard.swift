@@ -3,53 +3,60 @@ import ArchivistComponents
 import SwiftUI
 
 /// Trailing tile on each tvOS home row that pushes the user into a full
-/// paginated list for that section. Mirrors `TVVideoCardView`'s
-/// `VStack(thumbnail, info)` structure — a 16:9 visible tile plus an
-/// invisible info area sized to three text lines — so its overall
-/// height matches the adjacent video cards exactly. Without that
-/// match, `LazyHStack`'s default `.center` alignment lined up the
-/// tile's centre with the cards' centres geometrically, but because
-/// the tile was a 280×280 square against ~340pt-tall video cards the
-/// icon ended up sitting 30pt above the cards' visual centre.
+/// paginated list for that section. Laid out like `TVVideoCardView` — a
+/// `TVLayout.cardWidth` 16:9 artwork box that takes the shared focus lift,
+/// over a hidden info area reserving the card's two-line title and two
+/// single-line rows — so in a top-aligned row its artwork lines up with
+/// the video and playlist cards beside it.
 struct TVHomeViewAllCard: View {
     let action: () -> Void
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.Surface.highlight)
-
-                    VStack(spacing: 12) {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .scaledSystemFont(size: 56, relativeTo: .largeTitle, weight: .semibold)
-                            // Decorative: the adjacent label carries the meaning.
-                            .accessibilityHidden(true)
-                            .foregroundStyle(Color.Accent.dark)
-                        Text(String.localised("video.viewAll", table: .videos))
-                            .font(.callout)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Text.primary)
-                    }
-                }
-                .aspectRatio(16 / 9, contentMode: .fit)
-
-                // Invisible placeholder matching `TVVideoCardView.infoView`
-                // (headline + subheadline + caption with spacing 6) so the
-                // overall tile height matches the adjacent cards. Keep the
-                // strings non-empty so SwiftUI sizes them at the proper
-                // line height instead of collapsing to zero.
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(" ").font(.headline)
-                    Text(" ").font(.subheadline)
-                    Text(" ").font(.caption)
-                }
-                .hidden()
+            VStack(alignment: .leading, spacing: 16) {
+                artwork
+                    .tvCardFocusEffect(isFocused)
+                reservedInfoSpace
             }
-            .frame(width: 280)
+            .frame(width: TVLayout.cardWidth)
         }
-        .buttonStyle(.card)
+        .buttonStyle(TVCardButtonStyle())
+        .focused($isFocused)
+    }
+
+    private var artwork: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: TVLayout.cornerRadius)
+                .fill(Color.Surface.highlight)
+
+            VStack(spacing: 12) {
+                Image(systemName: "arrow.right.circle.fill")
+                    .scaledSystemFont(size: 56, relativeTo: .largeTitle, weight: .semibold)
+                    // Decorative: the adjacent label carries the meaning.
+                    .accessibilityHidden(true)
+                    .foregroundStyle(Color.Accent.dark)
+                Text(String.localised("video.viewAll", table: .videos))
+                    .font(.callout)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Text.primary)
+            }
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+    }
+
+    /// Mirrors `TVVideoCardView.infoView`'s reserved heights. The strings
+    /// are non-empty so SwiftUI sizes them at full line height.
+    private var reservedInfoSpace: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(" ")
+                .font(.headline)
+                .lineLimit(2, reservesSpace: true)
+            Text(" ").font(.subheadline)
+            Text(" ").font(.subheadline)
+        }
+        .hidden()
     }
 }
 #endif

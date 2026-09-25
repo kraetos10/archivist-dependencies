@@ -22,20 +22,29 @@ struct ThemePickerSection: View {
                         .tag(theme.rawValue)
                 }
             } label: {
-                Text("Theme")
+                Text(String.localised("settings.theme", table: .settings))
             }
             .pickerStyle(.inline)
             .labelsHidden()
         } header: {
-            Text("Appearance")
+            Text(String.localised("settings.appearance", table: .settings))
         } footer: {
-            Text("Recolours the whole app. Applies right away.")
+            Text(String.localised("settings.theme.footer", table: .settings))
         }
     }
 }
 
 private struct ThemeOptionLabel: View {
     let theme: AppTheme
+
+    /// Footnote is 23pt on tvOS, too small to read at 10ft.
+    private static var iconFont: Font {
+        #if os(tvOS)
+        .subheadline
+        #else
+        .footnote
+        #endif
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -44,7 +53,9 @@ private struct ThemeOptionLabel: View {
                 .foregroundStyle(Color.Text.primary)
             Spacer(minLength: 0)
             Image(systemName: theme.symbolName)
-                .font(.footnote)
+                .font(Self.iconFont)
+                // Decorative: the theme name beside it carries the meaning.
+                .accessibilityHidden(true)
                 .foregroundStyle(theme.swatchGradient.last ?? Color.Accent.dark)
         }
     }

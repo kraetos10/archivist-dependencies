@@ -4,41 +4,39 @@ import ArchivistNetworking
 import SwiftUI
 
 struct TVHomePlaylistsRow: View {
-    static let maxItems = 10
-
     let playlists: [PlaylistResponse]
     let serverConfig: ServerConfig
+    let focus: FocusState<TVHomeFocus?>.Binding
     let onPlaylistTapped: (PlaylistResponse) -> Void
     let onViewAll: () -> Void
 
     var body: some View {
         TVHomeSectionContainer(
-            title: String(localized: "Playlists"),
-            icon: "music.note.list",
-            onViewAll: onViewAll
+            title: String.localised("generic.playlists", table: .generic),
+            icon: "music.note.list"
         ) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 48) {
-                    ForEach(playlists.prefix(Self.maxItems)) { playlist in
+                LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
+                    ForEach(playlists) { playlist in
                         TVPlaylistCardView(
                             playlist: playlist,
                             serverConfig: serverConfig
                         ) {
                             onPlaylistTapped(playlist)
                         }
-                        .frame(width: 400)
+                        .frame(width: TVLayout.cardWidth)
+                        .focused(focus, equals: .card(.playlists, id: playlist.playlistId))
                     }
 
-                    if playlists.count > 0 {
+                    if !playlists.isEmpty {
                         TVHomeViewAllCard(action: onViewAll)
+                            .focused(focus, equals: .viewAll(.playlists))
                     }
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 30)
+                .padding(.vertical, TVLayout.rowVerticalPadding)
             }
             .scrollClipDisabled()
         }
     }
 }
-
 #endif

@@ -21,16 +21,14 @@ public struct TVPlaylistCardView: View {
 
     public var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
                 thumbnailView
+                    .tvCardFocusEffect(isFocused)
                 infoView
             }
         }
         .buttonStyle(TVCardButtonStyle())
         .focused($isFocused)
-        .scaleEffect(isFocused ? 1.05 : 1.0)
-        .shadow(color: isFocused ? .white.opacity(0.5) : .clear, radius: isFocused ? 20 : 0)
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
     }
 
     private var thumbnailView: some View {
@@ -56,29 +54,29 @@ public struct TVPlaylistCardView: View {
             }
         }
         .aspectRatio(16 / 9, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: TVLayout.cornerRadius))
     }
 
     private var infoView: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Heights are reserved so playlist cards match video cards
+            // (two-line title, then two single-line rows) in mixed rows.
             Text(playlist.playlistName)
                 .font(.headline)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
 
-            if let channel = playlist.playlistChannel {
-                Text(channel)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            } else {
-                Text("")
-            }
+            Text(playlist.playlistChannel ?? " ")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
 
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Image(systemName: "list.bullet")
-                    .font(.caption)
-                Text("\(playlist.entryCount) videos")
                     .font(.subheadline)
+                    .accessibilityHidden(true)
+                Text(String.localised("\(playlist.entryCount) videos"))
+                    .font(.subheadline)
+                    .lineLimit(1)
             }
             .foregroundStyle(.secondary)
         }
