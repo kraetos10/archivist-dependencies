@@ -40,11 +40,6 @@ extension SettingsReducer {
                 .history(HistoryReducer.State(serverConfig: state.serverConfig))
             )
             return .none
-        #if !os(watchOS)
-        case .playbackCacheTapped:
-            state.path.append(.playbackCache(PlaybackCacheReducer.State()))
-            return .none
-        #endif
         #if !os(tvOS)
         case .thirdPartyLibrariesTapped:
             state.path.append(.thirdPartyLibraries(ThirdPartyLibrariesReducer.State()))

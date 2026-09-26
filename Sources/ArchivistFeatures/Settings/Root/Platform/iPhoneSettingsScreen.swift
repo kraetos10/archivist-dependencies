@@ -23,8 +23,6 @@ public struct iPhoneSettingsScreen: View {
                 StatsScreen(store: store)
             case .history(let store):
                 HistoryScreen(store: store)
-            case .playbackCache(let store):
-                PlaybackCacheScreen(store: store)
             case .thirdPartyLibraries(let store):
                 ThirdPartyLibrariesScreen(store: store)
             }
@@ -120,19 +118,6 @@ public struct iPhoneSettingsScreen: View {
             }
 
             ThemePickerSection()
-
-            Section {
-                Button {
-                    send(.playbackCacheTapped)
-                } label: {
-                    settingsRow(
-                        icon: "externaldrive.badge.timemachine",
-                        title: String.localised("video.cache.row", table: .videos)
-                    )
-                }
-            } header: {
-                Text(String.localised("video.playback", table: .videos))
-            }
 
             if let supportURL = store.supportURL {
                 Section {

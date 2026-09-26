@@ -9,18 +9,22 @@ struct StatsBiggestChannelsSection: View {
     var body: some View {
         Section {
             ForEach(channels) { channel in
-                HStack(spacing: 12) {
-                    ChannelThumbView(
-                        url: channelThumbURL(for: channel.id),
-                        size: 32
-                    )
-                    Text(channel.name ?? "")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.Text.primary)
-                    Spacer()
-                    Text("\(channel.docCount ?? 0) videos")
-                        .font(.caption)
-                        .foregroundStyle(Color.Brand.secondary)
+                StatsFocusableRow {
+                    HStack(spacing: 12) {
+                        ChannelThumbView(
+                            url: channelThumbURL(for: channel.id),
+                            size: 32
+                        )
+                        .frame(width: StatsFocusableRow<EmptyView>.iconWidth)
+                        .accessibilityHidden(true)
+                        Text(channel.name ?? "")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.Text.primary)
+                        Spacer()
+                        Text(String.localised("\(channel.docCount ?? 0) videos"))
+                            .font(.caption)
+                            .foregroundStyle(Color.Brand.secondary)
+                    }
                 }
             }
         } header: {

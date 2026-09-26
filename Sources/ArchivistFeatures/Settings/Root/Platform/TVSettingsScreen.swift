@@ -23,8 +23,6 @@ public struct TVSettingsScreen: View {
                 StatsScreen(store: store)
             case .history(let store):
                 HistoryScreen(store: store)
-            case .playbackCache(let store):
-                PlaybackCacheScreen(store: store)
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
@@ -55,14 +53,6 @@ public struct TVSettingsScreen: View {
                     HStack(spacing: 16) {
                         Image(systemName: "clock.arrow.circlepath")
                         Text(String.localised("settings.history", table: .settings))
-                    }
-                    .padding(.vertical, 8)
-                }
-
-                Button { send(.playbackCacheTapped) } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "externaldrive.badge.timemachine")
-                        Text(String.localised("video.cache.title", table: .videos))
                     }
                     .padding(.vertical, 8)
                 }

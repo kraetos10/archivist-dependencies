@@ -9,8 +9,6 @@ public struct TVChannelCardView: View {
 
     @FocusState private var isFocused: Bool
 
-    private static let avatarSize: CGFloat = 120
-
     public init(
         channel: ChannelResponse,
         serverConfig: ServerConfig,
@@ -25,7 +23,7 @@ public struct TVChannelCardView: View {
         Button(action: action) {
             VStack(spacing: 16) {
                 thumbnailView
-                    .tvCardFocusEffect(isFocused, cornerRadius: Self.avatarSize / 2)
+                    .tvCardFocusEffect(isFocused, cornerRadius: TVLayout.channelAvatarSize / 2)
                 infoView
             }
             // A fixed width, so a long name truncates instead of widening
@@ -37,7 +35,7 @@ public struct TVChannelCardView: View {
     }
 
     private var thumbnailView: some View {
-        ChannelThumbView(url: thumbnailURL, size: Self.avatarSize)
+        ChannelThumbView(url: thumbnailURL, size: TVLayout.channelAvatarSize)
     }
 
     private var infoView: some View {

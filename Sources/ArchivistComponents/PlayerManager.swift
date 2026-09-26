@@ -603,10 +603,11 @@ public final class PlayerManager: NSObject {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
 
-        @Shared(.appStorage("vlcPrebufferToDisk")) var prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
-        @Shared(.appStorage("prebufferWifiOnly")) var prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
-        @Shared(.appStorage("playbackCacheSizeLimitBytes"))
-        var cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
+        // The cache has no settings screen; the platform defaults always
+        // apply, whatever an earlier version stored under these keys.
+        let prebufferEnabled = PlaybackCache.defaultPrebufferEnabled
+        let prebufferWifiOnly = PlaybackCache.defaultPrebufferWifiOnly
+        let cacheSizeLimitBytes = PlaybackCache.defaultCacheSizeLimitBytes
 
         // Cache-first: if we already have the file from a prior session,
         // play it directly as a file:// URL.

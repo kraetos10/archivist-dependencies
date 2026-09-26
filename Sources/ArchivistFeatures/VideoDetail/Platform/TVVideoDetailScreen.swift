@@ -40,6 +40,7 @@ public struct TVVideoDetailScreen: View {
                     playNextSection
                     upNextSection
                     similarSection
+                    commentsSection
                 }
             }
             // Land on Play when the screen first appears, rather than wherever
@@ -75,6 +76,12 @@ public struct TVVideoDetailScreen: View {
             TVFullDescriptionView(
                 title: store.video.title,
                 blocks: store.descriptionBlocks
+            )
+        }
+        .fullScreenCover(item: $store.expandedComment) { comment in
+            TVFullDescriptionView(
+                title: comment.commentAuthor ?? "",
+                blocks: (comment.commentText ?? "").descriptionBlocks()
             )
         }
         .onAppear { send(.viewDidAppear) }
@@ -312,6 +319,34 @@ public struct TVVideoDetailScreen: View {
                             send(.similarVideoTapped(video))
                         }
                         .frame(width: TVLayout.cardWidth)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Comments
+
+    /// Hidden once loaded if there are none — an empty "Comments" heading at
+    /// the bottom of the screen says nothing useful.
+    @ViewBuilder
+    private var commentsSection: some View {
+        if store.isLoadingComments || !store.comments.isEmpty {
+            section(String.localised("generic.comments", table: .generic)) {
+                cardRow {
+                    if store.isLoadingComments {
+                        ForEach(store.commentPlaceholders) { comment in
+                            TVCommentCard(comment: comment) {}
+                                .redacted(reason: .placeholder)
+                                // Placeholders must not take focus.
+                                .disabled(true)
+                        }
+                    } else {
+                        ForEach(store.comments) { comment in
+                            TVCommentCard(comment: comment) {
+                                send(.commentTapped(comment))
+                            }
+                        }
                     }
                 }
             }

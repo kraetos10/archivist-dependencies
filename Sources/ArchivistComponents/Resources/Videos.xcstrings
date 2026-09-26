@@ -749,215 +749,6 @@
         }
       }
     },
-    "video.vlcPrebuffer": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prebuffer for instant seek"
-          }
-        }
-      }
-    },
-    "video.vlcPrebufferSubtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Downloads the video in the background while playing so seeks are instant. Uses extra data."
-          }
-        }
-      }
-    },
-    "video.prebuffer.header": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback"
-          }
-        }
-      }
-    },
-    "video.prebuffer.footer": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "When on, each played video is downloaded in the background so you can seek instantly once the download finishes. Cached files are kept for 24 hours."
-          }
-        }
-      }
-    },
-    "video.prebuffer.wifiOnly": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wi-Fi Only"
-          }
-        }
-      }
-    },
-    "video.prebuffer.wifiOnlySubtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Only prebuffer when connected to Wi-Fi to save mobile data."
-          }
-        }
-      }
-    },
-    "video.prebuffer.tv.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prebuffer Playback"
-          }
-        }
-      }
-    },
-    "video.prebuffer.tv.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Downloads each video in the background while it plays so streams don't stall and seeks are instant."
-          }
-        }
-      }
-    },
-    "video.prebuffer.tv.footer": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "When on, each played video is downloaded in the background to avoid buffering stalls. The cache is cleared automatically when you start a new video."
-          }
-        }
-      }
-    },
-    "video.cache.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback Cache"
-          }
-        }
-      }
-    },
-    "video.cache.header": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Storage"
-          }
-        }
-      }
-    },
-    "video.cache.footer": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cached videos are kept for 24 hours so re-watching is instant. Files older than that are removed automatically."
-          }
-        }
-      }
-    },
-    "video.cache.totalSize": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Total size"
-          }
-        }
-      }
-    },
-    "video.cache.videos": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Videos"
-          }
-        }
-      }
-    },
-    "video.cache.clear": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear Cache"
-          }
-        }
-      }
-    },
-    "video.cache.sizeLimit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Size limit"
-          }
-        }
-      }
-    },
-    "video.cache.sizeLimit.unlimited": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlimited"
-          }
-        }
-      }
-    },
-    "video.cache.row": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback Cache"
-          }
-        }
-      }
-    },
-    "video.playback": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback"
-          }
-        }
-      }
-    },
     "video.deviceDownloads": {
       "extractionState": "manual",
       "localizations": {
@@ -1394,6 +1185,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Description"
+          }
+        }
+      }
+    },
+    "video.comment.favorited": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favourited by the creator"
+          }
+        }
+      }
+    },
+    "video.comment.likes %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld likes"
           }
         }
       }

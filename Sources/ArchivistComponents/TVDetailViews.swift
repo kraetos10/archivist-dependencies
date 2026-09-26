@@ -75,17 +75,20 @@ public struct TVDescriptionCard: View {
                     .fontWeight(.semibold)
             }
         }
-        .buttonStyle(TVDescriptionCardButtonStyle())
+        .buttonStyle(TVPanelButtonStyle())
         .frame(maxWidth: 1200, alignment: .leading)
     }
 }
 
-/// Same focus convention as `TVCapsuleButtonStyle`: white fill with dark
-/// text when focused, the highlight surface otherwise.
-private struct TVDescriptionCardButtonStyle: ButtonStyle {
+/// A text panel you can press (description preview, comment). Same focus
+/// convention as `TVCapsuleButtonStyle`: white fill with dark text when
+/// focused, the highlight surface otherwise.
+public struct TVPanelButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
 
-    func makeBody(configuration: Configuration) -> some View {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(isFocused ? Color.black : Color.Text.primary)
             .padding(24)

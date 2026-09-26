@@ -28,7 +28,7 @@ struct TVHomeChannelsRow: View {
                     }
 
                     if !channels.isEmpty {
-                        TVHomeViewAllCard(action: onViewAll)
+                        TVHomeViewAllCard(style: .channel, action: onViewAll)
                             .focused(focus, equals: .viewAll(.channels))
                     }
                 }

@@ -21,7 +21,7 @@ public final class PlaybackCache {
     /// same video again later today", short enough that disk doesn't grow.
     public nonisolated static let expirationTTL: TimeInterval = 60 * 60 * 24
 
-    /// Default value for the `vlcPrebufferToDisk` app-storage flag. tvOS ships
+    /// Whether playback prebuffers to disk. Fixed per platform. tvOS ships
     /// with caching on because Apple TV streams have been pausing regularly
     /// without a parallel disk copy to fall back to.
     #if os(tvOS)
@@ -30,10 +30,9 @@ public final class PlaybackCache {
     public nonisolated static let defaultPrebufferEnabled: Bool = false
     #endif
 
-    /// Default value for the `prebufferWifiOnly` app-storage flag. On tvOS
-    /// there's no cellular to protect against, and a Wi-Fi-only gate would
-    /// block prebuffer when the box is wired to ethernet, so tvOS ships with
-    /// the gate off.
+    /// Whether prebuffering waits for Wi-Fi. On tvOS there's no cellular to
+    /// protect against, and a Wi-Fi-only gate would block prebuffer when the
+    /// box is wired to ethernet, so tvOS ships with the gate off.
     #if os(tvOS)
     public nonisolated static let defaultPrebufferWifiOnly: Bool = false
     #else
@@ -46,24 +45,12 @@ public final class PlaybackCache {
     /// existing prebuffer cache. AVPlayer stays available as an opt-in.
     public nonisolated static let defaultUseVLCPlayer: Bool = true
 
-    /// Default upper bound on the playback cache (5 GB). Stored as bytes in
-    /// the `playbackCacheSizeLimitBytes` app-storage key. A value of `0`
+    /// Upper bound on the playback cache (5 GB), in bytes. A value of `0`
     /// means unlimited.
     public nonisolated static let defaultCacheSizeLimitBytes: Int = 5_000_000_000
 
     /// Sentinel meaning "no upper bound" for the cache size limit.
     public nonisolated static let unlimitedCacheSizeBytes: Int = 0
-
-    /// Sensible presets surfaced in Settings. Values are in bytes;
-    /// `unlimitedCacheSizeBytes` (0) at the end represents "Unlimited".
-    public nonisolated static let cacheSizeLimitPresetsBytes: [Int] = [
-        1_000_000_000,
-        2_000_000_000,
-        5_000_000_000,
-        10_000_000_000,
-        20_000_000_000,
-        unlimitedCacheSizeBytes
-    ]
 
     /// True when caching `expectedSize` bytes on top of what's already on
     /// disk would exceed `limitBytes`. `expectedSize == nil` falls back to

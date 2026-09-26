@@ -189,6 +189,14 @@ public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
     }
 }
 
+extension VideoComment: Identifiable {
+    /// The server's comment id; author and timestamp stand in for the rare
+    /// comment without one.
+    public var id: String {
+        commentId ?? "\(commentAuthorId ?? commentAuthor ?? "")-\(commentTimestamp ?? 0)"
+    }
+}
+
 public nonisolated struct VideoNavResponse: Decodable, Sendable, Equatable {
     public let playlist: String?
     public let index: Int?

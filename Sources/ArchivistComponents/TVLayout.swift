@@ -12,6 +12,10 @@ public enum TVLayout {
     public static let cardWidth: CGFloat = 400
     /// Width of a channel card (avatar and name).
     public static let channelCardWidth: CGFloat = 250
+    /// Diameter of the avatar on a channel card.
+    public static let channelAvatarSize: CGFloat = 120
+    /// Height of 16:9 card artwork at `cardWidth`.
+    public static var cardArtworkHeight: CGFloat { cardWidth * 9 / 16 }
     /// Gap between cards, horizontally and vertically.
     public static let cardSpacing: CGFloat = 48
     /// Vertical room around a horizontal row so a lifted card isn't clipped.

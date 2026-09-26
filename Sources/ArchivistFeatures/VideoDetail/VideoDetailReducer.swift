@@ -62,6 +62,8 @@ public struct VideoDetailReducer {
         var isCached = false
         var isDeletingFromServer = false
         var isDescriptionExpanded = false
+        /// tvOS: the comment open in the full-text view.
+        var expandedComment: VideoComment?
         /// Set when the user answers the tvOS resume prompt with "start from
         /// beginning", and consumed by the next play so it seeks to 0 rather
         /// than the stored resume position.
@@ -142,6 +144,7 @@ public struct VideoDetailReducer {
             downloadError = nil
             isDeletingFromServer = false
             isDescriptionExpanded = false
+            expandedComment = nil
             playbackStartsAtBeginning = false
             showAllComments = false
             currentCommentIndex = 0
@@ -217,6 +220,7 @@ public struct VideoDetailReducer {
             case nextUpVideoTapped(VideoResponse)
             case videoPlaybackDidEnd
             case toggleDescription
+            case commentTapped(VideoComment)
             case toggleWatchedTapped
             case addToPlaylistTapped
             case addToPlayNextTapped
@@ -336,6 +340,21 @@ extension VideoDetailReducer.State {
     /// The description cut into focusable blocks for the full-text view.
     var descriptionBlocks: [String] {
         descriptionPreview?.descriptionBlocks() ?? []
+    }
+
+    /// Placeholder cards for the comments row while it loads.
+    var commentPlaceholders: [VideoComment] {
+        (0..<3).map { index in
+            VideoComment(
+                commentId: "placeholder-\(index)",
+                commentText: VideoComment.placeholder.commentText,
+                commentTimestamp: nil,
+                commentLikeCount: VideoComment.placeholder.commentLikeCount,
+                commentIsFavorited: false,
+                commentAuthor: VideoComment.placeholder.commentAuthor,
+                commentAuthorId: nil
+            )
+        }
     }
 }
 #endif

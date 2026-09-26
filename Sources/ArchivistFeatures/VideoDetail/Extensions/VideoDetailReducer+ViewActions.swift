@@ -36,6 +36,9 @@ extension VideoDetailReducer {
         case .toggleDescription:
             state.isDescriptionExpanded.toggle()
             return .none
+        case .commentTapped(let comment):
+            state.expandedComment = comment
+            return .none
         case .toggleWatchedTapped:
             return handleToggleWatched(state: &state)
         case .nextVideoRequested:
@@ -147,13 +150,10 @@ extension VideoDetailReducer {
         effects.append(refreshVideoEffect(config: config, videoId: videoId))
         effects.append(observeDownloadEffect(videoId: videoId))
 
-        // tvOS has no comments UI, so don't pay for the request there.
-        #if !os(tvOS)
         if !state.isLoadingComments && state.comments.isEmpty {
             state.isLoadingComments = true
             effects.append(fetchCommentsEffect(config: config, videoId: videoId))
         }
-        #endif
 
         if !state.isLoadingSimilar && state.similarVideos.isEmpty {
             state.isLoadingSimilar = true

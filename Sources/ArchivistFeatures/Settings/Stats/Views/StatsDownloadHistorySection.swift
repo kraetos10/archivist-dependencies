@@ -14,20 +14,23 @@ struct StatsDownloadHistorySection: View {
     var body: some View {
         Section {
             ForEach(visibleEntries, id: \.date) { entry in
-                HStack {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.body)
-                        .foregroundStyle(Color.Accent.dark)
-                        .frame(width: 28)
-                    Text(formattedDate(entry.date))
-                        .font(.subheadline)
-                        .foregroundStyle(Color.Text.primary)
-                    Spacer()
-                    let count = entry.count ?? 0
-                    Text(count > 0 ? "+\(count)" : "-")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(count > 0 ? Color.Text.primary : Color.Brand.secondary)
+                StatsFocusableRow {
+                    HStack {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.body)
+                            .foregroundStyle(Color.Accent.dark)
+                            .frame(width: StatsFocusableRow<EmptyView>.iconWidth)
+                            .accessibilityHidden(true)
+                        Text(formattedDate(entry.date))
+                            .font(.subheadline)
+                            .foregroundStyle(Color.Text.primary)
+                        Spacer()
+                        let count = entry.count ?? 0
+                        Text(count > 0 ? "+\(count)" : "-")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(count > 0 ? Color.Text.primary : Color.Brand.secondary)
+                    }
                 }
             }
 
@@ -39,7 +42,7 @@ struct StatsDownloadHistorySection: View {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.body)
                             .foregroundStyle(Color.Accent.dark)
-                            .frame(width: 28)
+                            .frame(width: StatsFocusableRow<EmptyView>.iconWidth)
                         Text(
                             isExpanded
                                 ? String.localised("generic.showLess", table: .generic)

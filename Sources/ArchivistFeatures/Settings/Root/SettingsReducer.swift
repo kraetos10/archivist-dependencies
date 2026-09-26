@@ -55,9 +55,6 @@ public struct SettingsReducer {
             case downloadsTapped
             case statsTapped
             case historyTapped
-            #if !os(watchOS)
-            case playbackCacheTapped
-            #endif
             #if !os(tvOS)
             case thirdPartyLibrariesTapped
             #endif
