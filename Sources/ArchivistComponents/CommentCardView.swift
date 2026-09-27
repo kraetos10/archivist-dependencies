@@ -15,6 +15,7 @@ public struct CommentCardView: View {
                 Image(systemName: "person.circle.fill")
                     .font(.subheadline)
                     .foregroundStyle(Color.Brand.secondary)
+                    .accessibilityHidden(true)
 
                 Text(comment.commentAuthor ?? "")
                     .font(.subheadline)
@@ -33,10 +34,13 @@ public struct CommentCardView: View {
                     HStack(spacing: 2) {
                         Image(systemName: "hand.thumbsup.fill")
                             .font(.caption)
+                            .accessibilityHidden(true)
                         Text("\(likes)")
                             .font(.caption)
                     }
                     .foregroundStyle(Color.Brand.secondary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String.localised("video.comment.likes \(likes)", table: .videos))
                 }
             }
 
@@ -78,16 +82,20 @@ public struct CommentRowView: View {
                     HStack(spacing: 2) {
                         Image(systemName: "hand.thumbsup.fill")
                             .font(.caption)
+                            .accessibilityHidden(true)
                         Text("\(likes)")
                             .font(.caption)
                     }
                     .foregroundStyle(Color.Brand.secondary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String.localised("video.comment.likes \(likes)", table: .videos))
                 }
 
                 if comment.commentIsFavorited == true {
                     Image(systemName: "heart.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
+                        .accessibilityLabel(String.localised("video.comment.favorited", table: .videos))
                 }
             }
 

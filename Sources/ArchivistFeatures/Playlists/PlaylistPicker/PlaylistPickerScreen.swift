@@ -6,7 +6,7 @@ import ArchivistComponents
 
 @ViewAction(for: PlaylistPickerReducer.self)
 public struct PlaylistPickerScreen: View {
-    public let store: StoreOf<PlaylistPickerReducer>
+    @Bindable public var store: StoreOf<PlaylistPickerReducer>
 
     public init(store: StoreOf<PlaylistPickerReducer>) {
         self.store = store
@@ -18,7 +18,7 @@ public struct PlaylistPickerScreen: View {
                 if store.isLoading {
                     List {
                         ForEach(PlaylistResponse.placeholders.prefix(4)) { playlist in
-                            playlistRow(playlist, alreadyAdded: false)
+                            PlaylistPickerRow(playlist: playlist, alreadyAdded: false)
                                 .redacted(reason: .placeholder)
                         }
                         .listRowBackground(Color.Surface.highlight)
@@ -45,14 +45,26 @@ public struct PlaylistPickerScreen: View {
                 } else {
                     List {
                         ForEach(store.playlists) { playlist in
-                            let alreadyAdded = store.alreadyInPlaylistIds.contains(playlist.playlistId)
+                            let alreadyAdded = store.state.isAlreadyAdded(playlist)
                             Button {
                                 send(.playlistTapped(playlist))
                             } label: {
-                                playlistRow(playlist, alreadyAdded: alreadyAdded)
+                                PlaylistPickerRow(playlist: playlist, alreadyAdded: alreadyAdded)
                             }
                             .disabled(store.isAdding || alreadyAdded)
                             .listRowBackground(Color.Surface.highlight)
+                            .onAppear {
+                                if playlist.id == store.playlists.last?.id {
+                                    send(.lastItemAppeared)
+                                }
+                            }
+                        }
+
+                        if store.isLoadingMore {
+                            ProgressView()
+                                .tint(Color.Progress.tint)
+                                .frame(maxWidth: .infinity)
+                                .listRowBackground(Color.clear)
                         }
                     }
                 }
@@ -63,30 +75,37 @@ public struct PlaylistPickerScreen: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear { send(.viewDidAppear) }
+        .alert($store.scope(state: \.alert, action: \.alert))
     }
+}
 
-    private func playlistRow(
-        _ playlist: PlaylistResponse,
-        alreadyAdded: Bool
-    ) -> some View {
+/// A playlist in the picker: name, entry count, and whether the video is
+/// already in it.
+private struct PlaylistPickerRow: View {
+    let playlist: PlaylistResponse
+    let alreadyAdded: Bool
+
+    var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.playlistName)
                     .font(.body)
                     .foregroundStyle(Color.Text.primary)
-                Text("\(playlist.entryCount) videos")
+                Text(String.localised("playlist.entryCount \(playlist.entryCount)", table: .videos))
                     .font(.caption)
                     .foregroundStyle(Color.Brand.secondary)
             }
             Spacer()
-            if alreadyAdded {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.Accent.dark)
-            } else {
-                Image(systemName: "plus.circle")
-                    .foregroundStyle(Color.Accent.dark)
-            }
+            Image(systemName: alreadyAdded ? "checkmark.circle.fill" : "plus.circle")
+                .foregroundStyle(Color.Accent.dark)
+                .accessibilityHidden(true)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(
+            alreadyAdded
+                ? String.localised("playlist.alreadyAdded", table: .videos)
+                : ""
+        )
     }
 }
 #endif

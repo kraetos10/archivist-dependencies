@@ -18,13 +18,7 @@ public nonisolated struct DownloadResponse: Decodable, Sendable, Equatable, Iden
     public var id: String { youtubeId }
 
     public var publishedRelative: String? {
-        guard let published else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        guard let date = formatter.date(from: published) else { return nil }
-        let relative = RelativeDateTimeFormatter()
-        relative.unitsStyle = .full
-        return relative.localizedString(for: date, relativeTo: Date())
+        PublishedDate.relative(from: published)
     }
 
     public var youtubeURL: URL? {
@@ -121,6 +115,14 @@ public nonisolated enum DownloadStatus: String, Decodable, Sendable, Equatable {
     case pending
     case ignore
     case priority
+    case unknown
+
+    /// A value this client doesn't know yet decodes as `.unknown` instead of
+    /// failing the whole response it's part of.
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: raw) ?? .unknown
+    }
 }
 
 public nonisolated struct DownloadAggsResponse: Decodable, Sendable, Equatable {

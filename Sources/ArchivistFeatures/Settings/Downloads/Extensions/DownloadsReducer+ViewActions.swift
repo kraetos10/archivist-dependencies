@@ -9,11 +9,15 @@ extension DownloadsReducer {
         state: inout State
     ) -> Effect<Action> {
         switch action {
-        case .viewDidAppear:
-            return handleOnAppear(state: &state)
-        case .pullToRefreshTriggered:
-            return handleRefreshTriggered(state: &state)
-        case .lastItemAppeared:
+        case .viewDidAppear, .pullToRefreshTriggered:
+            // Every appearance re-fetches: tvOS has no pull-to-refresh, and
+            // the optimistic removal on download-confirm can leave the list
+            // empty while the server still has pending items.
+            return handleRefresh(state: &state)
+        case .itemAppeared(let id):
+            // Page on the last *rendered* card — while searching, the
+            // unfiltered buffer's last item isn't on screen.
+            guard id == state.filteredDownloads.last?.id else { return .none }
             return handleLoadNextPage(state: &state)
         case .downloadTapped(let download):
             return handleDownloadTapped(download, state: &state)
@@ -24,40 +28,27 @@ extension DownloadsReducer {
         }
     }
 
+    /// Reloads from page one, superseding any page load in flight.
+    func handleRefresh(state: inout State) -> Effect<Action> {
+        guard !state.isLoading else { return .none }
+        state.isLoading = true
+        state.isLoadingMore = false
+        state.currentPage = 1
+        state.lastPage = 1
+        return fetchDownloads(config: state.serverConfig, page: 1)
+    }
+
     // MARK: - Private Handlers
 
-    private func handleOnAppear(state: inout State) -> Effect<Action> {
-        // Always re-fetch on screen entry. Previously this guarded on
-        // `state.downloads.isEmpty` to avoid redundant fetches when the
-        // user navigated back to the queue, but that left tvOS users
-        // stranded — tvOS has no pull-to-refresh, and the optimistic
-        // removal we do on download-confirm can leave the list empty
-        // even when the server has more pending items. Treat every
-        // appearance as a refresh; the downloaded array is replaced
-        // wholesale so SwiftUI handles the diff cleanly.
-        guard !state.isLoading else { return .none }
-        state.isLoading = true
-        state.currentPage = 1
-        state.lastPage = 1
-        return fetchDownloads(config: state.serverConfig, page: 1)
-    }
-
-    private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
-        guard !state.isLoading else { return .none }
-        state.isLoading = true
-        state.currentPage = 1
-        state.lastPage = 1
-        return fetchDownloads(config: state.serverConfig, page: 1)
-    }
-
     private func handleLoadNextPage(state: inout State) -> Effect<Action> {
+        guard !state.isLoading, !state.isLoadingMore else { return .none }
         switch state.sortOrder {
         case .newestFirst:
-            guard state.currentPage > 1, !state.isLoadingMore else { return .none }
+            guard state.currentPage > 1 else { return .none }
             state.isLoadingMore = true
             return fetchDownloads(config: state.serverConfig, page: state.currentPage - 1)
         case .oldestFirst:
-            guard state.currentPage < state.lastPage, !state.isLoadingMore else { return .none }
+            guard state.currentPage < state.lastPage else { return .none }
             state.isLoadingMore = true
             return fetchDownloads(config: state.serverConfig, page: state.currentPage + 1)
         }
@@ -73,6 +64,7 @@ extension DownloadsReducer {
         state.currentPage = 1
         state.lastPage = 1
         state.isLoading = true
+        state.isLoadingMore = false
         state.hasLoaded = false
         return fetchDownloads(config: state.serverConfig, page: 1)
     }
@@ -109,8 +101,7 @@ extension DownloadsReducer {
     ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = download.youtubeId
-        let downloadService = self.downloadService
-        return .run { send in
+        return .run { [downloadService] send in
             let result = await Result {
                 try await downloadService.deleteDownload(config: config, id: videoId)
             }
@@ -122,8 +113,7 @@ extension DownloadsReducer {
         config: ServerConfig,
         page: Int
     ) -> Effect<Action> {
-        let downloadService = self.downloadService
-        return .run { send in
+        .run { [downloadService] send in
             let result = await Result {
                 try await downloadService.getDownloads(
                     config: config,
@@ -136,5 +126,6 @@ extension DownloadsReducer {
             }
             await send(.downloadsResult(result))
         }
+        .cancellable(id: CancelID.fetch, cancelInFlight: true)
     }
 }

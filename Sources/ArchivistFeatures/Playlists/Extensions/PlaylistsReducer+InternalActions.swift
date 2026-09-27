@@ -3,7 +3,7 @@ import ComposableArchitecture
 import Foundation
 
 extension PlaylistsReducer {
-    public func handleInternalAction(
+    func handleInternalAction(
         _ action: Action,
         state: inout State
     ) -> Effect<Action> {
@@ -19,21 +19,16 @@ extension PlaylistsReducer {
         case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .addPlaylist(.presented(.subscribeResult(.success))),
-             .addPlaylist(.presented(.createCustomResult(.success))):
-            return handleSubscribeSucceeded(state: &state)
-        case .playlistDetail(.presented(.unsubscribeResult(.success))):
-            if let playlistId = state.selectedPlaylist?.playlist.playlistId {
-                state.playlists.remove(id: playlistId)
-            }
+        case .addPlaylist(.presented(.delegate(.didAdd))):
+            // AddPlaylist dismisses itself; the list picks up the new one.
+            return refreshPlaylists(state: &state)
+        case .playlistDetail(.presented(.delegate(.didUnsubscribe(let playlistId)))):
+            state.playlists.remove(id: playlistId)
             state.selectedPlaylist = nil
             return .none
-        case .path(.element(_, action: .playlistDetail(.unsubscribeResult(.success)))):
-            if let last = state.path.last,
-               case .playlistDetail(let detail) = last {
-                state.playlists.remove(id: detail.playlist.playlistId)
-            }
-            _ = state.path.popLast()
+        case .path(.element(id: let id, action: .playlistDetail(.delegate(.didUnsubscribe(let playlistId))))):
+            state.playlists.remove(id: playlistId)
+            state.path.pop(from: id)
             return .none
         case .path(.element(_, action: .playlistDetail(.delegate(
                 .showVideo(let video, let nextVideos, let loopVideoIds)
@@ -41,16 +36,13 @@ extension PlaylistsReducer {
              .playlistDetail(.presented(.delegate(
                 .showVideo(let video, let nextVideos, let loopVideoIds)
              ))):
-            @Shared(.appStorage("autoPlayPlaylist")) var autoPlayPlaylist = true
             state.videoDetail = VideoDetailReducer.State(
                 serverConfig: state.serverConfig,
                 video: video,
                 nextVideos: nextVideos,
                 loopVideoIds: loopVideoIds,
-                shouldAutoPlayNextVideo: autoPlayPlaylist
+                shouldAutoPlayNextVideo: state.autoPlayPlaylist
             )
-            return .none
-        case .path, .addPlaylist, .playlistDetail:
             return .none
         default:
             return .none
@@ -63,7 +55,7 @@ extension PlaylistsReducer {
         _ response: PaginatedResponse<PlaylistResponse>,
         state: inout State
     ) -> Effect<Action> {
-        if state.isLoading {
+        if response.paginate.currentPage <= 1 {
             state.playlists = IdentifiedArrayOf(uniqueElements: response.data)
         } else {
             for playlist in response.data {
@@ -78,12 +70,7 @@ extension PlaylistsReducer {
         return .none
     }
 
-    private func handleSubscribeSucceeded(state: inout State) -> Effect<Action> {
-        state.addPlaylist = nil
-        return .send(.view(.pullToRefreshTriggered))
-    }
-
-    public func handleSearchQueryChanged(state: inout State) -> Effect<Action> {
+    func handleSearchQueryChanged(state: inout State) -> Effect<Action> {
         let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             state.searchResults = []

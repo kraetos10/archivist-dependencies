@@ -9,17 +9,20 @@ import StructuredQueries
 public struct ServerSetupReducer {
     public init() {}
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         var path = StackState<ServerSetupPath.State>()
         var registrationDetails = RegistrationDetails()
         var isLoading = false
+        /// The switch's position. Starts where child mode actually is, and
+        /// only settles `childModeEnabled` once a PIN is saved (or cleared).
         var childModeToggle = false
-        var isPresentingPinSetup = false
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
-        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
+        @Shared(.childModeEnabled) public var childModeEnabled
+        @Presents var pinSetup: ChildPinSetupReducer.State?
         @Presents var alert: AlertState<AlertAction>?
 
-        public init() {}
+        public init() {
+            childModeToggle = childModeEnabled
+        }
     }
 
     public enum AlertAction: Equatable, Sendable {
@@ -30,12 +33,14 @@ public struct ServerSetupReducer {
         case view(View)
         case alert(PresentationAction<AlertAction>)
         case binding(BindingAction<State>)
+        case childModeSaveResult(Result<Bool, Error>)
         case healthCheckResult(Result<Void, Error>)
-        case loginCompleted
+        /// Sent once the connection and token are stored. Carries the
+        /// config so the parent doesn't read it back from the database.
+        case loginCompleted(ServerConfig)
+        case loginSaveFailed
         case path(StackActionOf<ServerSetupPath>)
-        case serverValidated
-        case childPinConfirmed(String)
-        case childPinCancelled
+        case pinSetup(PresentationAction<ChildPinSetupReducer.Action>)
 
         @CasePathable
         public enum View {
@@ -43,9 +48,11 @@ public struct ServerSetupReducer {
         }
     }
 
+    @Dependency(\.defaultDatabase) var database
     @Dependency(\.healthService) var healthService
     @Dependency(\.keychainService) var keychainService
-    @Dependency(\.defaultDatabase) var database
+    @Dependency(\.localNetworkPrompt) var localNetworkPrompt
+    @Dependency(\.pinStore) var pinStore
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
@@ -53,65 +60,31 @@ public struct ServerSetupReducer {
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .serverValidated:
-                state.path.append(.login(LoginReducer.State(
-                    registrationDetails: Shared(value: state.registrationDetails)
-                )))
+            case .binding(\.childModeToggle):
+                return handleChildModeToggled(state: &state)
+            case .pinSetup(.presented(.confirmed(let pin))):
+                return handleChildPinConfirmed(pin, state: &state)
+            case .pinSetup(.presented(.cancelled)), .pinSetup(.dismiss):
+                state.pinSetup = nil
+                state.childModeToggle = state.childModeEnabled
                 return .none
+            case .childModeSaveResult(let result):
+                return handleChildModeSaveResult(result, state: &state)
+            case .healthCheckResult(let result):
+                return handleHealthCheckResult(result, state: &state)
             case .path(.element(_, action: .login(.loginSucceeded(let token)))):
                 return handleLoginSucceeded(token: token, state: &state)
-            case .binding(\.childModeToggle):
-                if state.childModeToggle {
-                    state.isPresentingPinSetup = true
-                } else {
-                    state.$childModeEnabled.withLock { $0 = false }
-                    state.$childModePin.withLock { $0 = "" }
-                }
+            case .loginSaveFailed:
+                state.alert = .loginSaveFailed
                 return .none
-            case .childPinConfirmed(let pin):
-                state.isPresentingPinSetup = false
-                state.$childModeEnabled.withLock { $0 = true }
-                state.$childModePin.withLock { $0 = pin }
+            case .alert, .binding, .loginCompleted, .path, .pinSetup:
                 return .none
-            case .childPinCancelled:
-                state.childModeToggle = false
-                state.isPresentingPinSetup = false
-                return .none
-            case .alert, .binding, .loginCompleted, .path:
-                return .none
-            default:
-                return handleInternalAction(action, state: &state)
             }
         }
         .ifLet(\.$alert, action: \.alert)
-        .forEach(\.path, action: \.path)
-    }
-
-    private func handleLoginSucceeded(
-        token: String,
-        state: inout State
-    ) -> Effect<Action> {
-        let details = state.registrationDetails
-        return .run { [database, keychainService] send in
-            try await database.write { db in
-                try ServerConnection
-                    .insert {
-                        ServerConnection(
-                            serverAddress: details.serverAddress,
-                            port: details.port,
-                            useHTTP: details.useHTTP
-                        )
-                    } onConflict: {
-                        $0.id
-                    } doUpdate: { conn, excluded in
-                        conn.serverAddress = excluded.serverAddress
-                        conn.port = excluded.port
-                        conn.useHTTP = excluded.useHTTP
-                    }
-                    .execute(db)
-            }
-            try keychainService.save(token: token)
-            await send(.loginCompleted)
+        .ifLet(\.$pinSetup, action: \.pinSetup) {
+            ChildPinSetupReducer()
         }
+        .forEach(\.path, action: \.path)
     }
 }

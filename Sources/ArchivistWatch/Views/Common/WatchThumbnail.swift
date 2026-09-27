@@ -1,76 +1,53 @@
 #if os(watchOS)
 import ArchivistNetworking
 import SwiftUI
+import UIKit
 
-@MainActor @Observable
+@MainActor
+@Observable
 final class ThumbnailLoader {
-    var image: Image?
+    private(set) var image: Image?
 
-    func load(
-        path: String,
-        config: ServerConfig
-    ) async {
-        guard let url = config.fullURL(for: path) else { return }
-        await load(url: url, config: config)
-    }
-
+    /// Loads `url`, sending the API token only when the URL is on the
+    /// configured server — an exact host match, so artwork from YouTube or a
+    /// lookalike host never receives it.
     func load(
         url: URL,
         config: ServerConfig
     ) async {
         var request = URLRequest(url: url)
-        if url.host == config.baseURL || url.host?.contains(config.baseURL) == true {
+        if config.isServerURL(url) {
             for (key, value) in config.authHeaders {
                 request.setValue(value, forHTTPHeaderField: key)
             }
         }
 
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            if let uiImage = UIImage(data: data) {
-                image = Image(uiImage: uiImage)
-            }
-        } catch {}
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let uiImage = UIImage(data: data) else { return }
+        image = Image(uiImage: uiImage)
     }
 }
 
 public struct WatchThumbnail: View {
-    let path: String?
-    let resolvedURL: URL?
+    let url: URL?
     let config: ServerConfig
-    let width: CGFloat
-    let aspectRatio: CGFloat
+    let width: Double
+    let aspectRatio: Double
 
     @State private var loader = ThumbnailLoader()
 
     public init(
-        path: String?,
-        config: ServerConfig,
-        width: CGFloat = 60,
-        aspectRatio: CGFloat = 16 / 9
-    ) {
-        self.path = path
-        self.resolvedURL = nil
-        self.config = config
-        self.width = width
-        self.aspectRatio = aspectRatio
-    }
-
-    public init(
         url: URL?,
         config: ServerConfig,
-        width: CGFloat = 60,
-        aspectRatio: CGFloat = 16 / 9
+        width: Double = 60,
+        aspectRatio: Double = 16 / 9
     ) {
-        self.path = nil
-        self.resolvedURL = url
+        self.url = url
         self.config = config
         self.width = width
         self.aspectRatio = aspectRatio
-    }
-
-    private var taskID: String? {
-        path ?? resolvedURL?.absoluteString
     }
 
     public var body: some View {
@@ -81,34 +58,32 @@ public struct WatchThumbnail: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 Rectangle()
-                    .fill(.secondary.opacity(0.3))
+                    .fill(.quaternary)
             }
         }
         .frame(width: width, height: width / aspectRatio)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .task(id: taskID) {
-            if let path {
-                await loader.load(path: path, config: config)
-            } else if let resolvedURL {
-                await loader.load(url: resolvedURL, config: config)
-            }
+        .clipShape(.rect(cornerRadius: 6))
+        .accessibilityHidden(true)
+        .task(id: url) {
+            guard let url else { return }
+            await loader.load(url: url, config: config)
         }
     }
 }
 
 public struct WatchChannelThumb: View {
-    let path: String?
+    let url: URL?
     let config: ServerConfig
-    let size: CGFloat
+    let size: Double
 
     @State private var loader = ThumbnailLoader()
 
     public init(
-        path: String?,
+        url: URL?,
         config: ServerConfig,
-        size: CGFloat = 32
+        size: Double = 32
     ) {
-        self.path = path
+        self.url = url
         self.config = config
         self.size = size
     }
@@ -121,14 +96,15 @@ public struct WatchChannelThumb: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 Circle()
-                    .fill(.secondary.opacity(0.3))
+                    .fill(.quaternary)
             }
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
-        .task(id: path) {
-            guard let path else { return }
-            await loader.load(path: path, config: config)
+        .clipShape(.circle)
+        .accessibilityHidden(true)
+        .task(id: url) {
+            guard let url else { return }
+            await loader.load(url: url, config: config)
         }
     }
 }

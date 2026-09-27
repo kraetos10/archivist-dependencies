@@ -36,21 +36,18 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
     public var channelId: String { channel.channelId }
     public var durationStr: String? { player?.durationStr }
 
-    public var remainingStr: String? {
+    /// Time left to watch, in seconds, when the video has been started.
+    public var remainingSeconds: Int? {
         guard let position = player?.position, position > 0,
               let duration = player?.duration, duration > 0 else { return nil }
-        let remaining = max(duration - Int(position), 0)
-        return Self.remainingFormatter.string(from: TimeInterval(remaining))
-            .map { "\($0) remaining" }
+        return max(duration - Int(position), 0)
     }
 
-    private static let remainingFormatter: DateComponentsFormatter = {
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .abbreviated
-        formatter.allowedUnits = [.hour, .minute]
-        formatter.zeroFormattingBehavior = .dropLeading
-        return formatter
-    }()
+    /// Time left to watch as a short duration ("1 hr, 5 min"), without any
+    /// surrounding sentence — callers wrap it in their own localised string.
+    public var remainingDuration: String? {
+        remainingSeconds.map(DurationText.abbreviated(seconds:))
+    }
 
     /// The video stream, if the server reported per-stream detail.
     public var videoStream: VideoStream? {
@@ -138,8 +135,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
     }
 
     public var publishedFormatted: String? {
-        guard let date = publishedDate else { return nil }
-        return displayFormatter.string(from: date)
+        publishedDate.map(PublishedDate.formatted)
     }
 
     public var publishedRelative: String? {
@@ -163,9 +159,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
 
     public var formattedFileSize: String? {
         guard let mediaSize else { return nil }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(mediaSize))
+        return Int64(mediaSize).formatted(.byteCount(style: .file))
     }
 
     public var resolution: String? {
@@ -228,25 +222,6 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
             result[start..<end].link = url
         }
         return result
-    }
-
-    public var isoFormatter: ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }
-
-    public var displayFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }
-
-    public var relativeFormatter: RelativeDateTimeFormatter {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter
     }
 
     public init(
@@ -450,6 +425,13 @@ public nonisolated enum VideoType: String, Decodable, Sendable, Equatable {
     case streams
     case shorts
     case unknown
+
+    /// A type this client doesn't know yet decodes as `.unknown` instead of
+    /// failing the whole response it's part of.
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: raw) ?? .unknown
+    }
 }
 
 public nonisolated struct VideoPlayer: Decodable, Sendable, Equatable {

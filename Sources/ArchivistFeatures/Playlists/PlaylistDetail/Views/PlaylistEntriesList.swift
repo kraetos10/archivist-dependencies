@@ -4,6 +4,10 @@ import ComposableArchitecture
 import SwiftUI
 
 /// The playlist's entries, plus its loading and empty states.
+///
+/// The rows are the view's direct children (no wrapping stack), so inside the
+/// screen's `LazyVStack` section they're built as they scroll in rather than
+/// all up front.
 @ViewAction(for: PlaylistDetailReducer.self)
 struct PlaylistEntriesList: View {
     let store: StoreOf<PlaylistDetailReducer>
@@ -21,31 +25,27 @@ struct PlaylistEntriesList: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 24)
         } else {
-            entries
-        }
-    }
+            // Read once per pass: builds a dictionary over every entry.
+            let thumbURLs = store.entryThumbURLs
 
-    private var entries: some View {
-        VStack(spacing: 0) {
             ForEach(store.entries) { entry in
-                let isAvailable = entry.youtubeId
-                    .map { store.availableVideoIDs.contains($0) } ?? false
-
                 PlaylistEntryRow(
                     entry: entry,
-                    thumbnailURL: entry.youtubeId.flatMap { store.entryThumbURLs[$0] },
-                    isAvailable: isAvailable
+                    thumbnailURL: entry.youtubeId.flatMap { thumbURLs[$0] },
+                    isAvailable: store.state.isEntryAvailable(entry)
                 )
                 .pressable {
-                    if isAvailable {
-                        send(.entryTapped(entry))
-                    } else {
-                        send(.queueServerDownloadTapped(entry))
-                    }
+                    send(.entryTapped(entry))
                 }
                 #if !os(tvOS)
                 .contextMenu {
-                    entryMenu(entry)
+                    PlaylistEntryMenu(
+                        entry: entry,
+                        allowsRemoval: store.isCustomPlaylist,
+                        onDownloadToDevice: { send(.downloadToDeviceTapped(entry)) },
+                        onMarkAsWatched: { send(.markAsWatchedTapped(entry)) },
+                        onRemove: { send(.removeEntryTapped(entry)) }
+                    )
                 }
                 #endif
                 .transition(.asymmetric(
@@ -53,16 +53,25 @@ struct PlaylistEntriesList: View {
                     removal: .move(edge: .trailing).combined(with: .opacity)
                 ))
             }
-        }
-        .animation(.default, value: store.entries.map(\.id))
-        .padding(.bottom, 24)
-    }
 
-    #if !os(tvOS)
-    @ViewBuilder
-    private func entryMenu(_ entry: PlaylistEntry) -> some View {
-        if let videoId = entry.youtubeId,
-           let url = URL(string: "https://www.youtube.com/watch?v=\(videoId)") {
+            Color.clear
+                .frame(height: 24)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+#if !os(tvOS)
+/// The long-press menu on a playlist entry.
+private struct PlaylistEntryMenu: View {
+    let entry: PlaylistEntry
+    let allowsRemoval: Bool
+    let onDownloadToDevice: () -> Void
+    let onMarkAsWatched: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        if let url = entry.youtubeWatchURL {
             ShareLink(item: url) {
                 Label(
                     String.localised("generic.share", table: .generic),
@@ -71,34 +80,26 @@ struct PlaylistEntriesList: View {
             }
         }
 
-        Button {
-            send(.downloadToDeviceTapped(entry))
-        } label: {
-            Label(
-                String.localised("video.downloadToDevice", table: .videos),
-                systemImage: "arrow.down.circle"
-            )
-        }
+        Button(
+            String.localised("video.downloadToDevice", table: .videos),
+            systemImage: "arrow.down.circle",
+            action: onDownloadToDevice
+        )
 
-        Button {
-            send(.markAsWatchedTapped(entry))
-        } label: {
-            Label(
-                String.localised("video.markAsWatched", table: .videos),
-                systemImage: "eye"
-            )
-        }
+        Button(
+            String.localised("video.markAsWatched", table: .videos),
+            systemImage: "eye",
+            action: onMarkAsWatched
+        )
 
-        if store.isCustomPlaylist {
-            Button(role: .destructive) {
-                send(.removeEntryTapped(entry))
-            } label: {
-                Label(
-                    String.localised("video.removeFromPlaylist", table: .videos),
-                    systemImage: "minus.circle"
-                )
-            }
+        if allowsRemoval {
+            Button(
+                String.localised("video.removeFromPlaylist", table: .videos),
+                systemImage: "minus.circle",
+                role: .destructive,
+                action: onRemove
+            )
         }
     }
-    #endif
 }
+#endif

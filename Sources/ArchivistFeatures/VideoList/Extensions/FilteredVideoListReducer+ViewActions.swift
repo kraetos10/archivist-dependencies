@@ -80,7 +80,11 @@ extension FilteredVideoListReducer {
         _ page: Int,
         state: inout State
     ) -> Effect<Action> {
-        if page == 1 { state.isLoading = true }
+        if page == 1 {
+            state.isLoading = true
+            // A page still loading is about to be cancelled below.
+            state.isLoadingMore = false
+        }
         let config = state.serverConfig
         let sort = state.sortOrder.apiValue
         let watch = state.filter.apiValue
@@ -99,5 +103,6 @@ extension FilteredVideoListReducer {
             }
             await send(.videosResult(result))
         }
+        .cancellable(id: CancelID.fetch, cancelInFlight: true)
     }
 }

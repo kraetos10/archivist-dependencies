@@ -39,7 +39,7 @@ public struct TVSearchScreen: View {
             text: $store.searchQuery,
             prompt: String.localised("generic.searchPrompt", table: .generic)
         )
-        .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
+        .fullScreenCover(item: $store.scope(state: \.destination?.videoDetail, action: \.destination.videoDetail)) { detailStore in
             NavigationStack {
                 TVVideoDetailScreen(store: detailStore)
                     .background(Color.Brand.primary)
@@ -47,7 +47,7 @@ public struct TVSearchScreen: View {
             .background(Color.Brand.primary)
         }
         .fullScreenCover(
-            item: $store.scope(state: \.channelDetail, action: \.channelDetail)
+            item: $store.scope(state: \.destination?.channelDetail, action: \.destination.channelDetail)
         ) { channelDetailStore in
             NavigationStack {
                 TVChannelDetailScreen(store: channelDetailStore)
@@ -61,7 +61,7 @@ public struct TVSearchScreen: View {
             }
         }
         .fullScreenCover(
-            item: $store.scope(state: \.playlistDetail, action: \.playlistDetail)
+            item: $store.scope(state: \.destination?.playlistDetail, action: \.destination.playlistDetail)
         ) { playlistDetailStore in
             NavigationStack {
                 TVPlaylistDetailScreen(store: playlistDetailStore)
@@ -147,12 +147,13 @@ public struct TVSearchScreen: View {
                 .padding(.top, 8)
                 .accessibilityAddTraits(.isHeader)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
                     cards()
                 }
                 .padding(.vertical, TVLayout.rowVerticalPadding)
             }
+            .scrollIndicators(.hidden)
             .scrollClipDisabled()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

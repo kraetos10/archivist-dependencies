@@ -2,20 +2,29 @@
 import ArchivistComponents
 import ArchivistNetworking
 import CarPlay
+import Dependencies
 import UIKit
 
 @MainActor
 public final class CarPlayCoordinator {
     private var interfaceController: CPInterfaceController?
     private let dataProvider: CarPlayDataProvider
-    private let videoService = VideoService.liveValue
+    @Dependency(\.playerClient) private var playerClient
+    @Dependency(\.videoService) private var videoService
     private var currentSort: VideoSortOrder = .published
     private weak var recentTemplate: CPListTemplate?
-    /// Subscription to `PlayerManager.events` for the video CarPlay is
-    /// currently playing. Held so starting another video — or tearing the
-    /// scene down — replaces it rather than leaking a second listener that
-    /// would double-save progress.
+    /// Subscription to player events for the video CarPlay is currently
+    /// playing. Held so starting another video — or tearing the scene
+    /// down — replaces it rather than leaking a second listener that would
+    /// double-save progress.
     private var playbackObservationTask: Task<Void, Never>?
+    /// List loads and thumbnail fetches in flight, cancelled with the scene.
+    private var loadTasks: [Task<Void, Never>] = []
+
+    /// CarPlay's own cap on list rows.
+    private var listLimit: Int {
+        CPListTemplate.maximumItemCount
+    }
 
     public init(dataProvider: CarPlayDataProvider) {
         self.dataProvider = dataProvider
@@ -25,19 +34,19 @@ public final class CarPlayCoordinator {
         self.interfaceController = interfaceController
 
         let recentTemplate = CPListTemplate(
-            title: String(localized: "Recent Videos"),
+            title: String.localised("carPlay.recentVideos", table: .generic),
             sections: []
         )
         recentTemplate.tabImage = UIImage(systemName: "play.rectangle.fill")
 
         let channelsTemplate = CPListTemplate(
-            title: String(localized: "Channels"),
+            title: String.localised("generic.channels", table: .generic),
             sections: []
         )
         channelsTemplate.tabImage = UIImage(systemName: "person.crop.rectangle.stack.fill")
 
         let playlistsTemplate = CPListTemplate(
-            title: String(localized: "Playlists"),
+            title: String.localised("generic.playlists", table: .generic),
             sections: []
         )
         playlistsTemplate.tabImage = UIImage(systemName: "list.bullet.rectangle.fill")
@@ -53,12 +62,13 @@ public final class CarPlayCoordinator {
     }
 
     public func teardown() {
-        // Save watch progress before stopping playback
-        let position = Int(PlayerManager.shared.currentTime)
-        let videoId = PlayerManager.shared.currentVideoID
+        // Read the position and stop in one turn — `stop()` zeroes it.
+        let videoId = playerClient.currentVideoID()
+        let position = Int(playerClient.stopReturningPosition())
         let config = dataProvider.serverConfig
         if let videoId, position > 0 {
-            Task.detached { [videoService = self.videoService] in
+            // Detached: the save has to outlive the scene.
+            Task.detached { [videoService] in
                 try? await videoService.setProgress(
                     config: config,
                     videoId: videoId,
@@ -66,51 +76,45 @@ public final class CarPlayCoordinator {
                 )
             }
         }
-        PlayerManager.shared.stop()
         // Drop the event subscription with the scene. Left running it would
         // keep saving progress for a CarPlay session the user has already
         // disconnected from.
         playbackObservationTask?.cancel()
         playbackObservationTask = nil
+        for task in loadTasks {
+            task.cancel()
+        }
+        loadTasks = []
         interfaceController = nil
     }
 
     // MARK: - Data Loading
 
-    private func loadRecentVideos(into template: CPListTemplate) {
-        Task {
-            do {
-                let videos = try await dataProvider.fetchRecentVideos(sort: currentSort)
-                let videoItems = videos.map { video in
-                    makeVideoListItem(video)
-                }
+    /// Runs `operation`, keeping hold of it so teardown can cancel it.
+    private func track(_ operation: @escaping @MainActor () async -> Void) {
+        loadTasks.removeAll(where: \.isCancelled)
+        loadTasks.append(Task { await operation() })
+    }
 
-                let sortItems = VideoSortOrder.allCases.map { sort in
-                    let label = sort == currentSort ? "✓ \(sort.label)" : sort.label
-                    let item = CPListItem(
-                        text: label,
-                        detailText: nil
-                    )
-                    item.handler = { [weak self] _, completion in
-                        guard let self else { completion(); return }
-                        self.currentSort = sort
-                        if let template = self.recentTemplate {
-                            self.loadRecentVideos(into: template)
-                        }
-                        completion()
-                    }
-                    return item
-                }
+    private func loadRecentVideos(into template: CPListTemplate) {
+        let sort = currentSort
+        let limit = listLimit
+        track { [weak self] in
+            guard let self else { return }
+            do {
+                let videos = try await dataProvider.fetchRecentVideos(sort: sort, limit: limit)
+                guard !Task.isCancelled else { return }
                 let sortSection = CPListSection(
-                    items: sortItems,
-                    header: String(localized: "Sort By"),
+                    items: VideoSortOrder.allCases.map { makeSortItem($0) },
+                    header: String.localised("carPlay.sortBy", table: .generic),
                     sectionIndexTitle: nil
                 )
-                let videoSection = CPListSection(items: videoItems)
-
+                let videoSection = CPListSection(items: videos.map { makeVideoListItem($0) })
                 template.updateSections([sortSection, videoSection])
+            } catch is CancellationError {
+                return
             } catch {
-                showError(in: template, message: String(localized: "Failed to load videos")) { [weak self] in
+                showError(in: template, message: String.localised("carPlay.loadVideosFailed", table: .generic)) { [weak self] in
                     self?.loadRecentVideos(into: template)
                 }
             }
@@ -118,9 +122,12 @@ public final class CarPlayCoordinator {
     }
 
     private func loadChannels(into template: CPListTemplate) {
-        Task {
+        let limit = listLimit
+        track { [weak self] in
+            guard let self else { return }
             do {
-                let channels = try await dataProvider.fetchChannels()
+                let channels = try await dataProvider.fetchChannels(limit: limit)
+                guard !Task.isCancelled else { return }
                 let items = channels.map { channel in
                     let item = CPListItem(
                         text: channel.channelName,
@@ -135,8 +142,10 @@ public final class CarPlayCoordinator {
                     return item
                 }
                 template.updateSections([CPListSection(items: items)])
+            } catch is CancellationError {
+                return
             } catch {
-                showError(in: template, message: String(localized: "Failed to load channels")) { [weak self] in
+                showError(in: template, message: String.localised("carPlay.loadChannelsFailed", table: .generic)) { [weak self] in
                     self?.loadChannels(into: template)
                 }
             }
@@ -144,9 +153,12 @@ public final class CarPlayCoordinator {
     }
 
     private func loadPlaylists(into template: CPListTemplate) {
-        Task {
+        let limit = listLimit
+        track { [weak self] in
+            guard let self else { return }
             do {
-                let playlists = try await dataProvider.fetchPlaylists()
+                let playlists = try await dataProvider.fetchPlaylists(limit: limit)
+                guard !Task.isCancelled else { return }
                 let items = playlists.map { playlist in
                     let item = CPListItem(
                         text: playlist.playlistName,
@@ -161,8 +173,10 @@ public final class CarPlayCoordinator {
                     return item
                 }
                 template.updateSections([CPListSection(items: items)])
+            } catch is CancellationError {
+                return
             } catch {
-                showError(in: template, message: String(localized: "Failed to load playlists")) { [weak self] in
+                showError(in: template, message: String.localised("carPlay.loadPlaylistsFailed", table: .generic)) { [weak self] in
                     self?.loadPlaylists(into: template)
                 }
             }
@@ -181,13 +195,17 @@ public final class CarPlayCoordinator {
         _ channel: ChannelResponse,
         into template: CPListTemplate
     ) {
-        Task {
+        let limit = listLimit
+        track { [weak self] in
+            guard let self else { return }
             do {
-                let videos = try await dataProvider.fetchChannelVideos(channelId: channel.channelId)
-                let items = videos.map { makeVideoListItem($0) }
-                template.updateSections([CPListSection(items: items)])
+                let videos = try await dataProvider.fetchChannelVideos(channelId: channel.channelId, limit: limit)
+                guard !Task.isCancelled else { return }
+                template.updateSections([CPListSection(items: videos.map { makeVideoListItem($0) })])
+            } catch is CancellationError {
+                return
             } catch {
-                showError(in: template, message: String(localized: "Failed to load videos")) { [weak self] in
+                showError(in: template, message: String.localised("carPlay.loadVideosFailed", table: .generic)) { [weak self] in
                     self?.loadChannelVideos(channel, into: template)
                 }
             }
@@ -204,13 +222,17 @@ public final class CarPlayCoordinator {
         _ playlist: PlaylistResponse,
         into template: CPListTemplate
     ) {
-        Task {
+        let limit = listLimit
+        track { [weak self] in
+            guard let self else { return }
             do {
-                let videos = try await dataProvider.fetchPlaylistVideos(playlistId: playlist.playlistId)
-                let items = videos.map { makeVideoListItem($0) }
-                template.updateSections([CPListSection(items: items)])
+                let videos = try await dataProvider.fetchPlaylistVideos(playlistId: playlist.playlistId, limit: limit)
+                guard !Task.isCancelled else { return }
+                template.updateSections([CPListSection(items: videos.map { makeVideoListItem($0) })])
+            } catch is CancellationError {
+                return
             } catch {
-                showError(in: template, message: String(localized: "Failed to load videos")) { [weak self] in
+                showError(in: template, message: String.localised("carPlay.loadVideosFailed", table: .generic)) { [weak self] in
                     self?.loadPlaylistVideos(playlist, into: template)
                 }
             }
@@ -224,31 +246,26 @@ public final class CarPlayCoordinator {
         let config = dataProvider.serverConfig
         let videoId = video.videoId
 
-        PlayerManager.shared.load(
+        // One subscription covers progress saves and the watched flag,
+        // taken before the load so nothing it emits is missed. A broadcast
+        // stream lets CarPlay and the VideoDetail feature observe at once.
+        let events = playerClient.startPlayback(PlayerClient.PlaybackRequest(
             url: url,
             startPosition: video.resumePositionSeconds,
             videoId: videoId,
-            expectedSize: video.mediaSize.map { Int64($0) }
-        )
-        PlayerManager.shared.currentVideoID = videoId
-        PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
-            title: video.title,
-            artist: video.channelName,
-            duration: Double(video.player?.duration ?? 0),
-            artworkURL: dataProvider.buildThumbnailURL(for: video.vidThumbUrl),
-            authHeaders: config.authHeaders
-        )
+            expectedSize: video.mediaSize.map { Int64($0) },
+            metadata: PlayerManager.NowPlayingMetadata(
+                title: video.title,
+                artist: video.channelName,
+                duration: Double(video.player?.duration ?? 0),
+                artworkURL: dataProvider.buildThumbnailURL(for: video.vidThumbUrl),
+                authHeaders: config.authHeaders
+            )
+        ))
 
-        // One subscription covers progress saves and the watched flag.
-        // This used to install `onPause` / `onPlaybackCompleted` closures on
-        // `PlayerManager`, which were single-assignment: connecting CarPlay
-        // overwrote the slots the VideoDetail feature had installed and left
-        // its progress saving dead for the rest of the session (and vice
-        // versa, depending on which ran last). A broadcast stream lets both
-        // observers coexist.
         playbackObservationTask?.cancel()
-        playbackObservationTask = Task { [videoService = self.videoService] in
-            for await event in PlayerManager.shared.events {
+        playbackObservationTask = Task { [videoService] in
+            for await event in events {
                 switch event {
                 case .paused(let eventVideoId, let position):
                     guard eventVideoId == videoId, position > 0 else { continue }
@@ -278,11 +295,26 @@ public final class CarPlayCoordinator {
 
     // MARK: - Helpers
 
+    private func makeSortItem(_ sort: VideoSortOrder) -> CPListItem {
+        let label = sort == currentSort ? "✓ \(sort.label)" : sort.label
+        let item = CPListItem(text: label, detailText: nil)
+        item.handler = { [weak self] _, completion in
+            guard let self else { completion(); return }
+            currentSort = sort
+            if let template = recentTemplate {
+                loadRecentVideos(into: template)
+            }
+            completion()
+        }
+        return item
+    }
+
     private func makeVideoListItem(_ video: VideoResponse) -> CPListItem {
-        let item = CPListItem(
-            text: video.title,
-            detailText: "\(video.channelName) · \(video.durationStr ?? "")"
-        )
+        let detail = [video.channelName, video.durationStr]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+        let item = CPListItem(text: video.title, detailText: detail)
         item.isExplicitContent = false
         item.handler = { [weak self] _, completion in
             self?.playVideo(video)
@@ -298,24 +330,29 @@ public final class CarPlayCoordinator {
     ) {
         guard let url = dataProvider.buildThumbnailURL(for: path) else { return }
         let headers = dataProvider.serverConfig.authHeaders
-        Task.detached {
-            var request = URLRequest(url: url)
-            for (key, value) in headers {
-                request.setValue(value, forHTTPHeaderField: key)
-            }
-            guard let (data, _) = try? await URLSession.shared.data(for: request),
-                  let image = UIImage(data: data) else { return }
-            let size = CGSize(width: 44, height: 44)
-            let renderer = UIGraphicsImageRenderer(size: size)
-            let resized = renderer.image { _ in
-                let scale = max(size.width / image.size.width, size.height / image.size.height)
-                let drawSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-                let origin = CGPoint(x: (size.width - drawSize.width) / 2, y: (size.height - drawSize.height) / 2)
-                image.draw(in: CGRect(origin: origin, size: drawSize))
-            }
-            await MainActor.run {
-                item.setImage(resized)
-            }
+        track {
+            guard let image = await Self.fetchThumbnail(url: url, headers: headers) else { return }
+            item.setImage(image)
+        }
+    }
+
+    /// Downloads and scales a list thumbnail off the main actor.
+    nonisolated private static func fetchThumbnail(
+        url: URL,
+        headers: [String: String]
+    ) async -> UIImage? {
+        var request = URLRequest(url: url)
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let image = UIImage(data: data) else { return nil }
+        let size = CGSize(width: 44, height: 44)
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            let scale = max(size.width / image.size.width, size.height / image.size.height)
+            let drawSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+            let origin = CGPoint(x: (size.width - drawSize.width) / 2, y: (size.height - drawSize.height) / 2)
+            image.draw(in: CGRect(origin: origin, size: drawSize))
         }
     }
 
@@ -326,7 +363,7 @@ public final class CarPlayCoordinator {
     ) {
         let item = CPListItem(
             text: message,
-            detailText: retry != nil ? String(localized: "Tap to retry") : nil
+            detailText: retry != nil ? String.localised("generic.tapToRetry", table: .generic) : nil
         )
         if let retry {
             item.handler = { _, completion in

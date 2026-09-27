@@ -3,14 +3,12 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchAddDownloadSheet: View {
-    @State var viewModel: WatchAddDownloadViewModel
-    public let onAdded: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
+    @Bindable var viewModel: WatchAddDownloadViewModel
+    let onAdded: () async -> Void
 
     public init(
         viewModel: WatchAddDownloadViewModel,
-        onAdded: @escaping () -> Void
+        onAdded: @escaping () async -> Void
     ) {
         self.viewModel = viewModel
         self.onAdded = onAdded
@@ -21,10 +19,7 @@ public struct WatchAddDownloadSheet: View {
             Form {
                 Section {
                     TextField(
-                        String(
-                            localized: "queue.urlPlaceholder",
-                            bundle: Bundle.module
-                        ),
+                        String(localized: "queue.urlPlaceholder", bundle: .module),
                         text: $viewModel.urlText
                     )
                     .textInputAutocapitalization(.never)
@@ -37,23 +32,22 @@ public struct WatchAddDownloadSheet: View {
                 }
 
                 Button {
-                    Task { await viewModel.addToQueue() }
+                    Task { await viewModel.addButtonTapped() }
                 } label: {
                     if viewModel.isAdding {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text(String(localized: "queue.addButton", bundle: Bundle.module))
+                        Text(String(localized: "queue.addButton", bundle: .module))
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .disabled(viewModel.urlText.isEmpty || viewModel.isAdding)
+                .disabled(viewModel.isAddDisabled)
             }
-            .navigationTitle(String(localized: "queue.addTitle", bundle: Bundle.module))
-            .onChange(of: viewModel.didAdd) {
+            .navigationTitle(String(localized: "queue.addTitle", bundle: .module))
+            .task(id: viewModel.didAdd) {
                 if viewModel.didAdd {
-                    dismiss()
-                    onAdded()
+                    await onAdded()
                 }
             }
         }

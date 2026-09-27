@@ -39,7 +39,7 @@ public struct TVLoginScreen: View {
 
             Text(String.localised("login.apiKey.title", table: .login))
                 .font(.title)
-                .fontWeight(.bold)
+                .bold()
 
             StaticAuthNoticeView(variable: store.staticAuthVariable)
                 .frame(maxWidth: 720)

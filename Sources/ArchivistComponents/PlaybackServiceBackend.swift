@@ -11,7 +11,7 @@ import VLCPlayerCore
 /// upstream's HTTP-MP4 seek behaviour while keeping our SwiftUI chrome
 /// in `VLCPlayerView`. tvOS stays on the VLCUI backend.
 @MainActor
-public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackServiceDelegate, @unchecked Sendable {
+public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackServiceDelegate {
     /// Long-lived host view that the SwiftUI player chrome adopts.
     /// `PlaybackService` reparents its `_actualVideoOutputView` under
     /// this on `videoOutputView =` and survives mini-↔-full transitions
@@ -34,7 +34,6 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     public var onPlaybackFailed: (() -> Void)?
     public var onPiPStateChanged: ((Bool) -> Void)?
 
-    private var playbackEndContinuation: AsyncStream<Void>.Continuation?
     /// Resume position in seconds applied once libvlc reports the
     /// stream as seekable. Mirrors the deferred-seek pattern from
     /// the VLCUI backend — `:start-time=` is best-effort for HTTP.
@@ -55,6 +54,21 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     /// those as `.stopped` exactly like reaching the end of a video, and
     /// reporting them as an ending marks the video watched and auto-advances.
     private var isTransitioningMedia = false
+
+    /// Set once libvlc reports `.opening` for media *this* backend loaded.
+    ///
+    /// `PlaybackService` is a process singleton reusing one media player, and
+    /// it delivers state changes asynchronously to whichever delegate is
+    /// current at delivery time. When a new video is loaded mid-playback,
+    /// `PlayerManager` stops the outgoing backend and this one takes over
+    /// the delegate in the same run-loop turn — so the outgoing media's
+    /// `.paused` / `.stopping` / `.stopped` land *here*. Before this gate a
+    /// stale `.stopped` looked like our own load failing (no `.playing`
+    /// yet), and surfaced as `playbackFailed` for the new video. Until our
+    /// own `.opening` arrives, those states can only belong to the previous
+    /// media, so they are ignored. `.error` is not gated: a genuine failure
+    /// of our media must always surface.
+    private var hasOpenedOwnMedia = false
 
     /// How close to the end a stop has to be to count as reaching the end.
     /// libvlc's last position update lands a beat before the true end.
@@ -85,6 +99,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         isBuffering = true
         isPlaying = true
         hasReachedPlaying = false
+        hasOpenedOwnMedia = false
         furthestTime = 0
         if let startPosition, startPosition > 0 {
             currentTime = startPosition
@@ -143,8 +158,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         duration = 0
         pendingResumeSec = 0
         hasReachedPlaying = false
-        playbackEndContinuation?.finish()
-        playbackEndContinuation = nil
+        hasOpenedOwnMedia = false
     }
 
     public func seekTo(_ seconds: Double) {
@@ -184,13 +198,14 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         service.videoOutputView = nil
         service.videoOutputView = host
         // `setVideoOutputView` runs on the next main-queue tick, so
-        // schedule the layout sweep after it. Autoresizing propagates
+        // schedule the layout sweep after it (main-actor jobs drain from
+        // the same main queue, behind it). Autoresizing propagates
         // frames down the chain but doesn't reliably invoke
         // `layoutSubviews` on VLCKit's CAMetalLayer-backed render view —
         // when that's skipped, the layer keeps its old `drawableSize`
         // and renders off-screen even though every UIView in the
         // hierarchy reports the new bounds.
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             Self.forceLayoutSweep(self.playerView)
         }
@@ -225,12 +240,12 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // size for any Metal layer in the subtree so the next frame
         // renders at the correct resolution.
         if let metalLayer = view.layer as? CAMetalLayer {
-            let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
+            let scale = view.window?.screen.nativeScale ?? view.traitCollection.displayScale
             let target = CGSize(
                 width: view.bounds.width * scale,
                 height: view.bounds.height * scale
             )
-            if target.width > 0, target.height > 0, metalLayer.drawableSize != target {
+            if scale > 0, target.width > 0, target.height > 0, metalLayer.drawableSize != target {
                 metalLayer.drawableSize = target
             }
         }
@@ -261,6 +276,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         // Replacing the media stops the outgoing one, and libvlc reports that
         // stop the same way it reports reaching the end.
         isTransitioningMedia = true
+        hasOpenedOwnMedia = false
 
         // The swap is an optimisation: if libvlc won't take the local file,
         // leave the streaming media playing rather than trapping.
@@ -277,18 +293,16 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         service.playbackRate = rate
     }
 
-    public func playbackEndEvents() -> AsyncStream<Void> {
-        playbackEndContinuation?.finish()
-        playbackEndContinuation = nil
-        return AsyncStream { continuation in
-            self.playbackEndContinuation = continuation
-        }
-    }
-
     // MARK: - VLCPlaybackServiceDelegate
 
+    // `PlaybackService` always calls its delegate from the main queue
+    // (every call site is inside `DispatchQueue.main.async`). Handling the
+    // callbacks synchronously on the main actor keeps them in libvlc's
+    // order — separate `Task` hops carry no ordering guarantee, and the
+    // `.opening` gate above depends on seeing states in sequence.
+
     nonisolated public func playbackPositionUpdated(_ playbackService: PlaybackService) {
-        Task { @MainActor in self.handlePositionUpdate() }
+        MainActor.assumeIsolated { handlePositionUpdate() }
     }
 
     nonisolated public func mediaPlayerStateChanged(
@@ -298,11 +312,11 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         currentMediaHasChapters: Bool,
         for playbackService: PlaybackService
     ) {
-        Task { @MainActor in self.handleStateChange(currentState) }
+        MainActor.assumeIsolated { handleStateChange(currentState) }
     }
 
     nonisolated public func pictureInPictureStateDidChange(enabled: Bool) {
-        Task { @MainActor in self.onPiPStateChanged?(enabled) }
+        MainActor.assumeIsolated { onPiPStateChanged?(enabled) }
     }
 
     private func handlePositionUpdate() {
@@ -343,8 +357,18 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     }
 
     private func handleStateChange(_ currentState: VLCMediaPlayerState) {
+        if !hasOpenedOwnMedia {
+            switch currentState {
+            case .paused, .stopping, .stopped:
+                // The previous media winding down; see `hasOpenedOwnMedia`.
+                return
+            default:
+                break
+            }
+        }
         switch currentState {
         case .opening:
+            hasOpenedOwnMedia = true
             // The replacement media is opening, so the outgoing one's stop
             // has been and gone.
             isTransitioningMedia = false
@@ -373,7 +397,6 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
                 break
             }
             if reachedEnd {
-                playbackEndContinuation?.yield()
                 onPlaybackEnd?()
             } else {
                 onPlaybackFailed?()

@@ -10,13 +10,13 @@ extension DeviceDownloadsReducer {
     ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
-            return handleViewDidAppear(state: &state)
+            return refreshStoragePeriodically()
         case .viewDidDisappear:
-            // The reducer now lives for the app's lifetime as a tab root, so
+            // The reducer lives for the app's lifetime as a tab root, so
             // the storage poll has to stop when the tab isn't on screen.
             return .cancel(id: CancelID.storageRefresh)
         case .deleteTapped(let videoId):
-            return handleDeleteTapped(videoId, state: &state)
+            return handleDeleteTapped(videoId)
         case .downloadTapped(let download):
             return handleDownloadTapped(download, state: &state)
         case .addToPlaylistTapped(let download):
@@ -30,45 +30,28 @@ extension DeviceDownloadsReducer {
 
     // MARK: - Private Handlers
 
-    private func handleViewDidAppear(state: inout State) -> Effect<Action> {
-        .merge(
-            refreshStorageInfo(),
-            // Periodically refresh storage while the screen is visible
-            // so it updates when downloads complete in the background
-            .run { send in
-                while !Task.isCancelled {
-                    try await Task.sleep(nanoseconds: 3_000_000_000)
-                    let downloadsSize = LocalVideoStorage.totalDownloadsSize()
-                    let resourceValues = try? URL(
-                        fileURLWithPath: NSHomeDirectory())
-                        .resourceValues(
-                            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
-                        )
-                    let available = resourceValues?.volumeAvailableCapacityForImportantUsage ?? 0
-                    await send(.storageInfoLoaded(downloadsSize: downloadsSize, available: available))
-                }
+    /// Reads storage now, then every few seconds while the screen is up so
+    /// the bar tracks downloads finishing in the background.
+    private func refreshStoragePeriodically() -> Effect<Action> {
+        .run { [clock, deviceStorage] send in
+            while true {
+                await send(.storageInfoLoaded(deviceStorage.usage()))
+                try await clock.sleep(for: .seconds(3))
             }
-            .cancellable(id: CancelID.storageRefresh, cancelInFlight: true)
-        )
-    }
-
-    private func refreshStorageInfo() -> Effect<Action> {
-        .run { send in
-            let downloadsSize = LocalVideoStorage.totalDownloadsSize()
-            let resourceValues = try? URL(fileURLWithPath: NSHomeDirectory())
-                .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-            let available = resourceValues?.volumeAvailableCapacityForImportantUsage ?? 0
-            await send(.storageInfoLoaded(downloadsSize: downloadsSize, available: available))
         }
+        .cancellable(id: CancelID.storageRefresh, cancelInFlight: true)
     }
 
-    private func handleDeleteTapped(
-        _ videoId: String,
-        state: inout State
-    ) -> Effect<Action> {
-        try? localVideoStorage.deleteVideo(videoId: videoId)
-        try? deviceDownloadDatabase.deleteDownload(videoId)
-        return refreshStorageInfo()
+    private func handleDeleteTapped(_ videoId: String) -> Effect<Action> {
+        .run { [deviceDownloadDatabase, deviceStorage, localVideoStorage] send in
+            do {
+                try localVideoStorage.deleteVideo(videoId: videoId)
+                try deviceDownloadDatabase.deleteDownload(videoId)
+            } catch {
+                await send(.operationFailed(error.localizedDescription))
+            }
+            await send(.storageInfoLoaded(deviceStorage.usage()))
+        }
     }
 
     private func handleDownloadTapped(
@@ -77,32 +60,40 @@ extension DeviceDownloadsReducer {
     ) -> Effect<Action> {
         switch download.status {
         case .completed:
-            let video = videoResponse(from: download)
-            let allCompleted = state.completedDownloads
+            let completed = state.completedDownloads
             let nextVideos: [VideoResponse]
-            if let index = allCompleted.firstIndex(where: { $0.id == download.id }) {
-                nextVideos = allCompleted
-                    .suffix(from: allCompleted.index(after: index))
-                    .map { videoResponse(from: $0) }
+            if let index = completed.firstIndex(where: { $0.id == download.id }) {
+                nextVideos = completed[completed.index(after: index)...].map(\.offlineVideo)
             } else {
                 nextVideos = []
             }
             state.videoDetail = VideoDetailReducer.State(
                 serverConfig: state.serverConfig,
-                video: video,
+                video: download.offlineVideo,
                 nextVideos: nextVideos,
                 shouldAutoPlayNextVideo: state.autoPlayEnabled
             )
             return .none
         case .failed:
-            let videoId = download.id
-            let config = state.serverConfig
-            return .run { [videoService, deviceDownloadDatabase, persistentDownloadManager] _ in
+            return retryDownload(videoId: download.id, config: state.serverConfig)
+        case .downloading, .none:
+            return .none
+        }
+    }
+
+    private func retryDownload(
+        videoId: String,
+        config: ServerConfig
+    ) -> Effect<Action> {
+        .run { [now, videoService, deviceDownloadDatabase, persistentDownloadManager] send in
+            do {
                 let video = try await videoService.getVideo(config: config, id: videoId)
                 guard let mediaPath = video.mediaUrl,
-                      let mediaURL = config.fullURL(for: mediaPath) else { return }
-
-                let retryDownload = DeviceDownload(
+                      let mediaURL = config.fullURL(for: mediaPath) else {
+                    await send(.operationFailed(String.localised("video.download.unavailable", table: .videos)))
+                    return
+                }
+                try deviceDownloadDatabase.insertDownload(DeviceDownload(
                     id: videoId,
                     title: video.title,
                     channelName: video.channelName,
@@ -110,10 +101,8 @@ extension DeviceDownloadsReducer {
                     status: .downloading,
                     progress: 0,
                     fileSize: video.mediaSize,
-                    createdAt: Date().timeIntervalSince1970
-                )
-                try? deviceDownloadDatabase.insertDownload(retryDownload)
-
+                    createdAt: now.timeIntervalSince1970
+                ))
                 await persistentDownloadManager.startDownload(
                     url: mediaURL,
                     videoId: videoId,
@@ -122,47 +111,10 @@ extension DeviceDownloadsReducer {
                     authHeaders: config.authHeaders,
                     thumbnailURL: video.vidThumbUrl.flatMap { config.fullURL(for: $0) }
                 )
+            } catch {
+                await send(.operationFailed(error.localizedDescription))
             }
-        default:
-            return .none
         }
-    }
-
-    private func videoResponse(from download: DeviceDownload) -> VideoResponse {
-        VideoResponse(
-            videoId: download.id,
-            title: download.title,
-            description: nil,
-            category: nil,
-            channel: VideoChannel(
-                channelId: "",
-                channelName: download.channelName,
-                channelActive: nil,
-                channelBannerUrl: nil,
-                channelThumbUrl: nil,
-                channelTvartUrl: nil,
-                channelDescription: nil,
-                channelLastRefresh: nil,
-                channelSubs: nil,
-                channelSubscribed: nil,
-                channelTags: nil,
-                channelTabs: nil
-            ),
-            published: nil,
-            dateDownloaded: nil,
-            vidLastRefresh: nil,
-            vidThumbUrl: download.thumbUrl,
-            vidType: nil,
-            active: nil,
-            mediaUrl: nil,
-            mediaSize: nil,
-            player: nil,
-            stats: nil,
-            subtitles: nil,
-            streams: nil,
-            tags: nil,
-            commentCount: nil
-        )
     }
 }
 #endif

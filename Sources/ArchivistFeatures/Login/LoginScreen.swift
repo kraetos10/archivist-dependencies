@@ -20,10 +20,11 @@ public struct LoginScreen: View {
                     LottieView(animation: LottieAnimationFile.credentials.animation)
                         .playing(loopMode: .playOnce)
                         .frame(width: 200, height: 200)
+                        .accessibilityHidden(true)
 
                     Text(String.localised("login.apiKey.title", table: .login))
                         .font(.largeTitle)
-                        .fontWeight(.bold)
+                        .bold()
                         .foregroundStyle(Color.Text.primary)
                         .multilineTextAlignment(.center)
 
@@ -75,7 +76,7 @@ public struct LoginScreen: View {
 
 #Preview {
     LoginScreen(
-        store: Store(initialState: LoginReducer.State(registrationDetails: Shared(value: RegistrationDetails()))) {
+        store: Store(initialState: LoginReducer.State(registrationDetails: RegistrationDetails())) {
             LoginReducer()
         }
     )

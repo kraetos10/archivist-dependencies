@@ -25,12 +25,16 @@ public struct VideoSortMenu: View {
                 .disabled(current == sort)
             }
         } label: {
-            Image(systemName: "arrow.up.arrow.down")
+            Label(String.localised("video.sort", table: .videos), systemImage: "arrow.up.arrow.down")
+                .labelStyle(.iconOnly)
                 .font(.caption)
                 .foregroundStyle(Color.Text.primary)
                 .padding(6)
                 .background(Color.Surface.highlight)
                 .clipShape(Circle())
+                // Small visible disc, full-size tap target.
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(.rect)
         }
     }
 }

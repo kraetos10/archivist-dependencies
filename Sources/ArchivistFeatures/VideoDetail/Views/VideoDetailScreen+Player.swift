@@ -20,15 +20,9 @@ extension VideoDetailScreen {
                 thumbnailView(height: height)
             }
 
-            if let countdown = store.autoPlayCountdown {
+            if let info = store.autoPlayCountdownInfo {
                 AutoPlayCountdownOverlay(
-                    info: AutoPlayCountdownInfo(
-                        title: countdown.nextVideo.title,
-                        thumbnailURL: countdown.nextVideo.vidThumbUrl
-                            .flatMap { store.serverConfig.fullURL(for: $0) },
-                        remainingSeconds: countdown.remainingSeconds,
-                        totalSeconds: VideoDetailReducer.autoPlayCountdownSeconds
-                    ),
+                    info: info,
                     onPlayNow: { send(.autoPlayCountdownPlayNowTapped) },
                     onCancel: { send(.autoPlayCountdownCancelTapped) }
                 )
@@ -42,7 +36,7 @@ extension VideoDetailScreen {
 
     func thumbnailView(height: CGFloat) -> some View {
         ZStack {
-            if let thumbURL = thumbnailURL {
+            if let thumbURL = store.thumbnailURL {
                 AsyncImage(url: thumbURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -60,7 +54,7 @@ extension VideoDetailScreen {
             }
 
             Image(systemName: "play.circle.fill")
-                .font(.system(size: 64))
+                .scaledSystemFont(size: 64, relativeTo: .largeTitle)
                 .foregroundStyle(.white.opacity(0.9))
                 .shadow(radius: 8)
         }
@@ -94,13 +88,6 @@ extension VideoDetailScreen {
         Rectangle()
             .fill(Color.Brand.secondary.opacity(0.3))
             .frame(height: height)
-    }
-
-    var thumbnailURL: URL? {
-        store.serverConfig.thumbnailURL(
-            videoId: store.video.videoId,
-            path: store.video.vidThumbUrl
-        )
     }
 }
 #endif

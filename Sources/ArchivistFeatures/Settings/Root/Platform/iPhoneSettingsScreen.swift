@@ -35,7 +35,6 @@ public struct iPhoneSettingsScreen: View {
         }
     }
 
-    @ViewBuilder
     private var settingsList: some View {
         List {
             ActiveTaskView(store: store.scope(state: \.activeTask, action: \.activeTask))
@@ -46,7 +45,7 @@ public struct iPhoneSettingsScreen: View {
                 Button {
                     send(.downloadsTapped)
                 } label: {
-                    settingsRow(
+                    SettingsNavigationRow(
                         icon: "arrow.down.circle",
                         title: String.localised("settings.queue", table: .settings)
                     )
@@ -55,7 +54,7 @@ public struct iPhoneSettingsScreen: View {
                 Button {
                     send(.statsTapped)
                 } label: {
-                    settingsRow(
+                    SettingsNavigationRow(
                         icon: "chart.bar",
                         title: String.localised("settings.stats", table: .settings)
                     )
@@ -64,7 +63,7 @@ public struct iPhoneSettingsScreen: View {
                 Button {
                     send(.historyTapped)
                 } label: {
-                    settingsRow(
+                    SettingsNavigationRow(
                         icon: "clock.arrow.circlepath",
                         title: String.localised("settings.history", table: .settings)
                     )
@@ -78,7 +77,7 @@ public struct iPhoneSettingsScreen: View {
                 ) {
                     send(.rescanSubscriptionsTapped)
                 }
-                .disabled(store.isRescanningSubscriptions || store.activeTask.activeDownload != nil)
+                .disabled(store.isRescanDisabled)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             } header: {
@@ -90,14 +89,14 @@ public struct iPhoneSettingsScreen: View {
                     Text(store.serverConfig.hostname)
                         .foregroundStyle(Color.Brand.secondary)
                 }
-                if let port = store.serverConfig.port {
+                if let port = store.portDescription {
                     LabeledContent(String.localised("settings.port", table: .settings)) {
-                        Text(String(port))
+                        Text(port)
                             .foregroundStyle(Color.Brand.secondary)
                     }
                 }
                 LabeledContent(String.localised("settings.connection", table: .settings)) {
-                    Text(store.serverConfig.useHTTP ? "HTTP" : "HTTPS")
+                    Text(store.connectionDescription)
                         .foregroundStyle(Color.Brand.secondary)
                 }
             } header: {
@@ -107,11 +106,11 @@ public struct iPhoneSettingsScreen: View {
             Section {
                 Toggle(
                     String.localised("video.autoplay", table: .videos),
-                    isOn: Binding(store.withState { $0.$autoPlayEnabled })
+                    isOn: $store.autoPlayEnabled.sending(\.view.autoPlayToggled)
                 )
                 Toggle(
                     String.localised("video.autoplayPlaylist", table: .videos),
-                    isOn: Binding(store.withState { $0.$autoPlayPlaylist })
+                    isOn: $store.autoPlayPlaylist.sending(\.view.autoPlayPlaylistToggled)
                 )
             } header: {
                 Text(String.localised("video.autoplaySection", table: .videos))
@@ -125,11 +124,13 @@ public struct iPhoneSettingsScreen: View {
                         HStack {
                             Image(systemName: "heart")
                                 .foregroundStyle(Color.Accent.dark)
+                                .accessibilityHidden(true)
                             Text(String.localised("settings.support", table: .settings))
                             Spacer()
                             Image(systemName: "arrow.up.right")
                                 .font(.caption)
                                 .foregroundStyle(Color.Brand.secondary)
+                                .accessibilityHidden(true)
                         }
                     }
                 } header: {
@@ -141,7 +142,7 @@ public struct iPhoneSettingsScreen: View {
                 Button {
                     send(.thirdPartyLibrariesTapped)
                 } label: {
-                    settingsRow(
+                    SettingsNavigationRow(
                         icon: "shippingbox",
                         title: String.localised("settings.thirdPartyLibraries", table: .settings)
                     )
@@ -151,76 +152,74 @@ public struct iPhoneSettingsScreen: View {
             }
 
             Section {
-                if VLCLogManager.shared.hasLogs {
-                    ShareLink(item: VLCLogManager.shared.logFileURL) {
-                        HStack {
-                            Image(systemName: "square.and.arrow.up")
-                                .foregroundStyle(Color.Accent.dark)
-                            Text("Share VLC playback logs")
-                                .foregroundStyle(Color.Text.primary)
-                            Spacer()
-                        }
+                if let logURL = store.diagnosticLogURL {
+                    ShareLink(item: logURL) {
+                        Label(
+                            String.localised("settings.diagnostics.shareLogs", table: .settings),
+                            systemImage: "square.and.arrow.up"
+                        )
+                        .foregroundStyle(Color.Text.primary)
                     }
                 }
                 Button(role: .destructive) {
-                    VLCLogManager.shared.clearLogs()
+                    send(.clearDiagnosticLogsTapped)
                 } label: {
-                    HStack {
-                        Image(systemName: "trash")
-                        Text("Clear VLC logs")
-                    }
+                    Label(
+                        String.localised("settings.diagnostics.clearLogs", table: .settings),
+                        systemImage: "trash"
+                    )
                 }
             } header: {
-                Text("Diagnostics")
+                Text(String.localised("settings.diagnostics", table: .settings))
             } footer: {
-                Text(
-                    "Logs capture libvlc output for the most recent playback. "
-                    + "Export when reporting choppy or stalled video."
-                )
+                Text(String.localised("settings.diagnostics.footer", table: .settings))
             }
 
             Section {
                 Button(role: .destructive) {
                     send(.logoutTapped)
                 } label: {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                        Text(String.localised("settings.logout", table: .settings))
-                    }
+                    Label(
+                        String.localised("settings.logout", table: .settings),
+                        systemImage: "rectangle.portrait.and.arrow.right"
+                    )
                 }
             }
 
             Section {
             } footer: {
-                Text(appVersionString)
+                Text(String.localised("settings.versionFooter \(store.appVersion)", table: .settings))
                     .frame(maxWidth: .infinity)
                     .multilineTextAlignment(.center)
             }
         }
-        .refreshable { send(.pullToRefreshTriggered) }
+        .refreshable { await send(.pullToRefreshTriggered).finish() }
         .scrollContentBackground(.hidden)
         .background(Color.Brand.primary)
         .navigationTitle(String.localised("generic.settings", table: .generic))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { send(.viewDidAppear) }
     }
+}
 
-    private func settingsRow(icon: String, title: String) -> some View {
+/// A settings row that pushes another screen.
+private struct SettingsNavigationRow: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
         HStack {
             Image(systemName: icon)
                 .foregroundStyle(Color.Accent.dark)
+                .accessibilityHidden(true)
             Text(title)
                 .foregroundStyle(Color.Text.primary)
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(Color.Brand.secondary)
+                .accessibilityHidden(true)
         }
-    }
-
-    private var appVersionString: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        return "Archivist v\(version) (\(build))"
     }
 }
 #endif

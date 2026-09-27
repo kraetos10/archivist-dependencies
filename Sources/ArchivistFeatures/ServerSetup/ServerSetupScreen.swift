@@ -23,10 +23,10 @@ public struct ServerSetupScreen: View {
             }
         }
         .interactiveDismissDisabled()
-        .sheet(isPresented: $store.isPresentingPinSetup) {
+        .sheet(item: $store.scope(state: \.pinSetup, action: \.pinSetup)) { pinStore in
             PinSetupSheet(
-                onConfirmed: { pin in store.send(.childPinConfirmed(pin)) },
-                onCancelled: { store.send(.childPinCancelled) }
+                onConfirmed: { pinStore.send(.confirmed($0)) },
+                onCancelled: { pinStore.send(.cancelled) }
             )
         }
     }
@@ -49,11 +49,12 @@ private struct ServerSetupContentView: View {
             LottieView(animation: LottieAnimationFile.server.animation)
                 .playing(loopMode: .playOnce)
                 .frame(width: 200, height: 200)
+                .accessibilityHidden(true)
 
             VStack(spacing: 16) {
                 Text(String.localised("login.title", table: .login))
                     .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .bold()
                     .foregroundStyle(Color.Text.primary)
 
                 Text(String.localised("login.subtitle", table: .login))

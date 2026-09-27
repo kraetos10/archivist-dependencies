@@ -60,7 +60,7 @@ private struct TVServerSetupContentView: View {
             VStack(spacing: 16) {
                 Text(String.localised("login.title", table: .login))
                     .font(.title)
-                    .fontWeight(.bold)
+                    .bold()
 
                 Text(String.localised("login.subtitle", table: .login))
                     .font(.headline)

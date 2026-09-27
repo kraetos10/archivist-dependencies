@@ -17,7 +17,7 @@ public struct DownloadDetailScreen: View {
             thumbnailView
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(store.download.title ?? store.download.youtubeId)
+                Text(store.displayTitle)
                     .font(.headline)
                     .foregroundStyle(Color.Text.primary)
 
@@ -49,9 +49,13 @@ public struct DownloadDetailScreen: View {
                     #if !os(tvOS)
                     if let youtubeURL = store.youtubeURL {
                         ShareLink(item: youtubeURL) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.title3)
-                                .foregroundStyle(Color.Text.primary)
+                            Label(
+                                String.localised("generic.share", table: .generic),
+                                systemImage: "square.and.arrow.up"
+                            )
+                            .labelStyle(.iconOnly)
+                            .font(.title3)
+                            .foregroundStyle(Color.Text.primary)
                         }
                     }
                     #endif
@@ -71,15 +75,15 @@ public struct DownloadDetailScreen: View {
 
         }
         .background(Color.Brand.primary)
-        .navigationTitle(store.download.title ?? store.download.youtubeId)
+        .navigationTitle(store.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { send(.viewDidAppear) }
-        .sheet(isPresented: $store.isPresentingDownloadPin) {
+        .alert($store.scope(state: \.alert, action: \.alert))
+        .sheet(item: $store.scope(state: \.pinEntry, action: \.pinEntry)) { pinStore in
             PinEntrySheet(
-                expectedPin: store.childModePin,
+                expectedPin: pinStore.expectedPin,
                 subtitle: String.localised("childMode.pinEntry.download.subtitle", table: .login),
-                onSuccess: { store.send(.pinDownloadConfirmed) },
-                onCancel: { store.send(.pinDownloadCancelled) }
+                onSuccess: { pinStore.send(.succeeded) },
+                onCancel: { pinStore.send(.cancelled) }
             )
         }
     }
@@ -113,67 +117,67 @@ public struct DownloadDetailScreen: View {
 
     private var statusBadge: some View {
         Text(String.localised("generic.pending", table: .generic))
-            .font(.caption2)
+            .font(.caption)
             .fontWeight(.semibold)
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.Accent.dark)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.Accent.dark)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(Color.Accent.dark.opacity(0.15), in: .rect(cornerRadius: 6))
     }
 
     /// Stays on the spinner once the request succeeds, rather than swapping
     /// in a "queued" confirmation.
     ///
-    /// Both presenters dismiss this screen on `downloadResult(.success)`,
-    /// and `ifLet` runs this reducer before the parent — so a success state
-    /// here renders for a frame on the way out, resizing the button (and
-    /// with it the popover) just as it disappears. The confirmation is the
-    /// dismissal; the queued video is already visible in the list behind.
+    /// The screen dismisses itself on a successful request, so a success
+    /// state here would render for a frame on the way out, resizing the
+    /// button (and with it the popover) just as it disappears. The
+    /// confirmation is the dismissal; the queued video is already visible
+    /// in the list behind.
     private var downloadButton: some View {
         Button {
             send(.downloadTapped)
         } label: {
-            HStack(spacing: 8) {
-                if store.isDownloading || store.downloadTriggered {
+            Group {
+                if store.isDownloadBusy {
                     ProgressView()
-                        .tint(.white)
                 } else {
-                    Image(systemName: "arrow.down.circle.fill")
-                    Text(String.localised("video.downloadNow", table: .videos))
+                    Label(
+                        String.localised("video.downloadNow", table: .videos),
+                        systemImage: "arrow.down.circle.fill"
+                    )
                 }
             }
             .font(.subheadline)
             .fontWeight(.semibold)
-            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.Accent.dark)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 6)
         }
-        .disabled(store.isDownloading || store.downloadTriggered)
+        .buttonStyle(.borderedProminent)
+        .tint(Color.Accent.dark)
+        .disabled(store.isDownloadBusy)
     }
 
     private var deleteButton: some View {
-        Button {
+        Button(role: .destructive) {
             send(.deleteTapped)
         } label: {
             Group {
                 if store.isDeleting {
                     ProgressView()
-                        .tint(.white)
                 } else {
-                    Image(systemName: "trash")
+                    Label(
+                        String.localised("generic.delete", table: .generic),
+                        systemImage: "trash"
+                    )
+                    .labelStyle(.iconOnly)
                 }
             }
             .font(.subheadline)
             .fontWeight(.semibold)
-            .foregroundStyle(.white)
-            .frame(width: 44)
-            .padding(.vertical, 12)
-            .background(.red)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .frame(minWidth: 44, minHeight: 44)
         }
+        .buttonStyle(.borderedProminent)
+        .accessibilityLabel(String.localised("generic.delete", table: .generic))
         .disabled(store.isDeleting)
     }
 }

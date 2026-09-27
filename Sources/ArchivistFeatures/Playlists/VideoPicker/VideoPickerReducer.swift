@@ -20,16 +20,30 @@ public struct VideoPickerReducer {
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<VideoResponse> = []
         var isSearching = false
-        var selectedVideoIds: Set<String> = []
+        /// In the order they were picked, which is the order they're added
+        /// to the playlist.
+        var selectedVideoIds: [String] = []
         var isAdding = false
+        /// The rows on screen. Stored, not computed: building it merges,
+        /// filters and sorts every item, so it's rebuilt only when its
+        /// inputs change (`updateDisplayedItems()`), never per render.
+        var displayedItems: [VideoListItem] = []
         @Presents var alert: AlertState<AlertAction>?
 
         var isSearchActive: Bool { !searchQuery.isEmpty }
 
-        var displayedItems: [VideoListItem] {
+        var lastVideoId: String? {
+            videos.last?.videoId
+        }
+
+        func isSelected(_ item: VideoListItem) -> Bool {
+            selectedVideoIds.contains(item.id)
+        }
+
+        mutating func updateDisplayedItems() {
             if isSearchActive {
                 let localMatches = videos.filter {
-                    $0.title.localizedCaseInsensitiveContains(searchQuery)
+                    $0.title.localizedStandardContains(searchQuery)
                 }
                 var mergedVideos = searchResults
                 for video in localMatches {
@@ -40,11 +54,12 @@ public struct VideoPickerReducer {
                 let downloadItems: [VideoListItem] = pendingDownloads
                     .filter { !videoIds.contains($0.youtubeId) }
                     .filter {
-                        ($0.title ?? "").localizedCaseInsensitiveContains(searchQuery)
-                        || ($0.channelName ?? "").localizedCaseInsensitiveContains(searchQuery)
+                        ($0.title ?? "").localizedStandardContains(searchQuery)
+                        || ($0.channelName ?? "").localizedStandardContains(searchQuery)
                     }
                     .map { .download($0) }
-                return videoItems + downloadItems
+                displayedItems = videoItems + downloadItems
+                return
             }
 
             let videoIds = Set(videos.map(\.videoId))
@@ -52,17 +67,12 @@ public struct VideoPickerReducer {
             let downloadItems: [VideoListItem] = pendingDownloads
                 .filter { !videoIds.contains($0.youtubeId) }
                 .map { .download($0) }
-            let allItems = videoItems + downloadItems
-            return allItems.sorted { lhs, rhs in
+            displayedItems = (videoItems + downloadItems).sorted { lhs, rhs in
                 guard let lhsDate = lhs.publishedDate, let rhsDate = rhs.publishedDate else {
                     return lhs.publishedDate != nil
                 }
                 return lhsDate > rhsDate
             }
-        }
-
-        var lastVideoId: String? {
-            videos.last?.videoId
         }
     }
 
@@ -72,10 +82,12 @@ public struct VideoPickerReducer {
         case view(View)
         case binding(BindingAction<State>)
         case alert(PresentationAction<AlertAction>)
+        case delegate(Delegate)
         case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
         case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case searchResult(Result<[VideoResponse], Error>)
-        case addResult(Result<Void, Error>)
+        /// The ids that failed to add; empty means every one went in.
+        case addFinished(failedIds: [String])
 
         @CasePathable
         public enum View {
@@ -83,6 +95,10 @@ public struct VideoPickerReducer {
             case videoToggled(VideoListItem)
             case addTapped
             case lastItemAppeared
+        }
+
+        public enum Delegate: Equatable, Sendable {
+            case didAddVideos
         }
     }
 
@@ -103,13 +119,11 @@ public struct VideoPickerReducer {
             switch action {
             case .binding(\.searchQuery):
                 return handleSearchQueryChanged(state: &state)
-            case .binding:
+            case .binding, .alert, .delegate:
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .alert:
-                return .none
-            default:
+            case .videosResult, .downloadsResult, .searchResult, .addFinished:
                 return handleInternalAction(action, state: &state)
             }
         }

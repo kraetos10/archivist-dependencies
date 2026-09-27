@@ -7,7 +7,7 @@ extension TabReducer {
     func handleAppeared(state: inout State) -> Effect<Action> {
         #if os(iOS)
         return .merge(
-            .send(.settings(.activeTask(.view(.startPolling)))),
+            .send(.settings(.activeTask(.startPolling))),
             // Detail screens publish their mini-player requests here
             // rather than through a delegate chain — see `MiniPlayerClient`
             // for why. This subscription is what makes the tab the owner
@@ -23,18 +23,39 @@ extension TabReducer {
             .cancellable(id: CancelID.miniPlayerRequests, cancelInFlight: true)
         )
         #else
-        return .send(.settings(.activeTask(.view(.startPolling))))
+        return .send(.settings(.activeTask(.startPolling)))
         #endif
     }
 
-    func handleScenePhaseChanged(
-        _ phase: ScenePhase,
+    /// Switches tab. Leaving Settings re-locks it; entering it with child
+    /// mode on asks for the PIN, which is read from the Keychain first.
+    func handleSelectTab(
+        _ tab: AppTab?,
         state: inout State
     ) -> Effect<Action> {
-        // VLC handles background playback natively via the
-        // `UIBackgroundModes: audio` entitlement + AVAudioSession `.playback`,
-        // so no scene-phase intervention is required here.
-        _ = phase
+        state.selectedTab = tab
+        guard tab == .settings else {
+            state.settingsUnlocked = false
+            return .none
+        }
+        guard state.isSettingsLocked else { return .none }
+        return .run { [pinStore] send in
+            await send(.settingsPinLoaded(pinStore.load()))
+        }
+    }
+
+    func handleSettingsPinLoaded(
+        _ pin: String?,
+        state: inout State
+    ) -> Effect<Action> {
+        // The user may have moved on while the Keychain was read.
+        guard state.selectedTab == .settings, state.isSettingsLocked else { return .none }
+        guard let pin else {
+            // Child mode without a PIN has nothing to check against.
+            state.settingsUnlocked = true
+            return .none
+        }
+        state.settingsPin = PinEntryReducer.State(expectedPin: pin)
         return .none
     }
 
@@ -70,7 +91,7 @@ extension TabReducer {
         }
         return .merge(
             minimise,
-            .send(.selectTab(.channels)),
+            handleSelectTab(.channels, state: &state),
             .send(.channels(.openChannel(channel)))
         )
     }
@@ -95,10 +116,8 @@ extension TabReducer {
         state.isMiniPlayerMinimised = true
         return .merge(
             .cancel(id: CancelID.miniPlayerSupersession),
-            .run { _ in
-                await MainActor.run {
-                    PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
-                }
+            .run { [playerClient] _ in
+                await playerClient.setActivePlayerSurfaceRole(.fullDetail)
             }
         )
     }
@@ -115,10 +134,8 @@ extension TabReducer {
         state.miniPlayer = detail
         state.isMiniPlayerMinimised = true
         return .merge(
-            .run { _ in
-                await MainActor.run {
-                    PlayerManager.shared.activePlayerSurfaceRole = .mini
-                }
+            .run { [playerClient] _ in
+                await playerClient.setActivePlayerSurfaceRole(.mini)
             },
             // The originating screen's playback effect died with its
             // store, taking the `PlayerManager.events` subscription with
@@ -140,9 +157,8 @@ extension TabReducer {
     /// video's playback effect cancels with `cancelInFlight` before the
     /// event is ever emitted.
     private func watchForSupersessionEffect() -> Effect<Action> {
-        .run { send in
-            let events = await MainActor.run { PlayerManager.shared.events }
-            for await event in events {
+        .run { [playerClient] send in
+            for await event in await playerClient.events() {
                 guard case .supersededByNewMedia(let previousVideoId, let position, _) = event
                 else { continue }
                 await send(
@@ -197,10 +213,8 @@ extension TabReducer {
         guard state.miniPlayer != nil else { return .none }
         state.isMiniPlayerMinimised = false
         state.miniPlayer?.isMiniPlayerCollapsed = false
-        return .run { _ in
-            await MainActor.run {
-                PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
-            }
+        return .run { [playerClient] _ in
+            await playerClient.setActivePlayerSurfaceRole(.fullDetail)
         }
     }
 
@@ -219,30 +233,27 @@ extension TabReducer {
         state.isMiniPlayerMinimised = true
         return .merge(
             .cancel(id: CancelID.miniPlayerSupersession),
-            .run { _ in
-                await MainActor.run {
-                    PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
-                }
+            .run { [playerClient] _ in
+                await playerClient.setActivePlayerSurfaceRole(.fullDetail)
             }
         )
     }
 
     /// The user dismissed the mini player itself. Playback is still
-    /// running, so the resume position has to be read *before* `stop()`
-    /// zeroes it — and saved from here rather than off the player's
-    /// `.paused` event, because clearing `miniPlayer` cancels the
-    /// subscription that would have handled it.
+    /// running, so the resume position is read in the same main-actor turn
+    /// as the stop — `stop()` zeroes it — and saved from here rather than
+    /// off the player's `.paused` event, because clearing `miniPlayer`
+    /// cancels the subscription that would have handled it.
     func handleMiniPlayerClosed(state: inout State) -> Effect<Action> {
         let detail = state.miniPlayer
         state.miniPlayer = nil
         state.isMiniPlayerMinimised = true
         return .merge(
             .cancel(id: CancelID.miniPlayerSupersession),
-            .run { [videoService] _ in
-                let position = await MainActor.run { Int(PlayerManager.shared.currentTime) }
-                await MainActor.run {
-                    PlayerManager.shared.activePlayerSurfaceRole = .fullDetail
-                    PlayerManager.shared.stop()
+            .run { [playerClient, videoService] _ in
+                let position = await MainActor.run {
+                    playerClient.setActivePlayerSurfaceRole(.fullDetail)
+                    return Int(playerClient.stopReturningPosition())
                 }
                 guard let detail, position > 0 else { return }
                 try? await videoService.setProgress(

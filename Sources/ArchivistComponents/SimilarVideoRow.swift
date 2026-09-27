@@ -105,7 +105,7 @@ public struct SimilarVideoRow: View {
                 }
 
                 if let views = video.formattedViewCount {
-                    Text("· \(views) views")
+                    Text(String.localised("· \(views) views"))
                 }
 
                 if let published = video.publishedRelative {

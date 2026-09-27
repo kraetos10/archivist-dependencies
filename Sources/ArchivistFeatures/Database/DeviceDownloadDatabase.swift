@@ -15,8 +15,9 @@ public struct DeviceDownloadDatabase: Sendable {
 }
 
 extension DeviceDownloadDatabase: DependencyKey {
-    public static let liveValue: DeviceDownloadDatabase = {
+    public static var liveValue: DeviceDownloadDatabase {
         @Dependency(\.defaultDatabase) var database
+        @Dependency(\.date) var date
         return DeviceDownloadDatabase(
             insertDownload: { download in
                 try database.write { db in
@@ -52,7 +53,7 @@ extension DeviceDownloadDatabase: DependencyKey {
                             $0.status = #bind(.completed)
                             $0.progress = #bind(1)
                             $0.fileSize = #bind(fileSize)
-                            $0.downloadedAt = #bind(Date().timeIntervalSince1970)
+                            $0.downloadedAt = #bind(date.now.timeIntervalSince1970)
                         }
                         .execute(db)
                 }
@@ -87,9 +88,13 @@ extension DeviceDownloadDatabase: DependencyKey {
                 }
             }
         )
-    }()
+    }
 
-    public static let testValue = DeviceDownloadDatabase(
+    public static var testValue: DeviceDownloadDatabase { .noop }
+    public static var previewValue: DeviceDownloadDatabase { .noop }
+
+    /// Accepts every write and does nothing.
+    public static let noop = DeviceDownloadDatabase(
         insertDownload: { _ in },
         updateProgress: { _, _ in },
         markCompleted: { _, _ in },

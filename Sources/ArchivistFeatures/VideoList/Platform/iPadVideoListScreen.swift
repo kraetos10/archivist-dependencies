@@ -28,7 +28,7 @@ public struct iPadVideoListScreen: View {
                     Spacer()
                     FloatingAddButton(action: { send(.addVideoTapped) })
                         .button
-                        .popover(item: $store.scope(state: \.addVideo, action: \.addVideo)) { addVideoStore in
+                        .popover(item: $store.scope(state: \.destination?.addVideo, action: \.destination.addVideo)) { addVideoStore in
                             AddVideoScreen(store: addVideoStore)
                                 .frame(width: 400)
                         }
@@ -45,12 +45,9 @@ public struct iPadVideoListScreen: View {
                 placement: .navigationBarDrawer(displayMode: .automatic),
                 prompt: String.localised("video.search", table: .videos)
             )
-            .onAppear {
-                send(.splitViewEnabled)
-                send(.viewDidAppear)
-            }
-            .alert($store.scope(state: \.alert, action: \.alert))
-            .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
+            .onAppear { send(.viewDidAppear) }
+            .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
+            .sheet(item: $store.scope(state: \.destination?.playlistPicker, action: \.destination.playlistPicker)) { pickerStore in
                 PlaylistPickerScreen(store: pickerStore)
             }
         } destination: { store in
@@ -61,7 +58,7 @@ public struct iPadVideoListScreen: View {
                 FilteredVideoListScreen(store: listStore)
             }
         }
-        .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
+        .fullScreenCover(item: $store.scope(state: \.destination?.videoDetail, action: \.destination.videoDetail)) { detailStore in
             NavigationStack {
                 VideoDetailScreen(store: detailStore)
             }
@@ -129,7 +126,10 @@ public struct iPadVideoListScreen: View {
 
     @ViewBuilder
     private var searchResultsSection: some View {
-        if (store.hasLoaded || !store.isSearching) && store.displayedVideos.isEmpty {
+        // Read once per pass: `displayedVideos` filters, merges and maps
+        // the whole list on every access.
+        let displayed = store.displayedVideos
+        if (store.hasLoaded || !store.isSearching) && displayed.isEmpty {
             VideoListEmptyState(
                 isSearchActive: true,
                 isSearching: store.isSearching,
@@ -137,7 +137,7 @@ public struct iPadVideoListScreen: View {
             )
         } else {
             LazyVGrid(columns: searchColumns, spacing: 16) {
-                ForEach(store.displayedVideos) { item in
+                ForEach(displayed) { item in
                     VideoCardView(
                         video: item.video,
                         serverConfig: store.serverConfig,
@@ -163,7 +163,7 @@ public struct iPadVideoListScreen: View {
                     }
                 }
             }
-            .animation(.default, value: store.displayedVideos.map(\.id))
+            .animation(.default, value: displayed.map(\.id))
             .padding()
         }
     }

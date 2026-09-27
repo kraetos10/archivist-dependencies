@@ -20,8 +20,7 @@ public final class VLCLogManager {
     private var fileHandle: FileHandle?
 
     public var logFileURL: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("vlc.log")
+        URL.documentsDirectory.appending(path: "vlc.log")
     }
 
     public var hasLogs: Bool {

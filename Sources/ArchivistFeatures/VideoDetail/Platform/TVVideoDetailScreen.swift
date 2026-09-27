@@ -11,9 +11,6 @@ import SwiftUI
 public struct TVVideoDetailScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
 
-    @FetchAll(PlayNextItem.all.order(by: \.id))
-    private var playNextItems
-
     /// The control focus returns to whenever this screen's content changes
     /// underneath the user. Without an explicit target the focus engine
     /// guesses — see `body`.
@@ -32,7 +29,7 @@ public struct TVVideoDetailScreen: View {
 
     public var body: some View {
         ScrollViewReader { scrollProxy in
-            ScrollView(showsIndicators: false) {
+            ScrollView {
                 VStack(alignment: .leading, spacing: 40) {
                     hero
                         .id(Self.topAnchor)
@@ -43,6 +40,7 @@ public struct TVVideoDetailScreen: View {
                     commentsSection
                 }
             }
+            .scrollIndicators(.hidden)
             // Land on Play when the screen first appears, rather than wherever
             // the focus engine's reading-order guess happens to put it.
             .defaultFocus($focusedControl, .play)
@@ -80,8 +78,8 @@ public struct TVVideoDetailScreen: View {
         }
         .fullScreenCover(item: $store.expandedComment) { comment in
             TVFullDescriptionView(
-                title: comment.commentAuthor ?? "",
-                blocks: (comment.commentText ?? "").descriptionBlocks()
+                title: comment.fullTextTitle,
+                blocks: comment.fullTextBlocks
             )
         }
         .onAppear { send(.viewDidAppear) }
@@ -193,8 +191,7 @@ public struct TVVideoDetailScreen: View {
 
     private var thumbnailView: some View {
         ZStack {
-            if let thumbPath = store.video.vidThumbUrl,
-               let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
+            if let thumbURL = store.heroThumbnailURL {
                 AsyncImage(url: thumbURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -209,10 +206,10 @@ public struct TVVideoDetailScreen: View {
                 Rectangle().fill(.secondary.opacity(0.3))
             }
 
-            if store.video.watchProgress > 0 {
+            if store.effectiveWatchProgress > 0 {
                 VStack {
                     Spacer()
-                    WatchProgressBar(progress: store.video.watchProgress, height: 6)
+                    WatchProgressBar(progress: store.effectiveWatchProgress, height: 6)
                 }
             }
         }
@@ -223,10 +220,10 @@ public struct TVVideoDetailScreen: View {
 
     @ViewBuilder
     private var playNextSection: some View {
-        if !playNextItems.isEmpty {
+        if !store.playNextItems.isEmpty {
             section(String.localised("video.playNext", table: .videos)) {
                 cardRow {
-                    ForEach(playNextItems) { item in
+                    ForEach(store.playNextItems) { item in
                         TVVideoCardView(
                             playNextItem: item,
                             serverConfig: store.serverConfig
@@ -247,7 +244,7 @@ public struct TVVideoDetailScreen: View {
                         .playNextTransition()
                     }
                 }
-                .animation(.default, value: playNextItems.map(\.id))
+                .animation(.default, value: store.playNextItems.map(\.id))
             }
         }
     }
@@ -369,12 +366,13 @@ public struct TVVideoDetailScreen: View {
     /// unclipped so lifted cards can overhang, and its own focus section so
     /// up/down lands in the row rather than diagonally past it.
     private func cardRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
                 content()
             }
             .padding(.vertical, TVLayout.rowVerticalPadding)
         }
+        .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .focusSection()
     }

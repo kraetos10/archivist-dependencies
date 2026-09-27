@@ -19,6 +19,7 @@ public struct PlayNextDatabase: Sendable {
 extension PlayNextDatabase: DependencyKey {
     public static var liveValue: PlayNextDatabase {
         @Dependency(\.defaultDatabase) var database
+        @Dependency(\.date) var date
 
         return PlayNextDatabase(
             addToQueue: { video in
@@ -32,7 +33,7 @@ extension PlayNextDatabase: DependencyKey {
                                 thumbUrl: video.vidThumbUrl,
                                 duration: video.durationStr,
                                 published: video.published,
-                                addedAt: Date().timeIntervalSince1970
+                                addedAt: date.now.timeIntervalSince1970
                             )
                         }
                         .execute(db)
@@ -50,13 +51,11 @@ extension PlayNextDatabase: DependencyKey {
             },
             popNext: {
                 try database.write { db in
-                    let items = try PlayNextItem
+                    guard let first = try PlayNextItem
                         .order(by: \.id)
-                        .limit(1)
-                        .fetchAll(db)
-                    guard let first = items.first else { return nil }
-                    let id = first.id
-                    try PlayNextItem.find(id).delete().execute(db)
+                        .fetchOne(db)
+                    else { return nil }
+                    try PlayNextItem.find(first.id).delete().execute(db)
                     return first
                 }
             },
@@ -64,13 +63,24 @@ extension PlayNextDatabase: DependencyKey {
                 try database.read { db in
                     try PlayNextItem
                         .order(by: \.id)
-                        .limit(1)
-                        .fetchAll(db)
-                        .first
+                        .fetchOne(db)
                 }
             }
         )
     }
+
+    /// An empty queue that accepts every write.
+    public static var testValue: PlayNextDatabase {
+        PlayNextDatabase(
+            addToQueue: { _ in },
+            removeFromQueue: { _ in },
+            clearQueue: {},
+            popNext: { nil },
+            peekNext: { nil }
+        )
+    }
+
+    public static var previewValue: PlayNextDatabase { testValue }
 }
 
 extension DependencyValues {

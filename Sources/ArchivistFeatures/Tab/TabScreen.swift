@@ -6,25 +6,25 @@ import ArchivistComponents
 
 public struct TabScreen: View {
     @Bindable public var store: StoreOf<TabReducer>
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     public init(store: StoreOf<TabReducer>) {
         self.store = store
     }
 
-    private var isIPad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     public var body: some View {
-        if isIPad {
+        if horizontalSizeClass == .regular {
             iPadTabScreen(store: store)
         } else {
-            iPhoneTabScreen
+            PhoneTabScreen(store: store)
         }
     }
+}
 
-    private var iPhoneTabScreen: some View {
+private struct PhoneTabScreen: View {
+    @Bindable var store: StoreOf<TabReducer>
+
+    var body: some View {
         TabView(selection: $store.selectedTab.sending(\.selectTab)) {
             Tab(
                 String.localised("generic.home", table: .generic),
@@ -77,15 +77,8 @@ public struct TabScreen: View {
         #endif
         .tint(Color.Accent.dark)
         .onAppear { store.send(.appeared) }
-        .onChange(of: scenePhase) {
-            store.send(.scenePhaseChanged(scenePhase))
-        }
-        .sheet(isPresented: $store.isPresentingSettingsPin) {
-            PinEntrySheet(
-                expectedPin: store.childModePin,
-                onSuccess: { store.send(.settingsPinSucceeded) },
-                onCancel: { store.send(.settingsPinDismissed) }
-            )
+        .sheet(item: $store.scope(state: \.settingsPin, action: \.settingsPin)) { pinStore in
+            SettingsPinSheet(store: pinStore)
         }
     }
 
@@ -94,7 +87,7 @@ public struct TabScreen: View {
     @TabContentBuilder<AppTab?>
     private var settingsTab: some TabContent<AppTab?> {
         let title = String.localised("generic.settings", table: .generic)
-        if store.childModeEnabled, !store.settingsUnlocked {
+        if store.isSettingsLocked {
             Tab(title, systemImage: "gearshape", value: AppTab.settings) {
                 PinLockedSettingsPlaceholder()
             }
@@ -102,28 +95,8 @@ public struct TabScreen: View {
             Tab(title, systemImage: "gearshape", value: AppTab.settings) {
                 SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
             }
-            .badge(store.activeDownload != nil ? 1 : 0)
+            .badge(store.settingsBadgeCount)
         }
     }
 }
-
-private struct PinLockedSettingsPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "lock.fill")
-                .scaledSystemFont(size: 40, relativeTo: .largeTitle)
-                // Decorative: the adjacent label carries the meaning.
-                .accessibilityHidden(true)
-                .foregroundStyle(Color.Accent.dark)
-            Text(String.localised("childMode.pinEntry.subtitle", table: .login))
-                .font(.subheadline)
-                .foregroundStyle(Color.Brand.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Brand.primary)
-    }
-}
-
 #endif

@@ -1,9 +1,17 @@
 import SwiftUI
 
 public struct FloatingAddButton: View {
+    public let accessibilityLabel: String
     public let action: () -> Void
 
-    public init(action: @escaping () -> Void) {
+    /// - Parameter accessibilityLabel: What VoiceOver announces for the
+    ///   icon-only button. Defaults to a generic "Add"; pass something
+    ///   specific ("Add Video") where the context allows.
+    public init(
+        accessibilityLabel: String = String.localised("generic.add", table: .generic),
+        action: @escaping () -> Void
+    ) {
+        self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
 
@@ -26,5 +34,6 @@ public struct FloatingAddButton: View {
                 .clipShape(Circle())
                 .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
         }
+        .accessibilityLabel(accessibilityLabel)
     }
 }

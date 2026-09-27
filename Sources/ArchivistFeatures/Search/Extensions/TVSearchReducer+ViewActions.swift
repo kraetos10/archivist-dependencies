@@ -9,8 +9,6 @@ extension TVSearchReducer {
         state: inout State
     ) -> Effect<Action> {
         switch action {
-        case .searchSubmitted:
-            return handleSearchSubmitted(state: &state)
         case .videoTapped(let video):
             return handleVideoTapped(video, state: &state)
         case .channelTapped(let channel):
@@ -32,18 +30,22 @@ extension TVSearchReducer {
             state.channelResults = []
             state.playlistResults = []
             state.hasSearched = false
+            // The cancel below can stop a search mid-flight, whose result
+            // would otherwise have cleared this.
+            state.isSearching = false
             return .cancel(id: CancelID.search)
         }
         // Don't re-search if the query hasn't changed (e.g. focus moved)
         guard query != state.lastSearchedQuery else { return .none }
         return .run { [clock] send in
             try await clock.sleep(for: .milliseconds(600))
-            await send(.view(.searchSubmitted))
+            await send(.searchDebounceElapsed)
         }
         .cancellable(id: CancelID.search, cancelInFlight: true)
     }
 
-    private func handleSearchSubmitted(state: inout State) -> Effect<Action> {
+    /// Runs the search once typing has paused.
+    func handleSearch(state: inout State) -> Effect<Action> {
         let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return .none }
         state.isSearching = true
@@ -62,13 +64,13 @@ extension TVSearchReducer {
         _ video: VideoResponse,
         state: inout State
     ) -> Effect<Action> {
-        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
-        state.videoDetail = VideoDetailReducer.State(
+        @Shared(.autoPlayEnabled) var autoPlayEnabled
+        state.destination = .videoDetail(VideoDetailReducer.State(
             serverConfig: state.serverConfig,
             video: video,
             nextVideos: [],
             shouldAutoPlayNextVideo: autoPlayEnabled
-        )
+        ))
         return .none
     }
 
@@ -76,10 +78,10 @@ extension TVSearchReducer {
         _ channel: ChannelResponse,
         state: inout State
     ) -> Effect<Action> {
-        state.channelDetail = ChannelDetailReducer.State(
+        state.destination = .channelDetail(ChannelDetailReducer.State(
             serverConfig: state.serverConfig,
             channel: channel
-        )
+        ))
         return .none
     }
 
@@ -87,10 +89,10 @@ extension TVSearchReducer {
         _ playlist: PlaylistResponse,
         state: inout State
     ) -> Effect<Action> {
-        state.playlistDetail = PlaylistDetailReducer.State(
+        state.destination = .playlistDetail(PlaylistDetailReducer.State(
             serverConfig: state.serverConfig,
             playlist: playlist
-        )
+        ))
         return .none
     }
 

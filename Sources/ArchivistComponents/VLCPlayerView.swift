@@ -83,7 +83,9 @@ private struct VLCPlayerHostRepresentable: UIViewRepresentable {
 /// `VLCMediaPlayer` is never recreated.
 public final class VLCPlayerHostView: UIView {
     private var lastBoundsSize: CGSize = .zero
-    private var pendingRefresh: DispatchWorkItem?
+    /// Debounced drawable rebind. Captures nothing of the host, so an
+    /// outstanding one is harmless after the host goes away.
+    private var pendingRefresh: Task<Void, Never>?
 
     func adoptPlayerView() {
         guard let playerView = PlayerManager.shared.persistentVLCPlayerView else { return }
@@ -127,11 +129,11 @@ public final class VLCPlayerHostView: UIView {
         lastBoundsSize = size
 
         pendingRefresh?.cancel()
-        let work = DispatchWorkItem {
+        pendingRefresh = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
             PlayerManager.shared.refreshVideoOutput()
         }
-        pendingRefresh = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
     }
 }
 #endif

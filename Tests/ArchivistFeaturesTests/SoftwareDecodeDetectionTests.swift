@@ -9,6 +9,7 @@ import Testing
 /// The rule has to be narrow in both directions: warning about content that
 /// plays fine trains people to dismiss it, and staying quiet on 4K VP9 is
 /// the case that actually stutters on an Apple TV.
+@Suite(.timeLimit(.minutes(1)))
 struct SoftwareDecodeDetectionTests {
     private func video(
         codec: String?,

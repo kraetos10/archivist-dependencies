@@ -29,12 +29,11 @@ public struct CommentsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        onDismiss()
-                    } label: {
+                    Button(action: onDismiss) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(Color.Brand.secondary)
                     }
+                    .accessibilityLabel(String.localised("generic.close", table: .generic))
                 }
             }
         }

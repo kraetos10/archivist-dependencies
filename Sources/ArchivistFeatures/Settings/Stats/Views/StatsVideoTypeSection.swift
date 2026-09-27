@@ -9,17 +9,17 @@ struct StatsVideoTypeSection: View {
         Section {
             StatRowView(
                 label: String.localised("video.typeRegular", table: .videos),
-                value: "\(video.typeVideos ?? 0)",
+                value: (video.typeVideos ?? 0).formatted(),
                 icon: "play.rectangle"
             )
             StatRowView(
                 label: String.localised("video.typeShorts", table: .videos),
-                value: "\(video.typeShorts ?? 0)",
+                value: (video.typeShorts ?? 0).formatted(),
                 icon: "bolt.circle"
             )
             StatRowView(
                 label: String.localised("video.typeStreams", table: .videos),
-                value: "\(video.typeStreams ?? 0)",
+                value: (video.typeStreams ?? 0).formatted(),
                 icon: "dot.radiowaves.left.and.right"
             )
         } header: {

@@ -31,7 +31,11 @@ public struct PlaylistDetailScreen: View {
         #endif
         .safeAreaInset(edge: .bottom) {
             if store.isCustomPlaylist {
-                FloatingAddButton { send(.addVideoTapped) }
+                FloatingAddButton(
+                    accessibilityLabel: String.localised("video.addVideos", table: .videos)
+                ) {
+                    send(.addVideoTapped)
+                }
             }
         }
         .toolbar {
@@ -108,10 +112,10 @@ public struct PlaylistDetailScreen: View {
                 )
             }
         } label: {
-            Image(systemName: "ellipsis")
+            Label(String.localised("generic.actions", table: .generic), systemImage: "ellipsis")
+                .labelStyle(.iconOnly)
                 .font(.title3.weight(.semibold))
         }
-        .accessibilityLabel(String.localised("generic.actions", table: .generic))
     }
     #endif
 }

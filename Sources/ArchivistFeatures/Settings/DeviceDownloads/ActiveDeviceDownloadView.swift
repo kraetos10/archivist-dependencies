@@ -31,7 +31,7 @@ public struct ActiveDeviceDownloadView: View {
                             Spacer()
 
                             if download.progress > 0 {
-                                Text("\(Int(download.progress * 100))%")
+                                Text(download.progress, format: .percent.precision(.fractionLength(0)))
                                     .font(.caption)
                                     .foregroundStyle(Color.Brand.secondary)
                             }

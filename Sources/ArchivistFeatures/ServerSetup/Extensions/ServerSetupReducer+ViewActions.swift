@@ -10,8 +10,24 @@ extension ServerSetupReducer {
     ) -> Effect<Action> {
         switch action {
         case .nextButtonTapped:
-            LocalNetworkPrompt.triggerLocalNetworkPrivacyAlert()
             return handleNextButtonTapped(state: &state)
+        }
+    }
+
+    /// The child-mode switch moved. Turning it on asks for a PIN first;
+    /// turning it off clears the stored one.
+    func handleChildModeToggled(state: inout State) -> Effect<Action> {
+        if state.childModeToggle {
+            guard !state.childModeEnabled else { return .none }
+            state.pinSetup = ChildPinSetupReducer.State()
+            return .none
+        }
+        guard state.childModeEnabled else { return .none }
+        return .run { [pinStore] send in
+            await send(.childModeSaveResult(Result {
+                try pinStore.clear()
+                return false
+            }))
         }
     }
 
@@ -28,8 +44,8 @@ extension ServerSetupReducer {
         let serverURL = state.registrationDetails.serverAddress
         let port = Int(state.registrationDetails.port)
         let useHTTP = state.registrationDetails.useHTTP
-        let healthService = self.healthService
-        return .run { send in
+        return .run { [healthService, localNetworkPrompt] send in
+            localNetworkPrompt.trigger()
             let result = await Result {
                 try await healthService.checkHealth(
                     baseURL: serverURL,

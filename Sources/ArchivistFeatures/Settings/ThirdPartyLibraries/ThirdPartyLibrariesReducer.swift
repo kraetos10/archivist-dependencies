@@ -12,22 +12,11 @@ public struct ThirdPartyLibrariesReducer {
         public init() {}
     }
 
-    public enum Action: ViewAction {
-        case view(View)
-
-        @CasePathable
-        public enum View {
-            case viewDidAppear
-        }
-    }
+    /// A static list: nothing to do.
+    public enum Action {}
 
     public var body: some Reducer<State, Action> {
-        Reduce { state, action in
-            switch action {
-            case .view(let viewAction):
-                return handleViewAction(viewAction, state: &state)
-            }
-        }
+        EmptyReducer()
     }
 }
 

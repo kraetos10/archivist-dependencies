@@ -13,8 +13,6 @@ public struct VideoPickerScreen: View {
     }
     @Environment(\.dismiss) private var dismiss
 
-    private let columns = [GridItem(.flexible())]
-
     public var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
@@ -25,33 +23,40 @@ public struct VideoPickerScreen: View {
                                 VideoRowView(
                                     title: video.title,
                                     subtitle: video.channelName,
-                                    thumbnailURL: video.vidThumbUrl.flatMap { store.serverConfig.fullURL(for: $0) },
+                                    thumbnailURL: nil,
                                     badge: video.durationStr
                                 )
                                 .redacted(reason: .placeholder)
                             }
                         } else {
                             ForEach(store.displayedItems) { item in
-                                let isSelected = store.selectedVideoIds.contains(item.id)
-                                pickerRow(for: item)
-                                    .overlay(alignment: .trailing) {
-                                        if isSelected {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(Color.Accent.dark)
-                                                .background(Circle().fill(.white))
-                                                .padding(.trailing, 16)
-                                        }
+                                let isSelected = store.state.isSelected(item)
+                                VideoRowView(
+                                    title: item.pickerTitle,
+                                    subtitle: item.pickerSubtitle,
+                                    thumbnailURL: item.pickerThumbnailURL(config: store.serverConfig),
+                                    badge: item.pickerBadge
+                                )
+                                .overlay(alignment: .trailing) {
+                                    if isSelected {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(Color.Accent.dark)
+                                            .background(Circle().fill(.white))
+                                            .padding(.trailing, 16)
+                                            .accessibilityHidden(true)
                                     }
-                                    .background(isSelected ? Color.Accent.dark.opacity(0.08) : Color.clear)
-                                    .pressable {
-                                        send(.videoToggled(item))
+                                }
+                                .background(isSelected ? Color.Accent.dark.opacity(0.08) : Color.clear)
+                                .pressable {
+                                    send(.videoToggled(item))
+                                }
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                .onAppear {
+                                    if item.id == store.lastVideoId {
+                                        send(.lastItemAppeared)
                                     }
-                                    .onAppear {
-                                        if item.id == store.lastVideoId {
-                                            send(.lastItemAppeared)
-                                        }
-                                    }
+                                }
                             }
                         }
                     }
@@ -75,7 +80,7 @@ public struct VideoPickerScreen: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
                         } else {
-                            Text("Add \(store.selectedVideoIds.count)")
+                            Text(String.localised("video.addSelected \(store.selectedVideoIds.count)", table: .videos))
                                 .font(.headline)
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
@@ -83,7 +88,7 @@ public struct VideoPickerScreen: View {
                         }
                     }
                     .background(Color.Accent.dark)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(.rect(cornerRadius: 12))
                     .disabled(store.isAdding)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -98,35 +103,18 @@ public struct VideoPickerScreen: View {
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
+                    Button(
+                        String.localised("generic.close", table: .generic),
+                        systemImage: "xmark"
+                    ) {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(Color.Text.primary)
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Color.Text.primary)
                 }
             }
             .onAppear { send(.viewDidAppear) }
             .alert($store.scope(state: \.alert, action: \.alert))
-        }
-    }
-
-    private func pickerRow(for item: VideoListItem) -> some View {
-        switch item {
-        case .video(let video):
-            VideoRowView(
-                title: video.title,
-                subtitle: "\(video.channelName) · \(video.publishedFormatted ?? "")",
-                thumbnailURL: video.vidThumbUrl.flatMap { store.serverConfig.fullURL(for: $0) },
-                badge: video.durationStr
-            )
-        case .download(let download):
-            VideoRowView(
-                title: download.title ?? "",
-                subtitle: download.channelName ?? "",
-                thumbnailURL: download.thumbURL(config: store.serverConfig),
-                badge: download.duration
-            )
         }
     }
 }

@@ -3,7 +3,7 @@ import ComposableArchitecture
 import Foundation
 
 extension VideoPickerReducer {
-    public func handleViewAction(
+    func handleViewAction(
         _ action: Action.View,
         state: inout State
     ) -> Effect<Action> {
@@ -11,10 +11,10 @@ extension VideoPickerReducer {
         case .viewDidAppear:
             return handleViewDidAppear(state: &state)
         case .videoToggled(let item):
-            if state.selectedVideoIds.contains(item.id) {
-                state.selectedVideoIds.remove(item.id)
+            if let index = state.selectedVideoIds.firstIndex(of: item.id) {
+                state.selectedVideoIds.remove(at: index)
             } else {
-                state.selectedVideoIds.insert(item.id)
+                state.selectedVideoIds.append(item.id)
             }
             return .none
         case .addTapped:
@@ -29,24 +29,9 @@ extension VideoPickerReducer {
         state.isLoading = true
         state.isLoadingDownloads = true
         let config = state.serverConfig
-        let videoService = self.videoService
         let downloadService = self.downloadService
         return .merge(
-            .run { send in
-                let result = await Result {
-                    try await videoService.getVideos(
-                        config: config,
-                        page: 1,
-                        sort: "published",
-                        order: "desc",
-                        type: nil,
-                        watch: nil,
-                        channel: nil,
-                        playlist: nil
-                    )
-                }
-                await send(.videosResult(result))
-            },
+            fetchVideos(page: 1, config: config),
             .run { send in
                 let result = await Result {
                     try await downloadService.getDownloads(
@@ -68,14 +53,19 @@ extension VideoPickerReducer {
               state.currentPage < state.lastPage,
               !state.isLoadingMore else { return .none }
         state.isLoadingMore = true
-        let config = state.serverConfig
-        let nextPage = state.currentPage + 1
+        return fetchVideos(page: state.currentPage + 1, config: state.serverConfig)
+    }
+
+    private func fetchVideos(
+        page: Int,
+        config: ServerConfig
+    ) -> Effect<Action> {
         let videoService = self.videoService
         return .run { send in
             let result = await Result {
                 try await videoService.getVideos(
                     config: config,
-                    page: nextPage,
+                    page: page,
                     sort: "published",
                     order: "desc",
                     type: nil,
@@ -88,59 +78,45 @@ extension VideoPickerReducer {
         }
     }
 
+    /// Adds the picked videos one at a time, in the order they were picked,
+    /// so they land in the playlist in that order and the server never sees
+    /// concurrent edits to the same playlist.
     private func handleAddTapped(state: inout State) -> Effect<Action> {
         guard !state.selectedVideoIds.isEmpty, !state.isAdding else { return .none }
         state.isAdding = true
         let config = state.serverConfig
         let playlistId = state.playlistId
-        let videoIds = Array(state.selectedVideoIds)
-        return .run { [playlistService] send in
-            let failures = await withTaskGroup(of: String?.self) { group in
-                for videoId in videoIds {
-                    group.addTask {
-                        do {
-                            try await playlistService.modifyCustomPlaylist(
-                                config: config,
-                                id: playlistId,
-                                action: "create",
-                                videoId: videoId
-                            )
-                            return nil
-                        } catch {
-                            return videoId
-                        }
-                    }
+        let videoIds = state.selectedVideoIds
+        let playlistService = self.playlistService
+        return .run { send in
+            var failed: [String] = []
+            for videoId in videoIds {
+                do {
+                    try await playlistService.modifyCustomPlaylist(
+                        config: config,
+                        id: playlistId,
+                        action: "create",
+                        videoId: videoId
+                    )
+                } catch {
+                    failed.append(videoId)
                 }
-                var failed: [String] = []
-                for await result in group {
-                    if let failedId = result {
-                        failed.append(failedId)
-                    }
-                }
-                return failed
             }
-
-            if failures.isEmpty {
-                await send(.addResult(.success(())))
-            } else {
-                let error = NSError(
-                    domain: "PlaylistAdd",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to add \(failures.count) of \(videoIds.count) videos"]
-                )
-                await send(.addResult(.failure(error)))
-            }
+            await send(.addFinished(failedIds: failed))
         }
     }
 
-    public func handleSearchQueryChanged(state: inout State) -> Effect<Action> {
+    func handleSearchQueryChanged(state: inout State) -> Effect<Action> {
         let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             state.searchResults = []
             state.isSearching = false
+            state.updateDisplayedItems()
             return .cancel(id: CancelID.search)
         }
         state.isSearching = true
+        // Local matches show straight away; server results merge in later.
+        state.updateDisplayedItems()
         let config = state.serverConfig
         let clock = self.clock
         let searchService = self.searchService

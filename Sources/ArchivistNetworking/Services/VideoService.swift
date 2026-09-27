@@ -148,16 +148,17 @@ public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
 
     public var relativeDate: String? {
         guard let commentTimestamp else { return nil }
-        let date = Date(timeIntervalSince1970: TimeInterval(commentTimestamp))
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return PublishedDate.relative(Date(timeIntervalSince1970: TimeInterval(commentTimestamp)))
     }
 
     public init(
-        commentId: String?, commentText: String?, commentTimestamp: Int?,
-        commentLikeCount: Int?, commentIsFavorited: Bool?,
-        commentAuthor: String?, commentAuthorId: String?
+        commentId: String?,
+        commentText: String?,
+        commentTimestamp: Int?,
+        commentLikeCount: Int?,
+        commentIsFavorited: Bool?,
+        commentAuthor: String?,
+        commentAuthorId: String?
     ) {
         self.commentId = commentId
         self.commentText = commentText

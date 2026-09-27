@@ -7,6 +7,16 @@ import StructuredQueries
 public enum ChannelVideoFilter: Sendable, Equatable {
     case all
     case unwatched
+
+    /// tvOS has no filter control, so it shows everything; iOS opens on
+    /// the unwatched videos.
+    static var platformDefault: Self {
+        #if os(tvOS)
+        return .all
+        #else
+        return .unwatched
+        #endif
+    }
 }
 
 @Reducer
@@ -27,11 +37,18 @@ public struct ChannelDetailReducer: Sendable {
         var hasLoadedDownloads = false
         var showNewestDownloadsFirst = true
         var isDescriptionExpanded = false
-        var videoFilter: ChannelVideoFilter = .unwatched
+        var videoFilter: ChannelVideoFilter = .platformDefault
         var videoSortOrder: VideoSortOrder = .published
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
+        @FetchAll(
+            DeviceDownload
+                .where { $0.status.eq(DeviceDownloadStatus.completed) }
+        )
+        var completedDownloads
 
+        /// The videos the carousel draws: queued-for-play-next ones are
+        /// left out, and the watched filter applies.
         var filteredVideos: IdentifiedArrayOf<VideoResponse> {
             let queuedIDs = Set(playNextItems.map(\.videoId))
             let base = videos.filter { !queuedIDs.contains($0.videoId) }
@@ -43,9 +60,19 @@ public struct ChannelDetailReducer: Sendable {
             }
         }
 
+        var downloadedVideoIDs: Set<String> {
+            Set(completedDownloads.map(\.id))
+        }
+
+        var showsPendingDownloads: Bool {
+            !pendingDownloads.isEmpty || isLoadingDownloads
+        }
+
         @Presents var alert: AlertState<AlertAction>?
 
         @Presents var downloadDetail: DownloadDetailReducer.State?
+
+        @Presents var playlistPicker: PlaylistPickerReducer.State?
 
         var channelThumbURL: URL? {
             guard let path = channel.channelThumbUrl else { return nil }
@@ -78,12 +105,22 @@ public struct ChannelDetailReducer: Sendable {
         case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
         case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
+        case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case unsubscribeResult(Result<Void, Error>)
         case deleteVideoResult(Result<String, Error>)
         case queueDownloadResult(Result<String, Error>)
+        case setWatchedResult(
+            videoId: String,
+            isWatched: Bool,
+            Result<Void, Error>
+        )
+        /// Sent by the parent when a server download finishes, so the
+        /// pending list drops what just completed.
+        case refreshPendingDownloads
 
         public enum Delegate: Equatable, Sendable {
             case videoSelected(VideoResponse, nextVideos: [VideoResponse])
+            case didUnsubscribe(String)
         }
 
         @CasePathable
@@ -101,10 +138,16 @@ public struct ChannelDetailReducer: Sendable {
             case markAsWatchedTapped(VideoResponse)
             case deleteFromServerTapped(VideoResponse)
             case playNextTapped(VideoResponse)
+            case addToPlaylistTapped(VideoResponse)
             case downloadSortToggled
             case videoSortOrderChanged(VideoSortOrder)
             case clearFilteredTapped
         }
+    }
+
+    nonisolated enum CancelID: Hashable, Sendable {
+        case videos
+        case downloads
     }
 
     @Dependency(\.videoService) var videoService
@@ -114,6 +157,7 @@ public struct ChannelDetailReducer: Sendable {
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
     @Dependency(\.localVideoStorage) var localVideoStorage
     @Dependency(\.playNextDatabase) var playNextDatabase
+    @Dependency(\.date.now) var now
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
@@ -121,59 +165,33 @@ public struct ChannelDetailReducer: Sendable {
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .binding:
+            case .binding, .delegate:
                 return .none
-            case .delegate:
-                return .none
-            case .downloadDetail(.presented(.view(.dismissTapped))):
-                state.downloadDetail = nil
-                return .none
-            case .downloadDetail(.presented(.downloadResult(.success))):
-                let youtubeId = state.downloadDetail?.download.youtubeId
-                state.downloadDetail = nil
-                if let youtubeId {
-                    state.pendingDownloads.remove(id: youtubeId)
-                }
-                return .none
-            case .downloadDetail(.presented(.deleteResult(.success))):
-                let youtubeId = state.downloadDetail?.download.youtubeId
-                state.downloadDetail = nil
-                if let youtubeId {
-                    state.pendingDownloads.remove(id: youtubeId)
-                }
-                return .none
-            case .downloadDetail:
+            case .downloadDetail(.presented(.delegate(.didQueueDownload(let youtubeId)))),
+                 .downloadDetail(.presented(.delegate(.didDelete(let youtubeId)))):
+                return handleDownloadDetailFinished(youtubeId, state: &state)
+            case .downloadDetail, .playlistPicker:
                 return .none
             case .alert(.presented(.confirmUnsubscribe)):
                 return handleUnsubscribeConfirmed(state: &state)
             case .alert(.presented(.confirmClearFiltered)):
                 return handleConfirmClearFiltered(state: &state)
             case .alert(.presented(.confirmDownload(let videoId))):
-                let config = state.serverConfig
-                return .run { send in
-                    let result = await Result {
-                        try await downloadService.updateDownload(
-                            config: config,
-                            id: videoId,
-                            status: "priority"
-                        )
-                    }
-                    await send(.queueDownloadResult(result.map { videoId }), animation: .default)
-                }
-            case .queueDownloadResult(.success(let videoId)):
-                state.pendingDownloads.remove(id: videoId)
-                return .none
-            case .queueDownloadResult(.failure):
-                return .none
+                return handleConfirmDownload(videoId, state: &state)
             case .alert:
                 return .none
-            default:
+            case .videosResult, .downloadsResult, .unsubscribeResult,
+                 .deleteVideoResult, .queueDownloadResult, .setWatchedResult,
+                 .refreshPendingDownloads:
                 return handleInternalAction(action, state: &state)
             }
         }
         .ifLet(\.$alert, action: \.alert)
         .ifLet(\.$downloadDetail, action: \.downloadDetail) {
             DownloadDetailReducer()
+        }
+        .ifLet(\.$playlistPicker, action: \.playlistPicker) {
+            PlaylistPickerReducer()
         }
     }
 }

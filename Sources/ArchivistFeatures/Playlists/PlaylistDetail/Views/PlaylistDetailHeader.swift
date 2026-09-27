@@ -6,23 +6,13 @@ import SwiftUI
 struct PlaylistDetailHeader: View {
     let store: StoreOf<PlaylistDetailReducer>
 
-    /// The API returns the string "false" for playlists with no description
-    /// rather than omitting the field, so it has to be filtered out here.
-    private var description: String? {
-        guard let description = store.playlist.playlistDescription,
-              !description.isEmpty,
-              description.lowercased() != "false"
-        else { return nil }
-        return description
-    }
-
     var body: some View {
         VStack(spacing: 12) {
             StretchyBannerView(url: store.playlistThumbURL)
 
             Text(store.playlist.playlistName)
                 .font(.title2)
-                .fontWeight(.bold)
+                .bold()
                 .foregroundStyle(Color.Text.primary)
 
             if let channel = store.playlist.playlistChannel {
@@ -31,11 +21,11 @@ struct PlaylistDetailHeader: View {
                     .foregroundStyle(Color.Brand.secondary)
             }
 
-            Text("\(store.playlist.entryCount) videos")
+            Text(String.localised("playlist.entryCount \(store.playlist.entryCount)", table: .videos))
                 .font(.caption)
                 .foregroundStyle(Color.Brand.secondary)
 
-            if let description {
+            if let description = store.displayDescription {
                 Text(description)
                     .font(.caption)
                     .foregroundStyle(Color.Text.primary)

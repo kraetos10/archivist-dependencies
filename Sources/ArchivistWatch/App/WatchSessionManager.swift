@@ -3,13 +3,18 @@ import ArchivistNetworking
 import Foundation
 import WatchConnectivity
 
+/// Receives the server configuration from the paired iPhone and stores it in
+/// the App Group, where `WatchAppState` reads it. A logout on the phone
+/// clears it, so the watch falls back to its setup screen.
 @MainActor
 public final class WatchSessionManager: NSObject, WCSessionDelegate {
-    public static let shared = WatchSessionManager()
-    public var onConfigReceived: ((ServerConfig) -> Void)?
-    public var config: WatchAppConfig?
+    /// The configuration changed: a new one from the phone, or `nil` once
+    /// the phone has logged out.
+    public var onConfigChanged: ((ServerConfig?) -> Void)?
+    private let config: WatchAppConfig
 
-    override public init() {
+    public init(config: WatchAppConfig) {
+        self.config = config
         super.init()
     }
 
@@ -22,14 +27,11 @@ public final class WatchSessionManager: NSObject, WCSessionDelegate {
     public func requestConfigFromiPhone() {
         guard WCSession.default.isReachable else { return }
         WCSession.default.sendMessage(
-            ["request": "serverConfig"],
-            replyHandler: { reply in
-                guard let data = reply["serverConfig"] as? Data,
-                      let serverConfig = try? JSONDecoder().decode(ServerConfig.self, from: data) else {
-                    return
-                }
-                Task { @MainActor [weak self] in
-                    self?.handleReceivedConfig(data: data, serverConfig: serverConfig)
+            WatchSyncPayload.requestMessage,
+            replyHandler: { [weak self] reply in
+                guard let payload = WatchSyncPayload(dictionary: reply) else { return }
+                Task { @MainActor in
+                    self?.handle(payload)
                 }
             },
             errorHandler: nil
@@ -41,12 +43,11 @@ public final class WatchSessionManager: NSObject, WCSessionDelegate {
     nonisolated public func session(
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
-        error: Error?
+        error: (any Error)?
     ) {
-        if activationState == .activated {
-            Task { @MainActor in
-                requestConfigFromiPhone()
-            }
+        guard activationState == .activated else { return }
+        Task { @MainActor in
+            requestConfigFromiPhone()
         }
     }
 
@@ -54,36 +55,27 @@ public final class WatchSessionManager: NSObject, WCSessionDelegate {
         _ session: WCSession,
         didReceiveApplicationContext applicationContext: [String: Any]
     ) {
-        guard let data = applicationContext["serverConfig"] as? Data,
-              let serverConfig = try? JSONDecoder().decode(ServerConfig.self, from: data) else {
-            return
-        }
+        guard let payload = WatchSyncPayload(dictionary: applicationContext) else { return }
         Task { @MainActor in
-            handleReceivedConfig(data: data, serverConfig: serverConfig)
+            handle(payload)
         }
     }
 
-    // MARK: - Private
+    // MARK: - Payloads
 
-    private func handleConfigReply(_ reply: [String: Any]) {
-        guard let data = reply["serverConfig"] as? Data,
-              let serverConfig = try? JSONDecoder().decode(ServerConfig.self, from: data) else {
-            return
+    /// Stores (or, on logout, removes) the configuration in the App Group
+    /// and reports the change.
+    func handle(_ payload: WatchSyncPayload) {
+        let defaults = UserDefaults(suiteName: config.appGroupSuite)
+        switch payload {
+        case .serverConfig(let serverConfig):
+            guard let data = try? JSONEncoder().encode(serverConfig) else { return }
+            defaults?.set(data, forKey: config.serverConfigKey)
+            onConfigChanged?(serverConfig)
+        case .loggedOut:
+            defaults?.removeObject(forKey: config.serverConfigKey)
+            onConfigChanged?(nil)
         }
-        handleReceivedConfig(data: data, serverConfig: serverConfig)
-    }
-
-    private func handleReceivedConfig(
-        data: Data,
-        serverConfig: ServerConfig
-    ) {
-        guard let appConfig = config else { return }
-
-        if let defaults = UserDefaults(suiteName: appConfig.appGroupSuite) {
-            defaults.set(data, forKey: appConfig.serverConfigKey)
-        }
-
-        onConfigReceived?(serverConfig)
     }
 }
 #endif

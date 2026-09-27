@@ -50,17 +50,17 @@ public struct StatsScreen: View {
         if let video = store.videoStats {
             StatsOverviewSection(video: video)
             StatsVideoTypeSection(video: video)
-        } else if !store.loadedSections.contains(.video) {
+        } else if store.showsOverviewPlaceholder {
             StatsPlaceholderOverviewSection()
         }
 
-        if store.channelStats != nil || store.playlistStats != nil || store.downloadStats != nil {
+        if store.hasApplicationStats {
             StatsApplicationSection(
                 channelStats: store.channelStats,
                 playlistStats: store.playlistStats,
                 downloadStats: store.downloadStats
             )
-        } else if !store.loadedSections.contains(.channel) {
+        } else if store.showsApplicationPlaceholder {
             StatsPlaceholderApplicationSection()
         }
 
@@ -70,9 +70,11 @@ public struct StatsScreen: View {
 
         if !store.downloadHistory.isEmpty {
             StatsDownloadHistorySection(
-                history: store.downloadHistory,
+                entries: store.visibleDownloadHistory,
+                canExpand: store.canExpandDownloadHistory,
                 isExpanded: store.isDownloadHistoryExpanded,
-                onToggle: { send(.downloadHistoryToggleTapped) }
+                toggleTitle: store.downloadHistoryToggleTitle,
+                onToggle: { send(.downloadHistoryToggleTapped, animation: .default) }
             )
         }
 

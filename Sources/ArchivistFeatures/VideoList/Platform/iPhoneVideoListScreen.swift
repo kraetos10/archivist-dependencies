@@ -25,7 +25,7 @@ public struct iPhoneVideoListScreen: View {
             }
             .safeAreaInset(edge: .bottom) {
                 FloatingAddButton { send(.addVideoTapped) }
-                    .sheet(item: $store.scope(state: \.addVideo, action: \.addVideo)) { addVideoStore in
+                    .sheet(item: $store.scope(state: \.destination?.addVideo, action: \.destination.addVideo)) { addVideoStore in
                         AddVideoScreen(store: addVideoStore)
                     }
             }
@@ -48,11 +48,11 @@ public struct iPhoneVideoListScreen: View {
         }
 
         .onAppear { send(.viewDidAppear) }
-        .alert($store.scope(state: \.alert, action: \.alert))
-        .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
+        .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
+        .sheet(item: $store.scope(state: \.destination?.playlistPicker, action: \.destination.playlistPicker)) { pickerStore in
             PlaylistPickerScreen(store: pickerStore)
         }
-        .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
+        .fullScreenCover(item: $store.scope(state: \.destination?.videoDetail, action: \.destination.videoDetail)) { detailStore in
             NavigationStack {
                 VideoDetailScreen(store: detailStore)
             }
@@ -106,7 +106,10 @@ public struct iPhoneVideoListScreen: View {
 
     @ViewBuilder
     private var searchResultsSection: some View {
-        if (store.hasLoaded || !store.isSearching) && store.displayedVideos.isEmpty {
+        // Read once per pass: `displayedVideos` filters, merges and maps
+        // the whole list on every access.
+        let displayed = store.displayedVideos
+        if (store.hasLoaded || !store.isSearching) && displayed.isEmpty {
             VideoListEmptyState(
                 isSearchActive: true,
                 isSearching: store.isSearching,
@@ -114,7 +117,7 @@ public struct iPhoneVideoListScreen: View {
             )
         } else {
             LazyVGrid(columns: searchColumns, spacing: 16) {
-                ForEach(store.displayedVideos) { item in
+                ForEach(displayed) { item in
                     VideoCardView(
                         video: item.video,
                         serverConfig: store.serverConfig,
@@ -140,7 +143,7 @@ public struct iPhoneVideoListScreen: View {
                     }
                 }
             }
-            .animation(.default, value: store.displayedVideos.map(\.id))
+            .animation(.default, value: displayed.map(\.id))
             .padding()
         }
     }

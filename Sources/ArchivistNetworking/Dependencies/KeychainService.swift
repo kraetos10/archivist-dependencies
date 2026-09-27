@@ -48,4 +48,12 @@ extension KeychainService: DependencyKey {
     }()
 
     public static var testValue: KeychainService { KeychainService() }
+    public static var previewValue: KeychainService {
+        let token = LockIsolated<String?>(nil)
+        return KeychainService(
+            save: { token.setValue($0) },
+            loadToken: { token.value },
+            deleteToken: { token.setValue(nil) }
+        )
+    }
 }

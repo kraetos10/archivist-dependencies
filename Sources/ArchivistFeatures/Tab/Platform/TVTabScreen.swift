@@ -6,7 +6,6 @@ import SwiftUI
 
 public struct TVTabScreen: View {
     @Bindable public var store: StoreOf<TabReducer>
-    @Environment(\.scenePhase) private var scenePhase
 
     public init(store: StoreOf<TabReducer>) {
         self.store = store
@@ -49,9 +48,6 @@ public struct TVTabScreen: View {
             }
         }
         .onAppear { store.send(.appeared) }
-        .onChange(of: scenePhase) {
-            store.send(.scenePhaseChanged(scenePhase))
-        }
     }
 }
 #endif

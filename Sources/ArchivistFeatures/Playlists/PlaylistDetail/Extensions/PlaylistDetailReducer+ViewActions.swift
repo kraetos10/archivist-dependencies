@@ -2,10 +2,9 @@ import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
-import SwiftUI
 
 extension PlaylistDetailReducer {
-    public func handleViewAction(
+    func handleViewAction(
         _ action: Action.View,
         state: inout State
     ) -> Effect<Action> {
@@ -14,17 +13,10 @@ extension PlaylistDetailReducer {
             return handleViewDidAppear(state: &state)
         case .entryTapped(let entry):
             return handleEntryTapped(entry, state: &state)
-        case .dismissTapped:
-            return .none
         case .unsubscribeTapped:
             return handleUnsubscribeTapped(state: &state)
         case .removeEntryTapped(let entry):
             return handleRemoveEntryTapped(entry, state: &state)
-        case .moveEntry(let source, let destination):
-            return handleMoveEntry(source: source, destination: destination, state: &state)
-        case .editTapped:
-            state.isEditing.toggle()
-            return .none
         case .addVideoTapped:
             state.videoPicker = VideoPickerReducer.State(
                 serverConfig: state.serverConfig,
@@ -33,42 +25,26 @@ extension PlaylistDetailReducer {
             return .none
         case .downloadToDeviceTapped(let entry):
             return handleDownloadToDeviceTapped(entry, state: &state)
-        case .queueServerDownloadTapped(let entry):
-            return handleQueueServerDownloadTapped(entry, state: &state)
         case .markAsWatchedTapped(let entry):
             return handleMarkAsWatchedTapped(entry, state: &state)
         case .loopToggled:
             state.$loopPlaylistEnabled.withLock { $0.toggle() }
             return .none
         case .descriptionTapped:
-            return handleDescriptionTapped(state: &state)
+            state.isShowingFullDescription = true
+            return .none
         }
-    }
-
-    private func handleDescriptionTapped(state: inout State) -> Effect<Action> {
-        state.isShowingFullDescription = true
-        return .none
     }
 
     // MARK: - Private Handlers
 
     private func handleViewDidAppear(state: inout State) -> Effect<Action> {
         guard !state.hasLoadedEntries, !state.isLoadingEntries else { return .none }
-        state.isLoadingEntries = true
-        let config = state.serverConfig
-        let playlistId = state.playlist.playlistId
-        return .run { [playlistService] send in
-            let result = await Result {
-                try await playlistService.getPlaylist(
-                    config: config,
-                    id: playlistId
-                )
-            }
-            await send(.playlistResult(result))
-        }
+        return loadPlaylist(state: &state)
     }
 
     private func handleUnsubscribeTapped(state: inout State) -> Effect<Action> {
+        let playlistName = state.playlist.playlistName
         state.alert = AlertState {
             TextState(String.localised("video.removePlaylist", table: .videos))
         } actions: {
@@ -78,22 +54,31 @@ extension PlaylistDetailReducer {
             ButtonState(role: .destructive, action: .confirmUnsubscribe) {
                 TextState(String.localised("generic.remove", table: .generic))
             }
-        } message: { [state] in
+        } message: {
             TextState(
                 String.localised(
-                    "Are you sure you want to remove \(state.playlist.playlistName)?",
-                    table: .login
+                    "playlist.removeConfirm \(playlistName)",
+                    table: .videos
                 )
             )
         }
         return .none
     }
 
+    /// An entry the server has plays; one it hasn't downloaded yet offers
+    /// to queue it instead.
     private func handleEntryTapped(
         _ entry: PlaylistEntry,
         state: inout State
     ) -> Effect<Action> {
         guard let videoId = entry.youtubeId else { return .none }
+        guard state.isEntryAvailable(entry) else {
+            return handleUnavailableEntryTapped(
+                entry,
+                videoId: videoId,
+                state: &state
+            )
+        }
         let config = state.serverConfig
         let entries = state.entries
         let tappedIndex = entries.firstIndex(where: { $0.youtubeId == videoId })
@@ -124,6 +109,27 @@ extension PlaylistDetailReducer {
             }
             await send(.videoResult(result))
         }
+        .cancellable(id: CancelID.openEntry, cancelInFlight: true)
+    }
+
+    private func handleUnavailableEntryTapped(
+        _ entry: PlaylistEntry,
+        videoId: String,
+        state: inout State
+    ) -> Effect<Action> {
+        state.alert = AlertState {
+            TextState(entry.title ?? videoId)
+        } actions: {
+            ButtonState(action: .confirmServerDownload(videoId)) {
+                TextState(String.localised("video.downloadNow", table: .videos))
+            }
+            ButtonState(role: .cancel) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("playlist.serverDownloadPrompt", table: .videos))
+        }
+        return .none
     }
 
     private func handleRemoveEntryTapped(
@@ -143,41 +149,7 @@ extension PlaylistDetailReducer {
                     videoId: videoId
                 )
             }
-            await send(.removeEntryResult(result.map { videoId }))
-        }
-    }
-
-    private func handleMoveEntry(
-        source: IndexSet,
-        destination: Int,
-        state: inout State
-    ) -> Effect<Action> {
-        guard state.isCustomPlaylist,
-              let sourceIndex = source.first,
-              sourceIndex < state.entries.count,
-              let videoId = state.entries[sourceIndex].youtubeId else { return .none }
-
-        let newPosition = destination > sourceIndex ? destination - 1 : destination
-
-        var entries = state.entries
-        entries.move(fromOffsets: source, toOffset: destination)
-        state.playlist = state.playlist.withEntries(entries)
-
-        let config = state.serverConfig
-        let playlistId = state.playlist.playlistId
-        let playlistService = self.playlistService
-
-        return .run { send in
-            let result = await Result {
-                try await playlistService.modifyCustomPlaylist(
-                    config: config,
-                    id: playlistId,
-                    action: "move",
-                    videoId: videoId,
-                    position: newPosition
-                )
-            }
-            await send(.moveEntryResult(result))
+            await send(.removeEntryResult(result.map { videoId }), animation: .default)
         }
     }
 
@@ -187,6 +159,7 @@ extension PlaylistDetailReducer {
     ) -> Effect<Action> {
         guard let videoId = entry.youtubeId else { return .none }
         let config = state.serverConfig
+        let createdAt = now.timeIntervalSince1970
         return .run { [videoService, deviceDownloadDatabase, persistentDownloadManager] _ in
             let video = try await videoService.getVideo(config: config, id: videoId)
             guard let mediaPath = video.mediaUrl,
@@ -200,7 +173,7 @@ extension PlaylistDetailReducer {
                 status: .downloading,
                 progress: 0,
                 fileSize: video.mediaSize,
-                createdAt: Date().timeIntervalSince1970
+                createdAt: createdAt
             )
             try? deviceDownloadDatabase.insertDownload(download)
 
@@ -215,43 +188,25 @@ extension PlaylistDetailReducer {
         }
     }
 
+    /// Marks the video watched on the server. (This used to post a
+    /// progress of 0, which reset the resume position and left the video
+    /// unwatched.)
     private func handleMarkAsWatchedTapped(
         _ entry: PlaylistEntry,
         state: inout State
     ) -> Effect<Action> {
         guard let videoId = entry.youtubeId else { return .none }
         let config = state.serverConfig
-        return .run { [videoService] _ in
-            try? await videoService.setProgress(
-                config: config,
-                videoId: videoId,
-                position: 0
-            )
-        }
-    }
-
-    private func handleQueueServerDownloadTapped(
-        _ entry: PlaylistEntry,
-        state: inout State
-    ) -> Effect<Action> {
-        guard let videoId = entry.youtubeId else { return .none }
-        let config = state.serverConfig
-        state.alert = AlertState {
-            TextState(entry.title ?? videoId)
-        } actions: {
-            ButtonState(action: .confirmServerDownload(videoId)) {
-                TextState(String.localised("video.downloadNow", table: .videos))
-            }
-            ButtonState(role: .cancel) {
-                TextState(String.localised("generic.cancel", table: .generic))
-            }
-        } message: {
-            TextState(
-                String(
-                    localized: "This video hasn't been downloaded to the server yet. Add it to the download queue?"
+        let videoService = self.videoService
+        return .run { send in
+            let result = await Result {
+                try await videoService.setWatched(
+                    config: config,
+                    videoId: videoId,
+                    isWatched: true
                 )
-            )
+            }
+            await send(.setWatchedResult(result.map { videoId }))
         }
-        return .none
     }
 }

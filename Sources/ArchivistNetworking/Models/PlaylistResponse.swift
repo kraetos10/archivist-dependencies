@@ -131,6 +131,14 @@ public nonisolated struct PlaylistResponse: Decodable, Sendable, Equatable, Iden
 public nonisolated enum PlaylistType: String, Decodable, Sendable, Equatable, Hashable {
     case regular
     case custom
+    case unknown
+
+    /// A value this client doesn't know yet decodes as `.unknown` instead of
+    /// failing the whole response it's part of.
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: raw) ?? .unknown
+    }
 }
 
 public nonisolated struct PlaylistEntry: Decodable, Sendable, Equatable, Identifiable, Hashable {

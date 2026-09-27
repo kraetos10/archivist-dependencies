@@ -1,6 +1,6 @@
 import Foundation
 
-public nonisolated enum HTTPMethod: String {
+public nonisolated enum HTTPMethod: String, Sendable {
     case get = "GET"
     case put = "PUT"
     case post = "POST"
@@ -8,7 +8,7 @@ public nonisolated enum HTTPMethod: String {
     case delete = "DELETE"
 }
 
-public nonisolated final class HTTPHeader {
+public nonisolated struct HTTPHeader: Sendable, Equatable {
     public let field: String
     public let value: String
 

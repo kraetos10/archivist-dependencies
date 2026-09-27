@@ -1,9 +1,9 @@
 import ArchivistNetworking
 import AVFoundation
 import AVKit
+import Dependencies
 import Network
 import SwiftUI
-import SystemConfiguration
 #if !os(tvOS) && !os(watchOS)
 import UIKit
 #endif
@@ -88,7 +88,6 @@ public final class PlayerManager: NSObject {
     public var currentVideoID: String?
     public var isInPiP = false
     public var isVLCFullscreen = false
-    public var activePiPDelegate: AnyObject?
 
     public var supportsPiP: Bool { backend is PlaybackServiceBackend }
     public var isUsingFallbackPlayer: Bool { backend is PlaybackServiceBackend }
@@ -214,20 +213,11 @@ public final class PlayerManager: NSObject {
     /// fullscreen player VC render the card even though it can't see the
     /// reducer's store.
     public var autoPlayCountdown: AutoPlayCountdownInfo?
-    /// Fires when the user taps "restore from PiP" but the source detail
-    /// screen has already been dismissed. Wired at app start to push the
-    /// VideoDetail screen back onto the navigation stack so the player
-    /// has somewhere to surface. Receives the currently-playing videoId.
-    public var onPiPRestoreRequested: ((String) -> Void)?
 
-    /// Wall-clock timestamp of the last PiP-restore-driven detail-screen
-    /// remount. Used to suppress immediate re-restores: when a user
-    /// dismisses a freshly-restored detail screen, the dismiss handler
-    /// kicks PiP again, which can race into PiP-end and re-fire restore,
-    /// looping the screen open. Cooldown breaks that cycle while leaving
-    /// normal "PiP for hours, restore later" untouched.
-    private var lastPiPRestoreAt: Date?
-    private let pipRestoreCooldown: TimeInterval = 3.0
+    /// Watches the network path so the Wi-Fi-only prebuffer gate can read
+    /// the current interface without a blocking reachability lookup. Only
+    /// started on platforms whose defaults actually consult it.
+    @ObservationIgnored private let pathMonitor = NWPathMonitor()
 
     public var currentMetadata: NowPlayingMetadata? {
         didSet {
@@ -250,15 +240,28 @@ public final class PlayerManager: NSObject {
 
     private override init() {
         super.init()
+        if PlaybackCache.defaultPrebufferEnabled, PlaybackCache.defaultPrebufferWifiOnly {
+            pathMonitor.start(queue: DispatchQueue(label: "PlayerManager.pathMonitor"))
+        }
         #if !os(tvOS)
         setupBackgroundPlayback()
         #endif
     }
 
+    /// Configure the shared session for video playback. A category failure
+    /// is a programming error (it would silently kill background audio), so
+    /// it is reported rather than swallowed. Activation failing is expected
+    /// while another app holds the route, so that stays best-effort.
+    private static func configureAudioSession() {
+        withErrorReporting {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        }
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
     #if !os(tvOS)
     private func setupBackgroundPlayback() {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        Self.configureAudioSession()
 
         observeInterruptions()
         observeRouteChanges()
@@ -525,23 +528,6 @@ public final class PlayerManager: NSObject {
         isBuffering = backend.isBuffering
     }
 
-    /// True when a PiP-end event should be allowed to drive a fresh
-    /// detail-screen remount via `onPiPRestoreRequested`. Returns false
-    /// during the cooldown window after a previous restore so a
-    /// dismiss-initiated PiP that races into PiP-end can't loop the
-    /// screen back open.
-    public func shouldRestoreFromPiPEnd() -> Bool {
-        guard let last = lastPiPRestoreAt else { return true }
-        return Date().timeIntervalSince(last) > pipRestoreCooldown
-    }
-
-    /// Stamp the cooldown so subsequent PiP-end events suppress restore
-    /// until enough time has passed. Call from the restore callsite right
-    /// before invoking the registered handler.
-    public func recordPiPRestoreFired() {
-        lastPiPRestoreAt = Date()
-    }
-
     // MARK: - Playback Control
 
     /// Announce the hand-over before `load` tears the outgoing video down.
@@ -600,8 +586,7 @@ public final class PlayerManager: NSObject {
         PlaybackCache.shared.clearAll()
         #endif
 
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        Self.configureAudioSession()
 
         // The cache has no settings screen; the platform defaults always
         // apply, whatever an earlier version stored under these keys.
@@ -637,8 +622,6 @@ public final class PlayerManager: NSObject {
             startPosition: startPosition
         )
 
-        installPersistentSurface(for: newBackend)
-
         #if os(iOS)
         // On auto-advance the new backend vends a fresh `playerView`; if
         // the fullscreen player is presented, hand the new surface to it
@@ -652,8 +635,9 @@ public final class PlayerManager: NSObject {
         // swaps to the local file for instant-seek. Skipped on tvOS where
         // the swap-restart on completion was making playback appear to
         // wait for the cache to fill.
-        let isOnWifi = Self.isConnectedToWifi()
-        let shouldPrebuffer = prebufferEnabled && (!prebufferWifiOnly || isOnWifi)
+        // Short-circuits so the network path is only consulted when the
+        // Wi-Fi gate actually applies.
+        let shouldPrebuffer = prebufferEnabled && (!prebufferWifiOnly || isOnUnmeteredNetwork)
         #if !os(tvOS)
         if !playingFromCache,
            shouldPrebuffer,
@@ -735,8 +719,6 @@ public final class PlayerManager: NSObject {
         currentVideoID = nil
         currentMetadata = nil
         isInPiP = false
-        activePiPDelegate = nil
-        teardownPersistentSurface()
         #if !os(tvOS)
         nowPlayingService.teardown()
         #endif
@@ -847,16 +829,27 @@ public final class PlayerManager: NSObject {
         Self.formatTime(effectiveDuration)
     }
 
+    /// Playhead as a 0...1 fraction of `effectiveDuration`, clamped — the
+    /// position can briefly overshoot a stale or short duration at the end
+    /// of a video or just after a resume.
+    public var playbackFraction: Double {
+        let total = effectiveDuration
+        guard total > 0, currentTime.isFinite else { return 0 }
+        return min(max(currentTime / total, 0), 1)
+    }
+
+    /// Seek to a 0...1 fraction of `effectiveDuration`. No-op until the
+    /// duration is known.
+    public func seek(toFraction fraction: Double) {
+        let total = effectiveDuration
+        guard total > 0 else { return }
+        seekTo(min(max(fraction, 0), 1) * total)
+    }
+
     private static func formatTime(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "-" }
-        let total = Int(seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let remainder = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, remainder)
-        }
-        return String(format: "%d:%02d", minutes, remainder)
+        let pattern: Duration.TimeFormatStyle.Pattern = seconds >= 3600 ? .hourMinuteSecond : .minuteSecond
+        return Duration.seconds(Int(seconds)).formatted(.time(pattern: pattern))
     }
 
     #if !os(tvOS) && !os(watchOS)
@@ -865,6 +858,9 @@ public final class PlayerManager: NSObject {
 
     public func scheduleHideVLCControls() {
         vlcHideControlsTask?.cancel()
+        // With VoiceOver running the chrome stays up: the tap zones that
+        // bring it back aren't something VoiceOver users can find by feel.
+        guard !UIAccessibility.isVoiceOverRunning else { return }
         vlcHideControlsTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(3))
             guard let self, !Task.isCancelled else { return }
@@ -995,35 +991,18 @@ public final class PlayerManager: NSObject {
             PlaybackService.sharedInstance().togglePictureInPicture()
         }
         isInPiP = false
-        activePiPDelegate = nil
         syncPlaybackState()
     }
     #endif
 
-    // MARK: - Persistent Player Surface
-
-    private func installPersistentSurface(for backend: any PlayerBackend) {
-        teardownPersistentSurface()
-        _ = backend
-    }
-
-    private func teardownPersistentSurface() {
-        #if canImport(VLCKit) && !os(watchOS)
-        persistentVLCPlayerView?.removeFromSuperview()
-        #endif
-    }
-
     // MARK: - Network
 
-    private nonisolated static func isConnectedToWifi() -> Bool {
-        var flags: SCNetworkReachabilityFlags = []
-        guard let reachability = SCNetworkReachabilityCreateWithName(nil, "apple.com"),
-              SCNetworkReachabilityGetFlags(reachability, &flags) else {
-            return false
-        }
-        let isReachable = flags.contains(.reachable)
-        let isWWAN = flags.contains(.isWWAN)
-        return isReachable && !isWWAN
+    /// Whether the current path is up and not cellular — the condition the
+    /// Wi-Fi-only prebuffer gate checks. Reads the monitor's cached path, so
+    /// it never blocks.
+    private var isOnUnmeteredNetwork: Bool {
+        let path = pathMonitor.currentPath
+        return path.status == .satisfied && !path.usesInterfaceType(.cellular)
     }
 
     // MARK: - Private

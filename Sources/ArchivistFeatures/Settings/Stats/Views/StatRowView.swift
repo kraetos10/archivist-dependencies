@@ -5,6 +5,8 @@ struct StatRowView: View {
     let label: String
     let value: String
     let icon: String
+    /// A breakdown row under the one above it.
+    var isIndented = false
 
     var body: some View {
         StatsFocusableRow {
@@ -23,6 +25,7 @@ struct StatRowView: View {
                     .fontWeight(.medium)
                     .foregroundStyle(Color.Text.primary)
             }
+            .padding(.leading, isIndented ? 16 : 0)
         }
     }
 }

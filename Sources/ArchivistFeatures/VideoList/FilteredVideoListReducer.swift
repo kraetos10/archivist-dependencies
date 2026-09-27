@@ -12,7 +12,7 @@ public struct FilteredVideoListReducer {
     public init() {}
 
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         public var serverConfig: ServerConfig
         public var filter: WatchFilter
         public var videos: IdentifiedArrayOf<VideoResponse> = []
@@ -34,12 +34,7 @@ public struct FilteredVideoListReducer {
         public init(serverConfig: ServerConfig, filter: WatchFilter) {
             self.serverConfig = serverConfig
             self.filter = filter
-            // KVO can't observe defaults keys containing "." — substitute
-            // an underscore so cross-process observation stays efficient.
-            _sortOrder = Shared(
-                wrappedValue: .published,
-                .appStorage("videoListSortOrder_\(filter.rawValue)")
-            )
+            _sortOrder = Shared(.videoListSortOrder(for: filter))
         }
 
         var downloadedVideoIDs: Set<String> {
@@ -50,6 +45,8 @@ public struct FilteredVideoListReducer {
         /// (`.continueWatching`, `.downloaded`) have no matching API value and
         /// are derived client-side from the full paginated list.
         var displayedVideos: [DisplayedVideo] {
+            // Built once: the computed property makes a new Set per access.
+            let downloadedVideoIDs = downloadedVideoIDs
             let filtered: IdentifiedArrayOf<VideoResponse>
             switch filter {
             case .all:
@@ -67,8 +64,8 @@ public struct FilteredVideoListReducer {
             let searched: IdentifiedArrayOf<VideoResponse> = trimmed.isEmpty
                 ? filtered
                 : filtered.filter {
-                    $0.title.localizedCaseInsensitiveContains(trimmed)
-                    || ($0.channelName.localizedCaseInsensitiveContains(trimmed))
+                    $0.title.localizedStandardContains(trimmed)
+                    || $0.channelName.localizedStandardContains(trimmed)
                 }
             return searched.map { video in
                 DisplayedVideo(
@@ -116,6 +113,13 @@ public struct FilteredVideoListReducer {
     }
 
     @Dependency(\.videoService) var videoService
+
+    enum CancelID {
+        /// Every page fetch. A refresh or re-sort cancels a page still in
+        /// flight, so a response for the old sort can't merge into the new
+        /// list.
+        case fetch
+    }
 
     public var body: some Reducer<State, Action> {
         BindingReducer()

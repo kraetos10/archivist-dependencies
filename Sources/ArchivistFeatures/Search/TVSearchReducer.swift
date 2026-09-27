@@ -17,15 +17,14 @@ public struct TVSearchReducer {
         var isSearching = false
         var hasSearched = false
         var lastSearchedQuery: String = ""
-        @Presents var videoDetail: VideoDetailReducer.State?
+        /// The cover over the results: a video, a channel or a playlist.
         /// Channels and playlists open over the Search tab itself, not
         /// through the home screen's covers — those aren't on screen while
         /// Search is the selected tab.
-        @Presents var channelDetail: ChannelDetailReducer.State?
-        @Presents var playlistDetail: PlaylistDetailReducer.State?
-        /// A video opened from inside `channelDetail` or `playlistDetail`.
-        /// Kept apart from `videoDetail` because it's presented over those
-        /// covers rather than over the results.
+        @Presents var destination: Destination.State?
+        /// A video opened from inside the channel or playlist cover. Not a
+        /// `destination` case: it's presented over that cover, alongside
+        /// it, rather than instead of it.
         @Presents var nestedVideoDetail: VideoDetailReducer.State?
 
         var hasNoResults: Bool {
@@ -36,14 +35,21 @@ public struct TVSearchReducer {
         }
     }
 
+    @Reducer
+    public enum Destination {
+        case channelDetail(ChannelDetailReducer)
+        case playlistDetail(PlaylistDetailReducer)
+        case videoDetail(VideoDetailReducer)
+    }
+
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
         case delegate(Delegate)
+        /// The typing pause after a query change has elapsed; run the search.
+        case searchDebounceElapsed
         case searchResult(Result<SearchResponse, Error>)
-        case videoDetail(PresentationAction<VideoDetailReducer.Action>)
-        case channelDetail(PresentationAction<ChannelDetailReducer.Action>)
-        case playlistDetail(PresentationAction<PlaylistDetailReducer.Action>)
+        case destination(PresentationAction<Destination.Action>)
         case nestedVideoDetail(PresentationAction<VideoDetailReducer.Action>)
         /// A video changed elsewhere (marked watched from a result's
         /// context menu), so its result card shows the new state.
@@ -53,7 +59,6 @@ public struct TVSearchReducer {
 
         @CasePathable
         public enum View {
-            case searchSubmitted
             case videoTapped(VideoResponse)
             case channelTapped(ChannelResponse)
             case playlistTapped(PlaylistResponse)
@@ -84,36 +89,30 @@ public struct TVSearchReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .videoDetail(.presented(.delegate(.didRequestMinimize))),
-                 .videoDetail(.presented(.delegate(.didDismiss))):
-                state.videoDetail = nil
+            case .destination(.presented(.videoDetail(.delegate(.didRequestMinimize)))),
+                 .destination(.presented(.videoDetail(.delegate(.didDismiss)))):
+                state.destination = nil
                 return .none
-            case .videoDetail:
-                return .none
-            case .channelDetail(.presented(.delegate(.videoSelected(let video, let nextVideos)))):
+            case .destination(.presented(.channelDetail(.delegate(.videoSelected(let video, let nextVideos))))):
                 return handleChannelVideoSelected(
                     video,
                     nextVideos: nextVideos,
                     state: &state
                 )
-            case .channelDetail(.presented(.unsubscribeResult(.success))):
-                state.channelDetail = nil
-                return .none
-            case .channelDetail:
-                return .none
-            case .playlistDetail(.presented(.delegate(
+            case .destination(.presented(.playlistDetail(.delegate(
                 .showVideo(let video, let nextVideos, let loopVideoIds)
-            ))):
+            )))):
                 return handlePlaylistVideoSelected(
                     video,
                     nextVideos: nextVideos,
                     loopVideoIds: loopVideoIds,
                     state: &state
                 )
-            case .playlistDetail(.presented(.unsubscribeResult(.success))):
-                state.playlistDetail = nil
+            case .destination(.presented(.channelDetail(.delegate(.didUnsubscribe)))),
+                 .destination(.presented(.playlistDetail(.delegate(.didUnsubscribe)))):
+                state.destination = nil
                 return .none
-            case .playlistDetail:
+            case .destination:
                 return .none
             case .nestedVideoDetail(.presented(.delegate(.didRequestMinimize))),
                  .nestedVideoDetail(.presented(.delegate(.didDismiss))):
@@ -123,6 +122,8 @@ public struct TVSearchReducer {
                 return .none
             case .delegate:
                 return .none
+            case .searchDebounceElapsed:
+                return handleSearch(state: &state)
             case .searchResult(let result):
                 return handleSearchResult(result, state: &state)
             case .videoUpdated(let video):
@@ -131,18 +132,12 @@ public struct TVSearchReducer {
                 return handleRefreshPendingDownloads(state: &state)
             }
         }
-        .ifLet(\.$videoDetail, action: \.videoDetail) {
-            VideoDetailReducer()
-        }
-        .ifLet(\.$channelDetail, action: \.channelDetail) {
-            ChannelDetailReducer()
-        }
-        .ifLet(\.$playlistDetail, action: \.playlistDetail) {
-            PlaylistDetailReducer()
-        }
+        .ifLet(\.$destination, action: \.destination)
         .ifLet(\.$nestedVideoDetail, action: \.nestedVideoDetail) {
             VideoDetailReducer()
         }
     }
 }
+
+extension TVSearchReducer.Destination.State: Equatable, Sendable {}
 #endif

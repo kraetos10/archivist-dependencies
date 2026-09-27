@@ -22,7 +22,7 @@ struct HomeFilterSectionPlaceholder: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(alignment: .center, spacing: 12) {
                     // Loop the available placeholder list up to the carousel
                     // cap so the redacted row looks the same as the real one.
@@ -39,6 +39,7 @@ struct HomeFilterSectionPlaceholder: View {
                 .padding(.bottom, 12)
             }
             .scrollDisabled(true)
+            .scrollIndicators(.hidden)
             .scrollClipDisabled()
         }
         .background(
@@ -86,7 +87,7 @@ struct HomeFilterSection: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(alignment: .center, spacing: 12) {
                     ForEach(Array(items.prefix(Self.maxItems))) { item in
                         VideoCardView(
@@ -119,6 +120,7 @@ struct HomeFilterSection: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             }
+            .scrollIndicators(.hidden)
             .scrollClipDisabled()
             .scrollTargetBehavior(.viewAligned)
         }

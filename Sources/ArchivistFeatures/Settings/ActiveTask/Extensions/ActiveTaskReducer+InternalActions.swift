@@ -1,60 +1,72 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
 extension ActiveTaskReducer {
-    public func handleInternalAction(
-        _ action: Action,
+    func handleStartPolling(state: inout State) -> Effect<Action> {
+        guard !state.isPolling else { return .none }
+        return poll(config: state.serverConfig, after: nil)
+    }
+
+    func handlePollResult(
+        _ result: Result<[NotificationResponse], Error>,
         state: inout State
     ) -> Effect<Action> {
-        switch action {
-        case .pollResult(.success(let notifications)):
+        switch result {
+        case .success(let notifications):
             if let notification = notifications.first {
-                let title = notification.title ?? ""
-                let normalizedProgress = notification.progress.map { $0 / 100.0 }
                 state.activeDownload = ActiveDownload(
-                    title: title,
+                    title: notification.title ?? "",
                     messages: notification.messages ?? [],
-                    progress: normalizedProgress
+                    progress: notification.progress.map { $0 / 100.0 }
                 )
                 state.activeTaskId = notification.id
                 state.isPolling = true
-                return scheduleNextPoll(config: state.serverConfig)
-            } else {
-                let hadActive = state.activeDownload != nil
-                state.activeDownload = nil
-                state.activeTaskId = nil
-                state.isPolling = false
-                state.isCancelling = false
-                if hadActive {
-                    return .send(.downloadCompleted)
-                }
-                return .none
+                return poll(config: state.serverConfig, after: .seconds(3))
             }
-        case .pollResult(.failure):
-            state.activeDownload = nil
-            state.activeTaskId = nil
-            state.isPolling = false
-            state.isCancelling = false
-            return .none
-        case .cancelTaskResult(.success):
-            state.isCancelling = false
-            return .none
-        case .cancelTaskResult(.failure):
-            state.isCancelling = false
-            return .none
-        default:
+            let hadActive = state.activeDownload != nil
+            clearActiveTask(state: &state)
+            return hadActive ? .send(.downloadCompleted) : .none
+        case .failure:
+            // Polling is best-effort: the next `startPolling` retries.
+            clearActiveTask(state: &state)
             return .none
         }
     }
 
+    func handleCancelTaskResult(
+        _ result: Result<Void, Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        state.isCancelling = false
+        if case .failure(let error) = result {
+            state.alert = AlertState {
+                TextState(String.localised("settings.cancelTaskFailed", table: .settings))
+            } message: {
+                TextState(error.localizedDescription)
+            }
+        }
+        return .none
+    }
+
     // MARK: - Private Helpers
 
-    private func scheduleNextPoll(config: ServerConfig) -> Effect<Action> {
-        let clock = self.clock
-        let taskService = self.taskService
-        return .run { send in
-            try await clock.sleep(for: .seconds(3))
+    private func clearActiveTask(state: inout State) {
+        state.activeDownload = nil
+        state.activeTaskId = nil
+        state.isPolling = false
+        state.isCancelling = false
+    }
+
+    private func poll(
+        config: ServerConfig,
+        after delay: Duration?
+    ) -> Effect<Action> {
+        .run { [clock, taskService] send in
+            if let delay {
+                try await clock.sleep(for: delay)
+            }
             let result = await Result {
                 try await taskService.getDownloadNotifications(config: config)
             }

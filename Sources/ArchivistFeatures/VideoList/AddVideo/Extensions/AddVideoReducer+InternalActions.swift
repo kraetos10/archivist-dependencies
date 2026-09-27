@@ -9,10 +9,16 @@ extension AddVideoReducer {
     ) -> Effect<Action> {
         switch action {
         case .addResult(.success):
+            // The parent closes the sheet on success.
             state.isAdding = false
             return .none
-        case .addResult(.failure):
+        case .addResult(.failure(let error)):
             state.isAdding = false
+            state.alert = AlertState {
+                TextState(String.localised("generic.error", table: .generic))
+            } message: {
+                TextState(error.localizedDescription)
+            }
             return .none
         default:
             return .none

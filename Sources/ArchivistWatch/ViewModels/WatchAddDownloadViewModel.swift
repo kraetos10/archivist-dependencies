@@ -4,65 +4,82 @@ import Foundation
 
 @MainActor
 @Observable
-public final class WatchAddDownloadViewModel {
+public final class WatchAddDownloadViewModel: Identifiable {
+    /// Bound to the text field.
     public var urlText = ""
-    public var isAdding = false
-    public var errorMessage: String?
-    public var didAdd = false
+    public private(set) var isAdding = false
+    public private(set) var errorMessage: String?
+    public private(set) var didAdd = false
 
-    private let config: ServerConfig
-    private let downloadService: DownloadService
+    @ObservationIgnored private let config: ServerConfig
+    @ObservationIgnored private let service: DownloadService
 
     public init(
         config: ServerConfig,
-        downloadService: DownloadService = .liveValue
+        service: DownloadService = .liveValue
     ) {
         self.config = config
-        self.downloadService = downloadService
+        self.service = service
     }
 
-    public func addToQueue() async {
-        let videoId = extractVideoId(from: urlText)
-            ?? urlText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !videoId.isEmpty else { return }
+    public var isAddDisabled: Bool {
+        videoId == nil || isAdding
+    }
 
+    public func addButtonTapped() async {
+        guard let videoId, !isAdding else { return }
         isAdding = true
         errorMessage = nil
+        defer { isAdding = false }
 
         do {
-            try await downloadService.addDownloads(
+            try await service.addDownloads(
                 config: config,
-                items: [AddDownloadItem(youtubeId: videoId, status: "pending")],
+                items: [AddDownloadItem(youtubeId: videoId, status: DownloadStatus.pending.rawValue)],
                 autostart: true,
                 flat: false,
                 force: false
             )
             didAdd = true
         } catch {
-            errorMessage = String(localized: "queue.addFailed", bundle: Bundle.module)
+            errorMessage = String(localized: "queue.addFailed", bundle: .module)
         }
-        isAdding = false
     }
 
-    private func extractVideoId(from input: String) -> String? {
-        if let range = input.range(of: "v=([a-zA-Z0-9_-]+)", options: .regularExpression) {
-            let match = input[range]
-            return String(match.dropFirst(2))
-        }
-        if let range = input.range(of: "youtu\\.be/([a-zA-Z0-9_-]+)", options: .regularExpression) {
-            let match = input[range]
-            if let slashIndex = match.lastIndex(of: "/") {
-                return String(match[match.index(after: slashIndex)...])
+    private var videoId: String? {
+        Self.videoId(from: urlText)
+    }
+
+    /// The video id from a YouTube watch, share or Shorts link, or the text
+    /// itself when it is already a bare id.
+    static func videoId(from input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let patterns = [
+            /[?&]v=([A-Za-z0-9_-]+)/,
+            /youtu\.be\/([A-Za-z0-9_-]+)/,
+            /\/shorts\/([A-Za-z0-9_-]+)/,
+            /\/live\/([A-Za-z0-9_-]+)/
+        ]
+        for pattern in patterns {
+            if let match = trimmed.firstMatch(of: pattern) {
+                return String(match.1)
             }
         }
-        if let range = input.range(of: "/shorts/([a-zA-Z0-9_-]+)", options: .regularExpression) {
-            let match = input[range]
-            let components = match.split(separator: "/")
-            if let last = components.last {
-                return String(last)
-            }
-        }
-        return nil
+        return trimmed.wholeMatch(of: /[A-Za-z0-9_-]+/) != nil ? trimmed : nil
+    }
+}
+
+extension WatchAddDownloadViewModel: Hashable {
+    nonisolated public static func == (
+        lhs: WatchAddDownloadViewModel,
+        rhs: WatchAddDownloadViewModel
+    ) -> Bool {
+        lhs === rhs
+    }
+
+    nonisolated public func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
     }
 }
 #endif

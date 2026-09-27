@@ -5,94 +5,108 @@ import Foundation
 @MainActor
 @Observable
 public final class WatchVideoListViewModel {
-    public var videos: [VideoResponse] = []
-    public var isLoading = false
-    public var isLoadingMore = false
-    private var currentPage = 1
-    private var lastPage = 1
-    public let config: ServerConfig
-    private let service: VideoService
+    public private(set) var videos: [VideoResponse] = []
+    public private(set) var isLoading = false
+    public private(set) var isLoadingMore = false
+    public private(set) var errorMessage: String?
 
+    public let config: ServerConfig
+
+    @ObservationIgnored private let channelId: String?
+    @ObservationIgnored private let service: VideoService
+    @ObservationIgnored private let playback: WatchPlaybackServices
+    @ObservationIgnored private var paging = WatchPaging()
+
+    /// `channelId` narrows the list to one channel (the channel detail screen).
     public init(
         config: ServerConfig,
-        service: VideoService = .liveValue
+        channelId: String? = nil,
+        service: VideoService = .liveValue,
+        playback: WatchPlaybackServices
     ) {
         self.config = config
+        self.channelId = channelId
         self.service = service
+        self.playback = playback
+    }
+
+    public var isEmpty: Bool {
+        videos.isEmpty
     }
 
     public func viewDidAppear() async {
-        await loadVideos()
+        guard !paging.hasLoaded else { return }
+        await loadFirstPage()
     }
 
     public func refresh() async {
-        videos = []
-        currentPage = 1
-        lastPage = 1
-        await loadVideos()
+        await loadFirstPage()
     }
 
-    public func loadNextPageIfNeeded(currentItem: VideoResponse) {
-        guard currentItem.id == videos.last?.id else { return }
-        loadNextPage()
+    public func rowAppeared(_ video: VideoResponse) async {
+        guard video.id == videos.last?.id,
+              !isLoading,
+              !isLoadingMore,
+              let request = paging.nextPageRequest() else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        do {
+            let response = try await fetch(page: request.page)
+            guard paging.accept(response.paginate, for: request) else { return }
+            videos.append(contentsOf: response.data.filter { new in !videos.contains { $0.id == new.id } })
+        } catch {
+            if !Task.isCancelled {
+                errorMessage = String(localized: "generic.loadFailed", bundle: .module)
+            }
+        }
+    }
+
+    public func rowModel(for video: VideoResponse) -> WatchVideoRowModel {
+        WatchVideoRowModel(
+            video: video,
+            config: config,
+            isDownloaded: playback.catalog.contains(videoId: video.videoId)
+        )
     }
 
     /// The same player for the same video: a navigation destination is rebuilt
     /// every time this screen re-renders, and a new player there would restart
     /// playback and take over the system Now Playing card.
     public func player(for video: VideoResponse) -> WatchAudioPlayerViewModel {
-        WatchNowPlayingState.shared.player(for: video.videoId) {
-            WatchAudioPlayerViewModel(video: video, serverConfig: config)
-        }
+        playback.player(for: video, config: config)
     }
 
-    // MARK: - Private
-
-    private func loadVideos() async {
-        guard !isLoading else { return }
+    private func loadFirstPage() async {
+        let request = paging.firstPageRequest()
         isLoading = true
-        defer { isLoading = false }
-
+        errorMessage = nil
+        defer {
+            if paging.isCurrent(request) {
+                isLoading = false
+            }
+        }
         do {
-            let response = try await service.getVideos(
-                config: config,
-                page: 1,
-                sort: "published",
-                order: "desc",
-                type: nil,
-                watch: nil,
-                channel: nil,
-                playlist: nil
-            )
+            let response = try await fetch(page: 1)
+            guard paging.accept(response.paginate, for: request) else { return }
             videos = response.data
-            currentPage = response.paginate.currentPage
-            lastPage = response.paginate.lastPage
-        } catch {}
+        } catch {
+            if !Task.isCancelled, paging.isCurrent(request) {
+                errorMessage = String(localized: "generic.loadFailed", bundle: .module)
+            }
+        }
     }
 
-    private func loadNextPage() {
-        guard !isLoadingMore, currentPage < lastPage else { return }
-        isLoadingMore = true
-        let nextPage = currentPage + 1
-
-        Task {
-            defer { isLoadingMore = false }
-            do {
-                let response = try await service.getVideos(
-                    config: config,
-                    page: nextPage,
-                    sort: "published",
-                    order: "desc",
-                    type: nil,
-                    watch: nil,
-                    channel: nil,
-                    playlist: nil
-                )
-                videos.append(contentsOf: response.data)
-                currentPage = response.paginate.currentPage
-                lastPage = response.paginate.lastPage
-            } catch {}
-        }
+    private func fetch(page: Int) async throws -> PaginatedResponse<VideoResponse> {
+        try await service.getVideos(
+            config: config,
+            page: page,
+            sort: "published",
+            order: "desc",
+            type: nil,
+            watch: nil,
+            channel: channelId,
+            playlist: nil
+        )
     }
 }
 #endif

@@ -177,6 +177,7 @@ public struct VideoCardView: View {
                             .background(.black.opacity(0.7))
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                             .padding(8)
+                            .accessibilityLabel(String.localised("video.watched", table: .videos))
                     } else if data.isPartiallyWatched {
                         Image(systemName: "circle.lefthalf.filled")
                             .font(.caption)
@@ -185,6 +186,7 @@ public struct VideoCardView: View {
                             .background(.black.opacity(0.7))
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                             .padding(8)
+                            .accessibilityLabel(String.localised("video.inProgress", table: .videos))
                     }
                     Spacer()
                     if data.isDownloaded {
@@ -195,6 +197,7 @@ public struct VideoCardView: View {
                             .background(.black.opacity(0.7))
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                             .padding(8)
+                            .accessibilityLabel(String.localised("video.downloaded", table: .videos))
                     }
                 }
 

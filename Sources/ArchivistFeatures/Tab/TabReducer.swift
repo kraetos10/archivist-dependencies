@@ -25,7 +25,7 @@ public enum AppTab: Hashable, Sendable {
 public struct TabReducer {
     public init() {}
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         public var selectedTab: AppTab? = .home
         public var serverConfig: ServerConfig
         public var videoList: VideoListReducer.State
@@ -38,17 +38,14 @@ public struct TabReducer {
         public var settings: SettingsReducer.State
         #if !os(tvOS)
         /// Videos currently downloading to the device, so the Saved tab can
-        /// badge them. Live query: it updates as downloads start and finish
-        /// without the tab asking.
-        @FetchAll(DeviceDownload.where { $0.status.eq(DeviceDownloadStatus.downloading) })
-        public var activeDeviceDownloads
-
-        public var activeDeviceDownloadCount: Int { activeDeviceDownloads.count }
+        /// badge them. Live count query: it updates as downloads start and
+        /// finish without the tab asking. Zero draws no badge.
+        @FetchOne(DeviceDownload.where { $0.status.eq(DeviceDownloadStatus.downloading) }.count())
+        public var activeDeviceDownloadCount = 0
         #endif
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
-        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
+        @Shared(.childModeEnabled) public var childModeEnabled
         public var settingsUnlocked: Bool = false
-        public var isPresentingSettingsPin: Bool = false
+        @Presents var settingsPin: PinEntryReducer.State?
         #if os(iOS)
         /// Video handed over by a detail screen the user dragged down, so
         /// playback can carry on in the floating mini player. It lives here
@@ -70,18 +67,28 @@ public struct TabReducer {
         public var presentingAllPlaylists: Bool = false
         #endif
 
+        /// Settings shows a lock placeholder until the PIN is entered.
+        var isSettingsLocked: Bool {
+            childModeEnabled && !settingsUnlocked
+        }
+
+        /// One badge while the server is working through a download.
+        var settingsBadgeCount: Int {
+            activeDownload == nil ? 0 : 1
+        }
+
         var hasVideoDetailPresented: Bool {
             presentedVideoDetailVideoId != nil
         }
 
         var presentedVideoDetailVideoId: String? {
             #if os(tvOS)
-            videoList.videoDetail?.video.videoId
+            videoList.destination?.videoDetail?.video.videoId
                 ?? channels.videoDetail?.video.videoId
                 ?? playlists.videoDetail?.video.videoId
                 ?? settings.videoDetail?.video.videoId
             #else
-            videoList.videoDetail?.video.videoId
+            videoList.destination?.videoDetail?.video.videoId
                 ?? channels.videoDetail?.video.videoId
                 ?? playlists.videoDetail?.video.videoId
                 ?? deviceDownloads.videoDetail?.video.videoId
@@ -120,15 +127,33 @@ public struct TabReducer {
             self.search = TVSearchReducer.State(serverConfig: serverConfig)
             #endif
         }
+
+        /// Opens a video over the Home tab — the entry point for deep links
+        /// and Top Shelf items, which arrive from outside any screen.
+        public mutating func openVideoOnHome(_ video: VideoResponse) {
+            selectedTab = .home
+            settingsUnlocked = false
+            @Shared(.autoPlayEnabled) var autoPlayEnabled
+            let detail = VideoDetailReducer.State(
+                serverConfig: videoList.serverConfig,
+                video: video,
+                nextVideos: [],
+                shouldAutoPlayNextVideo: autoPlayEnabled
+            )
+            #if os(tvOS)
+            videoList.path.append(.videoDetail(detail))
+            #else
+            videoList.destination = .videoDetail(detail)
+            #endif
+        }
     }
 
     public enum Action: BindableAction {
         case binding(BindingAction<State>)
         case selectTab(AppTab?)
-        case settingsPinSucceeded
-        case settingsPinDismissed
+        case settingsPin(PresentationAction<PinEntryReducer.Action>)
+        case settingsPinLoaded(String?)
         case appeared
-        case scenePhaseChanged(ScenePhase)
         case homeChannelTapped(ChannelResponse)
         case homePlaylistTapped(PlaylistResponse)
         case videoList(VideoListReducer.Action)
@@ -143,7 +168,6 @@ public struct TabReducer {
         case miniPlayerRequested(MiniPlayerRequest)
         case miniPlayerTapped
         case miniPlayerCloseTapped
-        case miniPlayerFinished
         case miniPlayer(VideoDetailReducer.Action)
         case playerSuperseded(previousVideoId: String, position: Int)
         #endif
@@ -167,58 +191,43 @@ public struct TabReducer {
     }
     #endif
 
-    @Dependency(\.continuousClock) var clock
+    @Dependency(\.pinStore) var pinStore
     @Dependency(\.videoService) var videoService
     #if os(iOS)
     @Dependency(\.miniPlayerClient) var miniPlayerClient
+    @Dependency(\.playerClient) var playerClient
     #endif
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
         Reduce { state, action in
             switch action {
-            case .binding(\.isPresentingSettingsPin):
-                if !state.isPresentingSettingsPin, !state.settingsUnlocked {
-                    state.selectedTab = .home
-                }
-                return .none
             case .binding:
                 return .none
             case .selectTab(let tab):
-                if tab != .settings {
-                    state.settingsUnlocked = false
-                }
-                if tab == .settings,
-                   state.childModeEnabled,
-                   !state.childModePin.isEmpty,
-                   !state.settingsUnlocked {
-                    state.isPresentingSettingsPin = true
-                    state.selectedTab = tab
-                    return .none
-                }
-                state.selectedTab = tab
-                return .none
-            case .settingsPinSucceeded:
+                return handleSelectTab(tab, state: &state)
+            case .settingsPinLoaded(let pin):
+                return handleSettingsPinLoaded(pin, state: &state)
+            case .settingsPin(.presented(.succeeded)):
                 state.settingsUnlocked = true
-                state.isPresentingSettingsPin = false
+                state.settingsPin = nil
                 return .none
-            case .settingsPinDismissed:
-                state.isPresentingSettingsPin = false
+            case .settingsPin(.presented(.cancelled)), .settingsPin(.dismiss):
+                state.settingsPin = nil
                 if !state.settingsUnlocked {
                     state.selectedTab = .home
                 }
                 return .none
+            case .settingsPin:
+                return .none
             case .appeared:
                 return handleAppeared(state: &state)
-            case .scenePhaseChanged(let phase):
-                return handleScenePhaseChanged(phase, state: &state)
 
             case .homeChannelTapped(let channel):
-                let detailState = ChannelDetailReducer.State(
+                state.channels.selectedChannel = ChannelDetailReducer.State(
                     serverConfig: state.channels.serverConfig,
                     channel: channel
                 )
-                state.channels.selectedChannel = detailState
                 return .none
 
             case .homePlaylistTapped(let playlist):
@@ -230,22 +239,22 @@ public struct TabReducer {
 
             case .settings(.path(.element(
                     _,
-                    action: .downloads(.downloadDetail(.presented(.downloadResult(.success))))
+                    action: .downloads(.downloadDetail(.presented(.delegate(.didQueueDownload))))
                  ))),
-                 .queue(.downloadDetail(.presented(.downloadResult(.success)))),
+                 .queue(.downloadDetail(.presented(.delegate(.didQueueDownload)))),
                  // tvOS bumps a queue item by tapping the alert's
                  // "Download Now" — there's no `downloadDetail` screen
                  // in that flow, so the iOS path above never matches.
                  // Without this case the `ActiveTaskView` row in tvOS
                  // settings stays empty even while the server is busy.
                  .queue(.alert(.presented(.confirmDownload))),
-                 .channels(.channelDetail(.presented(.downloadDetail(.presented(.downloadResult(.success)))))),
+                 .channels(.channelDetail(.presented(.downloadDetail(.presented(.delegate(.didQueueDownload)))))),
                  .channels(.path(.element(
                     _,
-                    action: .channelDetail(.downloadDetail(.presented(.downloadResult(.success))))
+                    action: .channelDetail(.downloadDetail(.presented(.delegate(.didQueueDownload))))
                  ))),
-                 .videoList(.addVideo(.presented(.addResult(.success)))):
-                return .send(.settings(.activeTask(.view(.startPolling))))
+                 .videoList(.destination(.presented(.addVideo(.addResult(.success))))):
+                return .send(.settings(.activeTask(.startPolling)))
 
             case .settings(.activeTask(.downloadCompleted)):
                 #if os(tvOS)
@@ -257,10 +266,6 @@ public struct TabReducer {
                 return .send(.channels(.refreshPendingDownloads))
                 #endif
 
-            // Mini-player minimize hooks were removed when we switched to
-            // system PiP for minimize. Each VideoDetail dismiss now hands
-            // off via `PlayerManager.startPiPIfAvailable()` and falls
-            // through to a normal `didDismiss`.
             #if os(iOS)
             case .miniPlayerRequested(let request):
                 return handleMiniPlayerRequest(request, state: &state)
@@ -273,16 +278,12 @@ public struct TabReducer {
             // Closing from the expanded mini player, deleting the video on
             // the server, or running out of videos to auto-advance to all
             // leave nothing to keep playing — so the mini player goes away.
-            //
-            // Deferred through a separate action rather than cleared here:
-            // this reducer runs before the `ifLet` below, so clearing the
-            // state now would drop the same action on the floor before the
-            // mini player's own reducer had handled it.
+            // `ifLet` has already run the mini player's own reducer for
+            // this action by the time it reaches here, so clearing the
+            // state now doesn't drop the action.
             case .miniPlayer(.delegate(.didDismiss)),
                  .miniPlayer(.serverDeleteResult(.success)),
                  .miniPlayer(.autoPlayExhausted):
-                return .send(.miniPlayerFinished)
-            case .miniPlayerFinished:
                 return handleMiniPlayerFinished(state: &state)
             case .miniPlayer:
                 return .none
@@ -296,13 +297,14 @@ public struct TabReducer {
             #if os(tvOS)
             // Search opens channels and playlists over its own tab, so the
             // only thing it hands up is the server work the home screen's
-            // context menu already does.
+            // context menu already does, through the video list's entry
+            // points for it.
             case .search(.delegate(.markAsWatchedRequested(let video))):
-                return .send(.videoList(.view(.markAsWatchedTapped(video))))
+                return .send(.videoList(.markAsWatched(video)))
             case .search(.delegate(.deleteFromServerRequested(let video))):
-                return .send(.videoList(.view(.deleteFromServerTapped(video))))
-            case .search(.channelDetail(.presented(.downloadDetail(.presented(.downloadResult(.success)))))):
-                return .send(.settings(.activeTask(.view(.startPolling))))
+                return .send(.videoList(.deleteFromServer(video)))
+            case .search(.destination(.presented(.channelDetail(.downloadDetail(.presented(.delegate(.didQueueDownload))))))):
+                return .send(.settings(.activeTask(.startPolling)))
             case .search:
                 return .none
             // A mark-watched from Search lands here once the server has
@@ -325,6 +327,9 @@ public struct TabReducer {
                 return .none
             #endif
             }
+        }
+        .ifLet(\.$settingsPin, action: \.settingsPin) {
+            PinEntryReducer()
         }
         #if os(iOS)
         .ifLet(\.miniPlayer, action: \.miniPlayer) {

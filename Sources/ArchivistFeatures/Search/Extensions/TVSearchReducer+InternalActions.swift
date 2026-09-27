@@ -23,7 +23,7 @@ extension TVSearchReducer {
         nextVideos: [VideoResponse],
         state: inout State
     ) -> Effect<Action> {
-        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
+        @Shared(.autoPlayEnabled) var autoPlayEnabled
         state.nestedVideoDetail = VideoDetailReducer.State(
             serverConfig: state.serverConfig,
             video: video,
@@ -39,7 +39,7 @@ extension TVSearchReducer {
         loopVideoIds: [String],
         state: inout State
     ) -> Effect<Action> {
-        @Shared(.appStorage("autoPlayPlaylist")) var autoPlayPlaylist = true
+        @Shared(.autoPlayPlaylist) var autoPlayPlaylist
         state.nestedVideoDetail = VideoDetailReducer.State(
             serverConfig: state.serverConfig,
             video: video,
@@ -60,9 +60,11 @@ extension TVSearchReducer {
         return .none
     }
 
+    /// Hands the refresh to the open channel through its own entry point,
+    /// rather than replaying its appear action.
     func handleRefreshPendingDownloads(state: inout State) -> Effect<Action> {
-        guard state.channelDetail != nil else { return .none }
-        return .send(.channelDetail(.presented(.view(.viewDidAppear))))
+        guard state.destination?.channelDetail != nil else { return .none }
+        return .send(.destination(.presented(.channelDetail(.refreshPendingDownloads))))
     }
 }
 #endif

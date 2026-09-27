@@ -3,9 +3,8 @@ import ArchivistComponents
 import ComposableArchitecture
 import SwiftUI
 
-@ViewAction(for: ThirdPartyLibrariesReducer.self)
 public struct ThirdPartyLibrariesScreen: View {
-    @Bindable public var store: StoreOf<ThirdPartyLibrariesReducer>
+    public let store: StoreOf<ThirdPartyLibrariesReducer>
 
     public init(store: StoreOf<ThirdPartyLibrariesReducer>) {
         self.store = store
@@ -23,7 +22,6 @@ public struct ThirdPartyLibrariesScreen: View {
         .background(Color.Brand.primary)
         .navigationTitle(String.localised("settings.thirdPartyLibraries", table: .settings))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { send(.viewDidAppear) }
     }
 
     @ViewBuilder
@@ -48,6 +46,7 @@ public struct ThirdPartyLibrariesScreen: View {
                     Image(systemName: "arrow.up.right")
                         .font(.caption)
                         .foregroundStyle(Color.Brand.secondary)
+                        .accessibilityHidden(true)
                 }
             }
             Text(library.license)

@@ -3,7 +3,7 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchPlaylistDetailView: View {
-    @State var viewModel: WatchPlaylistDetailViewModel
+    let viewModel: WatchPlaylistDetailViewModel
     let playlist: PlaylistResponse
 
     public init(
@@ -16,45 +16,34 @@ public struct WatchPlaylistDetailView: View {
 
     public var body: some View {
         List {
-            if viewModel.isLoading && viewModel.entries.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-            } else if viewModel.entries.isEmpty {
-                Text(String(localized: "video.empty", bundle: Bundle.module))
-                    .foregroundStyle(.secondary)
+            if viewModel.playableEntries.isEmpty {
+                WatchListStatus(
+                    isLoading: viewModel.isLoading,
+                    errorMessage: viewModel.errorMessage,
+                    emptyText: String(localized: "video.empty", bundle: .module)
+                )
             } else {
-                ForEach(viewModel.entries) { entry in
-                    Button {
-                        viewModel.playEntry(entry)
-                    } label: {
+                ForEach(viewModel.playableEntries) { entry in
+                    NavigationLink(value: entry) {
                         WatchVideoRow(
-                            title: entry.title ?? String(localized: "generic.unknown", bundle: Bundle.module),
-                            thumbURL: entry.thumbURL(config: viewModel.config),
-                            config: viewModel.config,
-                            videoId: entry.youtubeId ?? "",
-                            isWatched: false,
-                            watchProgress: 0,
-                            durationStr: nil,
-                            remainingStr: nil
+                            model: viewModel.rowModel(for: entry),
+                            config: viewModel.config
                         )
                     }
                 }
             }
         }
         .navigationTitle(playlist.playlistName)
-        .overlay {
-            if viewModel.isLoadingVideo {
-                ProgressView()
+        .navigationDestination(for: PlaylistEntry.self) { entry in
+            if let player = viewModel.player(for: entry) {
+                WatchNowPlayingView(viewModel: player)
             }
-        }
-        .navigationDestination(item: $viewModel.loadedVideo) { video in
-            WatchNowPlayingView(viewModel: viewModel.player(for: video))
         }
         .refreshable {
             await viewModel.refresh()
         }
-        .onAppear {
-            Task { await viewModel.viewDidAppear() }
+        .task {
+            await viewModel.viewDidAppear()
         }
     }
 }

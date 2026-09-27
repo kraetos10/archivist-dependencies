@@ -11,12 +11,11 @@ public struct PlaylistDetailReducer {
         var playlist: PlaylistResponse
         var isLoadingEntries = false
         var hasLoadedEntries = false
-        var isEditing = false
         var entryThumbnails: [String: String] = [:]
         var availableVideoIDs: Set<String> = []
         /// tvOS: the full description is presented over the screen.
         var isShowingFullDescription = false
-        @Shared(.appStorage("loopPlaylist")) var loopPlaylistEnabled = false
+        @Shared(.loopPlaylist) var loopPlaylistEnabled
         @Presents var alert: AlertState<AlertAction>?
         @Presents var videoPicker: VideoPickerReducer.State?
 
@@ -28,6 +27,8 @@ public struct PlaylistDetailReducer {
             playlist.playlistEntries ?? []
         }
 
+        /// Thumbnail per entry id. Builds a dictionary over every entry, so
+        /// read it once per render, not once per row.
         var entryThumbURLs: [String: URL] {
             var result: [String: URL] = [:]
             for entry in entries {
@@ -42,10 +43,21 @@ public struct PlaylistDetailReducer {
             return result
         }
 
+        /// The description to show, or `nil`. The API returns the string
+        /// "false" for playlists with no description rather than omitting
+        /// the field, so that's filtered out here.
+        var displayDescription: String? {
+            guard let description = playlist.playlistDescription,
+                  !description.isEmpty,
+                  description.lowercased() != "false"
+            else { return nil }
+            return description
+        }
+
         /// The description split into non-empty lines, one focus stop each
         /// on the tvOS full-description screen.
         var descriptionBlocks: [String] {
-            (playlist.playlistDescription ?? "").descriptionBlocks()
+            (displayDescription ?? "").descriptionBlocks()
         }
 
         func isEntryAvailable(_ entry: PlaylistEntry) -> Bool {
@@ -77,7 +89,8 @@ public struct PlaylistDetailReducer {
         case videoResult(Result<(VideoResponse, nextVideos: [VideoResponse]), Error>)
         case unsubscribeResult(Result<Void, Error>)
         case removeEntryResult(Result<String, Error>)
-        case moveEntryResult(Result<Void, Error>)
+        case setWatchedResult(Result<String, Error>)
+        case serverDownloadResult(Result<String, Error>)
         case thumbnailsLoaded([String: String], availableIDs: Set<String>)
         case videoPicker(PresentationAction<VideoPickerReducer.Action>)
 
@@ -85,14 +98,10 @@ public struct PlaylistDetailReducer {
         public enum View {
             case viewDidAppear
             case entryTapped(PlaylistEntry)
-            case dismissTapped
             case unsubscribeTapped
             case removeEntryTapped(PlaylistEntry)
-            case moveEntry(IndexSet, Int)
-            case editTapped
             case addVideoTapped
             case downloadToDeviceTapped(PlaylistEntry)
-            case queueServerDownloadTapped(PlaylistEntry)
             case markAsWatchedTapped(PlaylistEntry)
             case loopToggled
             case descriptionTapped
@@ -104,14 +113,25 @@ public struct PlaylistDetailReducer {
                 nextVideos: [VideoResponse],
                 loopVideoIds: [String]
             )
+            case didUnsubscribe(String)
         }
     }
+
+    nonisolated enum CancelID: Hashable, Sendable {
+        case load
+        case thumbnails
+        case openEntry
+    }
+
+    /// How many entry lookups run at once when filling in thumbnails.
+    static let thumbnailFetchConcurrency = 6
 
     @Dependency(\.playlistService) var playlistService
     @Dependency(\.videoService) var videoService
     @Dependency(\.downloadService) var downloadService
     @Dependency(\.persistentDownloadManager) var persistentDownloadManager
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
+    @Dependency(\.date.now) var now
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
@@ -119,33 +139,22 @@ public struct PlaylistDetailReducer {
             switch action {
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .binding:
+            case .binding, .delegate:
                 return .none
             case .alert(.presented(.confirmUnsubscribe)):
                 return handleUnsubscribeConfirmed(state: &state)
             case .alert(.presented(.confirmServerDownload(let videoId))):
-                let config = state.serverConfig
-                let items = [AddDownloadItem(youtubeId: videoId, status: "pending")]
-                return .run { [downloadService] _ in
-                    try? await downloadService.addDownloads(
-                        config: config,
-                        items: items,
-                        autostart: true,
-                        flat: false,
-                        force: false
-                    )
-                }
+                return handleServerDownloadConfirmed(videoId, state: &state)
             case .alert:
                 return .none
-            case .delegate:
-                return .none
-            case .videoPicker(.presented(.addResult(.success))):
-                state.videoPicker = nil
-                state.hasLoadedEntries = false
-                return .send(.view(.viewDidAppear))
+            case .videoPicker(.presented(.delegate(.didAddVideos))):
+                // The picker dismisses itself; reload to show what it added.
+                return reloadPlaylist(state: &state)
             case .videoPicker:
                 return .none
-            default:
+            case .playlistResult, .videoResult, .unsubscribeResult,
+                 .removeEntryResult, .setWatchedResult, .serverDownloadResult,
+                 .thumbnailsLoaded:
                 return handleInternalAction(action, state: &state)
             }
         }

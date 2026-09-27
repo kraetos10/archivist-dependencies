@@ -2,26 +2,21 @@
 import SwiftUI
 
 public struct WatchNowPlayingTab: View {
-    let nowPlayingState = WatchNowPlayingState.shared
+    let nowPlaying: WatchNowPlayingState
 
-    public init() {}
+    public init(nowPlaying: WatchNowPlayingState) {
+        self.nowPlaying = nowPlaying
+    }
 
     public var body: some View {
-        if let player = nowPlayingState.activePlayer {
+        if let player = nowPlaying.activePlayer {
             WatchNowPlayingView(viewModel: player)
         } else {
-            VStack(spacing: 8) {
-                Image(systemName: "waveform")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                Text(String(localized: "nowPlaying.empty", bundle: Bundle.module))
-                    .font(.headline)
-                Text(String(localized: "nowPlaying.emptyDescription", bundle: Bundle.module))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+            ContentUnavailableView {
+                Label(String(localized: "nowPlaying.empty", bundle: .module), systemImage: "waveform")
+            } description: {
+                Text(String(localized: "nowPlaying.emptyDescription", bundle: .module))
             }
-            .frame(maxWidth: .infinity)
         }
     }
 }

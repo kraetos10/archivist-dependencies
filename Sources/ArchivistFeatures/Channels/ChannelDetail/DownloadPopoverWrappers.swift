@@ -73,6 +73,14 @@ private struct DownloadPopoverModifier: ViewModifier {
                     showPopover = false
                 }
             }
+            .onChange(of: showPopover) { _, isShowing in
+                // Tapping outside closes the popover without touching the
+                // store; end the presentation there too so the detail
+                // feature doesn't linger.
+                if !isShowing, store.downloadDetail != nil {
+                    store.send(.downloadDetail(.dismiss))
+                }
+            }
     }
 }
 

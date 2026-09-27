@@ -7,14 +7,24 @@ public struct WatchData: Sendable {
 
     public init() {}
 
-    public func appDatabase() throws -> DatabaseWriter {
+    public func appDatabase() throws -> any DatabaseWriter {
         var configuration = Configuration()
         configuration.foreignKeysEnabled = true
 
-        let baseURL = URL.documentsDirectory
-        let url = baseURL.appending(component: "watch_db.sqlite")
+        let url = URL.documentsDirectory.appending(component: "watch_db.sqlite")
         let database = try DatabasePool(path: url.path, configuration: configuration)
+        try migrator.migrate(database)
+        return database
+    }
 
+    /// A migrated in-memory database, for tests and previews.
+    public func inMemoryDatabase() throws -> any DatabaseWriter {
+        let database = try DatabaseQueue()
+        try migrator.migrate(database)
+        return database
+    }
+
+    private var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         #if DEBUG
         migrator.eraseDatabaseOnSchemaChange = true
@@ -45,10 +55,7 @@ public struct WatchData: Sendable {
                 ALTER TABLE "watchDownloads" ADD COLUMN "durationStr" TEXT
                 """).execute(db)
         }
-
-        try migrator.migrate(database)
-
-        return database
+        return migrator
     }
 }
 #endif

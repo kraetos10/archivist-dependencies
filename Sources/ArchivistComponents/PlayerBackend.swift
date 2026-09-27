@@ -42,8 +42,6 @@ public protocol PlayerBackend: AnyObject {
     /// whose audio output recovers on its own.
     func refreshAudio()
 
-    func playbackEndEvents() -> AsyncStream<Void>
-
     var onTimeUpdate: ((Double) -> Void)? { get set }
     var onStateChange: (() -> Void)? { get set }
     var onPlaybackEnd: (() -> Void)? { get set }

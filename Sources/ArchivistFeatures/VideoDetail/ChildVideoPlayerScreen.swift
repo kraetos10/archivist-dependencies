@@ -7,7 +7,9 @@ import SwiftUI
 @ViewAction(for: VideoDetailReducer.self)
 public struct ChildVideoPlayerScreen: View {
     @Bindable public var store: StoreOf<VideoDetailReducer>
-    @Bindable private var playerManager = PlayerManager.shared
+    /// Read-only, for rendering the live transport (play state, position).
+    /// Every control goes through the reducer.
+    private let playerManager = PlayerManager.shared
     @State private var overlayShown: Bool = true
 
     public init(store: StoreOf<VideoDetailReducer>) {
@@ -46,7 +48,6 @@ public struct ChildVideoPlayerScreen: View {
             send(.viewDidAppear)
         }
         .onChange(of: store.video.videoId) {
-            send(.videoChanged)
             overlayShown = true
         }
         .alert($store.scope(state: \.alert, action: \.alert))
@@ -58,20 +59,30 @@ public struct ChildVideoPlayerScreen: View {
             VLCPlayerView()
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    overlayShown.toggle()
-                }
+                .onTapGesture(perform: toggleOverlay)
+                // The tap is the only way back to the hidden chrome, and a
+                // bare tap gesture is invisible to VoiceOver.
+                .accessibilityElement()
+                .accessibilityLabel(String.localised("video.player", table: .videos))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction(
+                    named: String.localised("video.toggleControls", table: .videos),
+                    toggleOverlay
+                )
         } else {
             thumbnailLayer
         }
+    }
+
+    private func toggleOverlay() {
+        overlayShown.toggle()
     }
 
     private var thumbnailLayer: some View {
         ZStack {
             Color.black
 
-            if let thumbURL,
-               let url = store.serverConfig.fullURL(for: thumbURL) {
+            if let url = store.thumbnailURL {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -85,7 +96,7 @@ public struct ChildVideoPlayerScreen: View {
             }
 
             Image(systemName: "play.circle.fill")
-                .font(.system(size: 72))
+                .scaledSystemFont(size: 72, relativeTo: .largeTitle)
                 .foregroundStyle(.white.opacity(0.95))
                 .shadow(radius: 8)
         }
@@ -106,10 +117,10 @@ public struct ChildVideoPlayerScreen: View {
                 Image(systemName: "xmark")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                    .accessibilityLabel(String.localised("generic.close", table: .generic))
                     .padding(12)
                     .background(.black.opacity(0.5), in: Circle())
             }
+            .accessibilityLabel(String.localised("generic.close", table: .generic))
             Spacer()
         }
         // Outer ZStack respects safe area, so this sits below the
@@ -121,7 +132,7 @@ public struct ChildVideoPlayerScreen: View {
     }
 
     private var similarVideosOverlay: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 10) {
                 ForEach(store.similarVideos) { video in
                     Button {
@@ -143,15 +154,17 @@ public struct ChildVideoPlayerScreen: View {
             }
             .padding(.horizontal, 16)
         }
+        .scrollIndicators(.hidden)
         .padding(.vertical, 12)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 12)
     }
 
     private var transportBar: some View {
         HStack(spacing: 16) {
+            // Transport chrome over video: fixed size on purpose.
             Button {
-                playerManager.togglePlayPause()
+                send(.childPlayPauseTapped)
             } label: {
                 Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 28, weight: .semibold))
@@ -167,13 +180,9 @@ public struct ChildVideoPlayerScreen: View {
             )
 
             ChildSeekBar(
-                progress: playerManager.duration > 0
-                    ? playerManager.currentTime / playerManager.duration
-                    : 0,
-                onSeek: { value in
-                    let target = value * playerManager.duration
-                    playerManager.seekTo(target)
-                }
+                progress: playerManager.playbackFraction,
+                valueDescription: playerManager.currentTimeDisplay,
+                onSeek: { send(.childSeekRequested($0)) }
             )
 
             Text("\(playerManager.currentTimeDisplay) / \(playerManager.durationDisplay)")
@@ -183,18 +192,26 @@ public struct ChildVideoPlayerScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 12)
     }
+}
 
-    private var thumbURL: String? {
-        store.video.vidThumbUrl
+extension PlayerManager {
+    /// How far through the video playback is, from 0 to 1.
+    var playbackFraction: Double {
+        duration > 0 ? currentTime / duration : 0
     }
 }
 
 private struct ChildSeekBar: View {
     let progress: Double
+    /// Spoken position, e.g. "1:23".
+    let valueDescription: String
     let onSeek: (Double) -> Void
+
+    /// VoiceOver's increment/decrement step, as a fraction of the video.
+    private static let accessibilityStep = 0.05
 
     @State private var isDragging = false
     @State private var dragProgress: Double = 0
@@ -246,6 +263,21 @@ private struct ChildSeekBar: View {
             )
         }
         .frame(height: 48)
+        // The drag is unreachable under VoiceOver; expose the bar as an
+        // adjustable control instead.
+        .accessibilityElement()
+        .accessibilityLabel(String.localised("video.seekBar", table: .videos))
+        .accessibilityValue(valueDescription)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                onSeek(min(progress + Self.accessibilityStep, 1))
+            case .decrement:
+                onSeek(max(progress - Self.accessibilityStep, 0))
+            @unknown default:
+                break
+            }
+        }
     }
 }
 #endif

@@ -7,9 +7,7 @@ extension VideoDetailScreen {
     var commentsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation {
-                    store.showAllComments.toggle()
-                }
+                send(.commentsHeaderTapped, animation: .default)
             } label: {
                 HStack {
                     Text(String.localised("generic.comments", table: .generic))
@@ -43,6 +41,8 @@ extension VideoDetailScreen {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else if store.showAllComments {
                 LazyVStack(spacing: 0) {
+                    // `Array(...)`: `EnumeratedSequence` is only a
+                    // collection from iOS 26, and this package targets 18.
                     ForEach(
                         Array(store.comments.enumerated()),
                         id: \.element.commentId

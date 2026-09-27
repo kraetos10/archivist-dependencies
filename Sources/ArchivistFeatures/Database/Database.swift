@@ -1,10 +1,27 @@
+public import Dependencies
 public import SQLiteData
 import ArchivistNetworking
 import Foundation
 
+extension DependencyValues {
+    /// Opens the on-disk database, runs migrations and installs it as
+    /// `defaultDatabase`. Call from `prepareDependencies` at launch; a
+    /// thrown error means the app has no usable store and should say so.
+    public mutating func bootstrapDatabase() throws {
+        defaultDatabase = try TubeData().appDatabase()
+    }
+
+    /// An in-memory database with the full schema, for tests and previews.
+    public mutating func bootstrapInMemoryDatabase() throws {
+        defaultDatabase = try TubeData().inMemoryDatabase()
+    }
+}
+
 public struct TubeData: Sendable {
     public init() {}
 
+    /// Kept for existing test suites; new code bootstraps through
+    /// `DependencyValues.bootstrapDatabase()`.
     public static let shared = TubeData()
 
     public func appDatabase() throws -> DatabaseWriter {
@@ -87,7 +104,7 @@ public struct TubeData: Sendable {
 
     private func resolveDatabasePath() -> String {
         #if os(tvOS)
-        let baseURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let baseURL = URL.cachesDirectory
         #else
         let baseURL = URL.documentsDirectory
         #endif

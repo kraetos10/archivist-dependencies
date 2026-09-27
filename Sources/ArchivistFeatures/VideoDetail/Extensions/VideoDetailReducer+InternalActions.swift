@@ -8,22 +8,14 @@ extension VideoDetailReducer {
         _ action: Action,
         state: inout State
     ) -> Effect<Action> {
+        if let effect = handleLoadAction(action, state: &state) {
+            return effect
+        }
         switch action {
-        case .videoRefreshed(let video):
-            state.video = video
-            return .none
-        case .commentsResult(let result):
-            return handleCommentsResult(result, state: &state)
-        case .similarResult(let result):
-            return handleSimilarResult(result, state: &state)
-        case .downloadResumed, .downloadProgressUpdated, .downloadCompleted, .downloadFailed:
-            return handleDownloadAction(action, state: &state)
         case .serverDeleteResult(let result):
             return handleServerDeleteResult(result, state: &state)
         case .watchedToggleResult(let result):
             return handleWatchedToggleResult(result, state: &state)
-        case .loadNextVideo:
-            return handleLoadNextVideo(state: &state)
         case .autoPlayVideo(let video):
             return handleAutoPlayVideo(video, state: &state)
         case .autoPlayExhausted:
@@ -56,6 +48,35 @@ extension VideoDetailReducer {
         }
     }
 
+    /// Responses from the per-video loads. Each is dropped unless it belongs
+    /// to the video on screen — a switch can leave the previous video's
+    /// response in flight.
+    private func handleLoadAction(
+        _ action: Action,
+        state: inout State
+    ) -> Effect<Action>? {
+        switch action {
+        case .videoRefreshed(let video):
+            guard video.videoId == state.video.videoId else { return Effect<Action>.none }
+            state.video = video
+            return Effect<Action>.none
+        case .commentsResult(let videoId, let result):
+            guard videoId == state.video.videoId else { return Effect<Action>.none }
+            return handleCommentsResult(result, state: &state)
+        case .similarResult(let videoId, let result):
+            guard videoId == state.video.videoId else { return Effect<Action>.none }
+            return handleSimilarResult(result, state: &state)
+        case .downloadResumed(let videoId, _),
+             .downloadProgressUpdated(let videoId, _),
+             .downloadCompleted(let videoId),
+             .downloadFailed(let videoId, _):
+            guard videoId == state.video.videoId else { return Effect<Action>.none }
+            return handleDownloadAction(action, state: &state)
+        default:
+            return nil
+        }
+    }
+
     private func handleCommentsResult(
         _ result: Result<[VideoComment], Error>,
         state: inout State
@@ -80,16 +101,16 @@ extension VideoDetailReducer {
 
     private func handleDownloadAction(_ action: Action, state: inout State) -> Effect<Action> {
         switch action {
-        case .downloadResumed(let progress):
+        case .downloadResumed(_, let progress):
             state.isDownloading = true
             state.downloadProgress = progress
-        case .downloadProgressUpdated(let progress):
+        case .downloadProgressUpdated(_, let progress):
             state.downloadProgress = progress
         case .downloadCompleted:
             state.isDownloading = false
             state.isDownloaded = true
             state.downloadProgress = 1
-        case .downloadFailed(let message):
+        case .downloadFailed(_, let message):
             state.isDownloading = false
             state.downloadError = message
             state.alert = AlertState {
@@ -110,18 +131,16 @@ extension VideoDetailReducer {
         state.isDeletingFromServer = false
         switch result {
         case .success:
-            let videoId = state.video.videoId
-            try? localVideoStorage.deleteVideo(videoId: videoId)
-            try? deviceDownloadDatabase.deleteDownload(videoId)
             state.isDownloaded = false
+            return deleteLocalCopyEffect(videoId: state.video.videoId)
         case .failure(let error):
             state.alert = AlertState {
                 TextState(String.localised("generic.error", table: .generic))
             } message: {
                 TextState(error.localizedDescription)
             }
+            return .none
         }
-        return .none
     }
 
     private func handleWatchedToggleResult(
@@ -158,8 +177,8 @@ extension VideoDetailReducer {
         return .merge(
             .cancel(id: CancelID.playback),
             .cancel(id: CancelID.autoPlayCountdown),
-            .run { _ in
-                await MainActor.run { PlayerManager.shared.stop() }
+            .run { [playerClient] _ in
+                await playerClient.stop(dismissFullscreen: true)
             }
         )
     }
@@ -172,8 +191,8 @@ extension VideoDetailReducer {
         return .merge(
             .cancel(id: CancelID.playback),
             .cancel(id: CancelID.autoPlayCountdown),
-            .run { _ in
-                await MainActor.run { PlayerManager.shared.stop() }
+            .run { [playerClient] _ in
+                await playerClient.stop(dismissFullscreen: true)
             }
         )
     }
@@ -186,7 +205,11 @@ extension VideoDetailReducer {
         state: inout State
     ) -> Effect<Action> {
         state.nextVideos = nextVideos
-        return .send(.autoPlayCountdownStarted(video, consumesPlayNextQueue: false))
+        return handleAutoPlayCountdownStarted(
+            video,
+            consumesPlayNextQueue: false,
+            state: &state
+        )
     }
 
     private func handleAutoPlayCountdownStarted(
@@ -216,19 +239,17 @@ extension VideoDetailReducer {
         )
         return .merge(
             .cancel(id: CancelID.playback),
-            .run { _ in
+            .run { [playerClient] _ in
                 // Keep any presented fullscreen player up — the countdown
                 // card is surfaced inside it.
-                await MainActor.run {
-                    PlayerManager.shared.stop(dismissFullscreen: false)
-                }
+                await playerClient.stop(dismissFullscreen: false)
             },
-            .run { send in
+            .run { [playerClient] send in
                 // Listen for the countdown card's buttons for the lifetime
                 // of this countdown. The card is rendered by the fullscreen
                 // player VC, which can't see the store, so it reports taps
-                // through `PlayerManager`'s event stream instead.
-                let events = await MainActor.run { PlayerManager.shared.events }
+                // through the player's event stream instead.
+                let events = await playerClient.events()
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {
                         for await event in events {
@@ -275,7 +296,7 @@ extension VideoDetailReducer {
         return .none
     }
 
-    private func handleAutoPlayVideo(
+    func handleAutoPlayVideo(
         _ video: VideoResponse,
         state: inout State
     ) -> Effect<Action> {
@@ -291,136 +312,48 @@ extension VideoDetailReducer {
         let hasPrevious = !state.previousVideos.isEmpty
         state.resetForNewVideo(video)
         state.isPlaying = true
-        let url = mediaURL(state: state)
-        let startPosition = state.video.resumePositionSeconds
         let config = state.serverConfig
         let videoId = state.video.videoId
-        let currentVideo = video
-        let expectedSize = state.video.mediaSize.map { Int64($0) }
-        return .merge(
-            .run { [videoService] send in
-                let events = await VideoDetailReducer.loadAutoPlayStream(
-                    url: url,
-                    startPosition: startPosition,
-                    videoId: videoId,
-                    expectedSize: expectedSize,
-                    hasPrevious: hasPrevious,
-                    currentVideo: currentVideo,
-                    config: config
-                )
-                guard let events else { return }
-                let saveTask = VideoDetailReducer.periodicProgressSaveTask(
-                    config: config,
-                    videoId: videoId,
-                    videoService: videoService
-                )
-                defer { saveTask.cancel() }
-                await VideoDetailReducer.consumePlayerEvents(
-                    events,
-                    videoId: videoId,
-                    config: config,
-                    videoService: videoService,
-                    send: send
-                )
-            }
-            .cancellable(id: CancelID.playback, cancelInFlight: true),
-            .send(.view(.viewDidAppear))
-        )
-    }
-
-    @MainActor
-    private static func loadAutoPlayStream(
-        url: URL?,
-        startPosition: Double?,
-        videoId: String,
-        expectedSize: Int64?,
-        hasPrevious: Bool,
-        currentVideo: VideoResponse,
-        config: ServerConfig
-    ) -> AsyncStream<PlayerEvent>? {
-        // Subscribe before stopping the outgoing video, so the `.paused`
-        // that `stop()` emits still reaches a listener and the outgoing
-        // video's final position is saved. The consumer filters by
-        // `videoId`, so that event is correctly ignored by *this* stream's
-        // handler while the outgoing video's own effect (not yet cancelled)
-        // acts on it.
-        let events = PlayerManager.shared.events
-        // Auto-advance: keep the fullscreen player up so the next video
-        // plays fullscreen without a flash.
-        PlayerManager.shared.stop(dismissFullscreen: false)
-        PlayerManager.shared.canGoPrevious = hasPrevious
-        guard let url else { return nil }
-        PlayerManager.shared.load(
-            url: url,
-            startPosition: startPosition,
-            videoId: videoId,
-            expectedSize: expectedSize
-        )
-        PlayerManager.shared.currentVideoID = videoId
-        // Refresh now-playing metadata so the title/channel row in the
-        // player overlay (and Control Center now-playing) reflect the
-        // auto-played video. Without this, the overlay sticks on the
-        // previous video's title until the user opens detail manually.
-        PlayerManager.shared.currentMetadata = PlayerManager.NowPlayingMetadata(
-            title: currentVideo.title,
-            artist: currentVideo.channelName,
-            duration: Double(currentVideo.player?.duration ?? 0),
-            artworkURL: config.thumbnailURL(
-                videoId: currentVideo.videoId,
-                path: currentVideo.vidThumbUrl
-            ),
-            channelThumbURL: currentVideo.channel.channelThumbUrl
-                .flatMap { config.fullURL(for: $0) },
-            authHeaders: config.authHeaders
-        )
-        return events
-    }
-
-    private func handleLoadNextVideo(state: inout State) -> Effect<Action> {
-        guard !state.nextVideos.isEmpty else { return .none }
-        let nextVideo = state.nextVideos.removeFirst()
-        state.resetForNewVideo(nextVideo)
-        state.isPlaying = true
-        let url = mediaURL(state: state)
-        let startPosition = state.video.resumePositionSeconds
-        let config = state.serverConfig
-        let videoId = state.video.videoId
-        let expectedSize = state.video.mediaSize.map { Int64($0) }
-        return .merge(
-            .run { [videoService] send in
-                let events = await MainActor.run { () -> AsyncStream<PlayerEvent>? in
-                    // Subscribe before stopping, so the `.paused` emitted
-                    // for the outgoing video still reaches its own effect.
-                    let events = PlayerManager.shared.events
-                    // Loading the next video — keep the fullscreen player
-                    // up so playback continues fullscreen seamlessly.
-                    PlayerManager.shared.stop(dismissFullscreen: false)
-                    guard let url else { return nil }
-                    PlayerManager.shared.load(
-                        url: url,
-                        startPosition: startPosition,
-                        videoId: videoId,
-                        expectedSize: expectedSize
-                    )
-                    return events
+        // Auto-advance keeps the fullscreen player up (`replacesCurrent`)
+        // so the next video plays fullscreen without a flash. The stream is
+        // subscribed before the outgoing video is stopped, so its `.paused`
+        // still reaches a listener: this effect's consumer filters it out
+        // by `videoId`, while the outgoing video's effect — not yet
+        // cancelled — saves its final position.
+        let request = mediaURL(state: state).map { url in
+            PlayerClient.PlaybackRequest(
+                url: url,
+                startPosition: state.video.resumePositionSeconds,
+                videoId: videoId,
+                expectedSize: state.video.mediaSize.map { Int64($0) },
+                metadata: Self.nowPlayingMetadata(for: video, config: config),
+                replacesCurrent: true,
+                canGoPrevious: hasPrevious
+            )
+        }
+        let playbackEffect: Effect<Action> = .run { [playerClient, videoService] send in
+            guard let request else {
+                await MainActor.run {
+                    playerClient.stop(dismissFullscreen: false)
+                    playerClient.setCanGoPrevious(hasPrevious)
                 }
-                guard let events else { return }
-                let saveTask = VideoDetailReducer.periodicProgressSaveTask(
-                    config: config,
-                    videoId: videoId,
-                    videoService: videoService
-                )
-                defer { saveTask.cancel() }
-                await VideoDetailReducer.consumePlayerEvents(
-                    events,
-                    videoId: videoId,
-                    config: config,
-                    videoService: videoService,
-                    send: send
-                )
+                return
             }
-            .cancellable(id: CancelID.playback, cancelInFlight: true),
-            .send(.view(.viewDidAppear))
+            let events = await playerClient.startPlayback(request)
+            await VideoDetailReducer.observePlayback(
+                events,
+                videoId: videoId,
+                config: config,
+                videoService: videoService,
+                playerClient: playerClient,
+                send: send
+            )
+        }
+        return .merge(
+            .cancel(id: CancelID.autoPlayCountdown),
+            .cancel(id: CancelID.autoPlayResolve),
+            playbackEffect.cancellable(id: CancelID.playback, cancelInFlight: true),
+            handleViewDidAppear(state: &state)
         )
     }
 }

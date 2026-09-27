@@ -9,48 +9,32 @@ struct StatsOverviewSection: View {
         Section {
             StatRowView(
                 label: String.localised("video.totalVideos", table: .videos),
-                value: "\(video.docCount ?? 0)",
+                value: (video.docCount ?? 0).formatted(),
                 icon: "film.stack"
             )
             StatRowView(
-                label: String(localized: "Media Size"),
-                value: formatBytes(video.totalSize),
+                label: String.localised("stats.mediaSize", table: .settings),
+                value: video.mediaSizeText,
                 icon: "internaldrive"
             )
             StatRowView(
-                label: String(localized: "Duration"),
-                value: formatDuration(video.totalDuration),
+                label: String.localised("stats.duration", table: .settings),
+                value: video.durationText,
                 icon: "clock"
             )
             StatRowView(
                 label: String.localised("generic.active", table: .generic),
-                value: "\(video.activeTrue ?? 0)",
+                value: (video.activeTrue ?? 0).formatted(),
                 icon: "checkmark.circle"
             )
             StatRowView(
                 label: String.localised("generic.inactive", table: .generic),
-                value: "\(video.activeFalse ?? 0)",
+                value: (video.activeFalse ?? 0).formatted(),
                 icon: "xmark.circle"
             )
         } header: {
             Text(String.localised("generic.overview", table: .generic))
         }
         .listRowBackground(Color.Surface.highlight)
-    }
-
-    private func formatBytes(_ bytes: Int?) -> String {
-        guard let bytes else { return "0 B" }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .binary
-        return formatter.string(fromByteCount: Int64(bytes))
-    }
-
-    private func formatDuration(_ seconds: Int?) -> String {
-        guard let seconds, seconds > 0 else { return "NA" }
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.day, .hour, .minute, .second]
-        formatter.unitsStyle = .abbreviated
-        formatter.zeroFormattingBehavior = .dropLeading
-        return formatter.string(from: TimeInterval(seconds)) ?? "NA"
     }
 }

@@ -124,7 +124,7 @@ public struct TVFullDescriptionView: View {
     }
 
     public var body: some View {
-        ScrollView(showsIndicators: false) {
+        ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.title2)
@@ -140,6 +140,7 @@ public struct TVFullDescriptionView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, TVLayout.rowVerticalPadding)
         }
+        .scrollIndicators(.hidden)
         .background(Color.Brand.primary.ignoresSafeArea())
     }
 }

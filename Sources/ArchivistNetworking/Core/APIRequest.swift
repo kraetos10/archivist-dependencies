@@ -1,30 +1,26 @@
 import Dependencies
 import Foundation
 
-public nonisolated protocol APIRequest {
-    var method: HTTPMethod { get }
-    var path: String? { get }
-    var queryItems: [URLQueryItem]? { get }
-    var headers: [HTTPHeader]? { get }
-    var body: Data? { get }
-    var baseURL: String { get }
-    var port: Int? { get }
-
+public nonisolated protocol APIRequest: Sendable {
     associatedtype DecodableData
+
+    var method: HTTPMethod { get }
+    var path: String { get }
+    var queryItems: [URLQueryItem]? { get }
+    var headers: [HTTPHeader] { get }
+    var body: Data? { get }
 
     func urlRequest() throws -> URLRequest
     func execute() async throws -> (data: DecodableData, headers: [AnyHashable: Any])
 }
 
-public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unchecked Sendable {
+public nonisolated struct NetworkAPIRequest<T: Decodable>: APIRequest {
     public let method: HTTPMethod
-    public let path: String?
-    public var queryItems: [URLQueryItem]?
-    public let headers: [HTTPHeader]?
-    public var body: Data?
-    public let baseURL: String
-    public let port: Int?
-    public let scheme: String
+    public let path: String
+    public let queryItems: [URLQueryItem]?
+    public let headers: [HTTPHeader]
+    public let body: Data?
+    public let config: ServerConfig
 
     private let jsonDecoder: JSONDecoder
 
@@ -38,20 +34,23 @@ public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unc
         body: Data? = nil,
         jsonDecoder: JSONDecoder = JSONDecoder()
     ) {
-        self.scheme = config.scheme
-        self.baseURL = config.hostname
+        self.config = config
         self.path = path.rawValue
         self.queryItems = queryItems
         self.method = method
         self.body = body
-        self.port = config.port
         self.jsonDecoder = jsonDecoder
 
-        var httpHeaders = config.authHeaders.map { HTTPHeader(field: $0.key, value: $0.value) }
+        var httpHeaders = config.authHeaders
+            .sorted { $0.key < $1.key }
+            .map { HTTPHeader(field: $0.key, value: $0.value) }
         httpHeaders.append(HTTPHeader(field: "Content-Type", value: "application/json"))
         self.headers = httpHeaders
     }
 
+    /// An unauthenticated request against a server address that hasn't been
+    /// turned into a full `ServerConfig` yet (the token request). It is
+    /// resolved through the same `ServerConfig` URL builder as everything else.
     public init(
         useHTTP: Bool = false,
         baseURL: String,
@@ -60,42 +59,34 @@ public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unc
         method: HTTPMethod = .get,
         body: Data? = nil,
         port: Int? = nil,
-        headers: [String: String] = [:],
         jsonDecoder: JSONDecoder = JSONDecoder()
     ) {
-        self.scheme = useHTTP ? "http" : "https"
-        self.baseURL = baseURL
-        self.path = path.rawValue
-        self.queryItems = queryItems
-        self.method = method
-        self.body = body
-        self.port = port
-        self.jsonDecoder = jsonDecoder
-
-        var httpHeaders = headers.map { HTTPHeader(field: $0.key, value: $0.value) }
-        if !headers.keys.contains("Content-Type") {
-            httpHeaders.append(HTTPHeader(field: "Content-Type", value: "application/json"))
-        }
-        self.headers = httpHeaders
+        self.init(
+            config: ServerConfig(
+                baseURL: baseURL,
+                port: port,
+                apiToken: "",
+                useHTTP: useHTTP
+            ),
+            path: path,
+            queryItems: queryItems,
+            method: method,
+            body: body,
+            jsonDecoder: jsonDecoder
+        )
     }
 
     public func urlRequest() throws -> URLRequest {
-        var urlComponents = URLComponents()
-        urlComponents.scheme = scheme
-        urlComponents.host = baseURL
-        urlComponents.port = port
-        urlComponents.path = path ?? ""
-        urlComponents.queryItems = queryItems
-
-        guard let url = urlComponents.url else {
+        guard let url = config.url(path: path, queryItems: queryItems) else {
             throw NetworkingError.invalidURL
         }
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method.rawValue
         urlRequest.httpBody = body
-        headers?.forEach { urlRequest.addValue($0.value, forHTTPHeaderField: $0.field) }
-
+        for header in headers {
+            urlRequest.setValue(header.value, forHTTPHeaderField: header.field)
+        }
         return urlRequest
     }
 
@@ -107,22 +98,26 @@ public nonisolated final class NetworkAPIRequest<T: Decodable>: APIRequest, @unc
         var responseHeaders = [AnyHashable: Any]()
 
         if let response = response as? HTTPURLResponse {
-            guard response.statusCode >= 200 && response.statusCode < 300 else {
-                let body = String(data: data, encoding: .utf8) ?? ""
-                let error = NetworkingError.errorStatusCode(response.statusCode, body)
-
-                if response.statusCode == 403, body.contains("Invalid token") {
+            guard (200..<300).contains(response.statusCode) else {
+                let error = NetworkingError(
+                    statusCode: response.statusCode,
+                    body: data
+                )
+                if error.isInvalidToken {
                     @Dependency(\.authEventService) var authEventService
-                    Task { await authEventService.tokenExpired() }
+                    await authEventService.tokenExpired()
                 }
-
                 throw error
             }
             responseHeaders = response.allHeaderFields
         }
 
         let decodeData = data.isEmpty ? Data("{}".utf8) : data
-        let decoded = try jsonDecoder.decode(DecodableData.self, from: decodeData)
-        return (data: decoded, headers: responseHeaders)
+        do {
+            let decoded = try jsonDecoder.decode(DecodableData.self, from: decodeData)
+            return (data: decoded, headers: responseHeaders)
+        } catch let error as DecodingError {
+            throw NetworkingError.decodingFailed(String(describing: error))
+        }
     }
 }

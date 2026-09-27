@@ -2,6 +2,15 @@ import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
+/// What the playlist list shows. Worked out once per read so the view only
+/// switches on it, and so the search merge runs a single time.
+public enum PlaylistsContent: Equatable, Sendable {
+    case placeholders
+    case noPlaylists
+    case noSearchResults
+    case playlists(IdentifiedArrayOf<PlaylistResponse>)
+}
+
 @Reducer
 public struct PlaylistsReducer {
     public init() {}
@@ -18,11 +27,14 @@ public struct PlaylistsReducer {
         var searchResults: IdentifiedArrayOf<PlaylistResponse> = []
         var isSearching = false
         var useSplitView = false
+        @Shared(.autoPlayPlaylist) var autoPlayPlaylist
         @Presents var addPlaylist: AddPlaylistReducer.State?
         @Presents var videoDetail: VideoDetailReducer.State?
-        // Split view (iPad)
+        /// The detail shown beside the list in split view (iPad), or
+        /// presented over the tvOS home screen. Never set alongside a `path`
+        /// push — a playlist detail has exactly one home.
         @Presents var selectedPlaylist: PlaylistDetailReducer.State?
-        // Stack navigation (iPhone)
+        // Stack navigation (iPhone, tvOS "All playlists")
         var path = StackState<PlaylistsPath.State>()
 
         var isSearchActive: Bool {
@@ -32,13 +44,22 @@ public struct PlaylistsReducer {
         var filteredPlaylists: IdentifiedArrayOf<PlaylistResponse> {
             guard isSearchActive else { return playlists }
             let localMatches = playlists.filter {
-                $0.playlistName.localizedCaseInsensitiveContains(searchQuery)
+                $0.playlistName.localizedStandardContains(searchQuery)
             }
             var merged = searchResults
             for playlist in localMatches {
                 merged.updateOrAppend(playlist)
             }
             return merged
+        }
+
+        var content: PlaylistsContent {
+            let filtered = filteredPlaylists
+            guard filtered.isEmpty else { return .playlists(filtered) }
+            if hasLoaded {
+                return searchQuery.isEmpty ? .noPlaylists : .noSearchResults
+            }
+            return isLoading ? .placeholders : .playlists([])
         }
     }
 
@@ -55,16 +76,19 @@ public struct PlaylistsReducer {
         @CasePathable
         public enum View {
             case viewDidAppear
+            /// The iPad split view appeared: switch to split-view selection
+            /// and load, in one step.
+            case splitViewDidAppear
             case pullToRefreshTriggered
             case lastItemAppeared
             case playlistCardTapped(PlaylistResponse)
             case addPlaylistTapped
-            case splitViewEnabled
         }
     }
 
     nonisolated enum CancelID: Hashable, Sendable {
         case search
+        case load
     }
 
     @Dependency(\.playlistService) var playlistService

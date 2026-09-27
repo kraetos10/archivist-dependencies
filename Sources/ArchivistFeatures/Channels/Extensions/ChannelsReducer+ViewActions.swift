@@ -1,19 +1,22 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
 extension ChannelsReducer {
-    public func handleViewAction(
+    func handleViewAction(
         _ action: Action.View,
         state: inout State
     ) -> Effect<Action> {
         switch action {
         case .viewDidAppear:
             return handleOnAppear(state: &state)
+        case .splitViewDidAppear:
+            return handleSplitViewDidAppear(state: &state)
         case .pullToRefreshTriggered:
-            return handleRefreshTriggered(state: &state)
+            return refreshChannels(state: &state)
         case .lastItemAppeared:
-            return handleLoadNextPage(state: &state)
+            return loadNextPage(state: &state)
         case .channelTapped(let channel):
             return handleChannelTapped(channel, state: &state)
         case .addChannelTapped:
@@ -23,10 +26,31 @@ extension ChannelsReducer {
         case .filterChanged(let filter):
             state.$filter.withLock { $0 = filter }
             return .none
-        case .splitViewEnabled:
-            state.useSplitView = true
-            return .none
         }
+    }
+
+    // MARK: - Shared
+
+    /// Reloads the first page and the unwatched-channel set. Cancels any
+    /// in-flight page so a late page can't land on top of the fresh list.
+    func refreshChannels(state: inout State) -> Effect<Action> {
+        state.isLoading = true
+        state.currentPage = 1
+        state.isLoadingUnwatchedIds = true
+        return .merge(
+            fetchUnwatchedChannelIdsEffect(config: state.serverConfig),
+            fetchChannels(page: 1, state: state)
+                .cancellable(id: CancelID.loadChannels, cancelInFlight: true)
+        )
+    }
+
+    func loadNextPage(state: inout State) -> Effect<Action> {
+        guard state.currentPage < state.lastPage,
+              !state.isLoadingMore,
+              !state.isLoading else { return .none }
+        state.isLoadingMore = true
+        return fetchChannels(page: state.currentPage + 1, state: state)
+            .cancellable(id: CancelID.loadChannels)
     }
 
     // MARK: - Private Handlers
@@ -40,52 +64,49 @@ extension ChannelsReducer {
         }
 
         state.isLoading = true
-        let config = state.serverConfig
-        let channelService = self.channelService
         return .merge(
             refreshUnwatched,
-            .run { send in
-                let result = await Result {
-                    try await channelService.getChannels(
-                        config: config,
-                        page: 1,
-                        filter: nil,
-                        query: nil
-                    )
-                }
-                await send(.channelsResult(result))
-            }
-            .cancellable(id: CancelID.loadChannels)
+            fetchChannels(page: 1, state: state)
+                .cancellable(id: CancelID.loadChannels)
         )
     }
 
-    private func handleRefreshTriggered(state: inout State) -> Effect<Action> {
-        state.isLoading = true
-        state.currentPage = 1
-        state.isLoadingUnwatchedIds = true
+    /// The split view never shows `path`. A channel opened before it first
+    /// appeared (from a video, say) was pushed; move it into the selection.
+    private func handleSplitViewDidAppear(state: inout State) -> Effect<Action> {
+        state.useSplitView = true
+        if state.selectedChannel == nil,
+           case .channelDetail(let detail)? = state.path.last {
+            state.selectedChannel = detail
+        }
+        state.path.removeAll()
+        return handleOnAppear(state: &state)
+    }
+
+    private func fetchChannels(
+        page: Int,
+        state: State
+    ) -> Effect<Action> {
         let config = state.serverConfig
         let channelService = self.channelService
-        return .merge(
-            fetchUnwatchedChannelIdsEffect(config: config),
-            .run { send in
-                let result = await Result {
-                    try await channelService.getChannels(
-                        config: config,
-                        page: 1,
-                        filter: nil,
-                        query: nil
-                    )
-                }
-                await send(.channelsResult(result))
+        return .run { send in
+            let result = await Result {
+                try await channelService.getChannels(
+                    config: config,
+                    page: page,
+                    filter: nil,
+                    query: nil
+                )
             }
-            .cancellable(id: CancelID.loadChannels, cancelInFlight: true)
-        )
+            await send(.channelsResult(result))
+        }
     }
 
     /// Paginate the global unwatched video list and collect the distinct
     /// channel ids. Capped at a sensible page budget to avoid pathological
     /// fetches on libraries with huge unwatched backlogs — this is a
-    /// best-effort filter, not an authoritative set.
+    /// best-effort filter, not an authoritative set. A new request replaces
+    /// one still paging, so repeat appearances don't stack.
     private func fetchUnwatchedChannelIdsEffect(
         config: ServerConfig
     ) -> Effect<Action> {
@@ -111,49 +132,31 @@ extension ChannelsReducer {
                     }
                     if page >= response.paginate.lastPage { break }
                     page += 1
+                } catch is CancellationError {
+                    return
                 } catch {
                     break
                 }
             }
             await send(.unwatchedChannelIdsLoaded(ids))
         }
-    }
-
-    private func handleLoadNextPage(state: inout State) -> Effect<Action> {
-        guard state.currentPage < state.lastPage, !state.isLoadingMore else { return .none }
-        state.isLoadingMore = true
-        let config = state.serverConfig
-        let nextPage = state.currentPage + 1
-        let channelService = self.channelService
-        return .run { send in
-            let result = await Result {
-                try await channelService.getChannels(
-                    config: config,
-                    page: nextPage,
-                    filter: nil,
-                    query: nil
-                )
-            }
-            await send(.channelsResult(result))
-        }
-        .cancellable(id: CancelID.loadChannels)
+        .cancellable(id: CancelID.unwatchedIds, cancelInFlight: true)
     }
 
     private func handleChannelTapped(
         _ channel: ChannelResponse,
         state: inout State
     ) -> Effect<Action> {
-        if state.useSplitView {
-            guard state.selectedChannel?.channel.channelId != channel.channelId else {
-                return .none
-            }
-        }
         let detailState = ChannelDetailReducer.State(
             serverConfig: state.serverConfig,
             channel: channel
         )
-        state.selectedChannel = detailState
-        if !state.useSplitView {
+        if state.useSplitView {
+            guard state.selectedChannel?.channel.channelId != channel.channelId else {
+                return .none
+            }
+            state.selectedChannel = detailState
+        } else {
             state.path.append(.channelDetail(detailState))
         }
         return .none
@@ -180,7 +183,7 @@ extension ChannelsReducer {
         } message: {
             TextState(
                 String.localised(
-                    "Are you sure you want to unsubscribe from \(channel.channelName)?",
+                    "channel.unsubscribeConfirm \(channel.channelName)",
                     table: .login
                 )
             )
@@ -188,7 +191,7 @@ extension ChannelsReducer {
         return .none
     }
 
-    public func handleConfirmedUnsubscribe(
+    func handleConfirmedUnsubscribe(
         _ channelId: String,
         state: inout State
     ) -> Effect<Action> {

@@ -8,18 +8,17 @@ import SwiftUI
 /// Self-contained: it owns the persisted `@Shared` selection so it can be
 /// dropped into any settings `List` without touching the reducer (the theme
 /// is a pure view concern — no reducer logic reads it). The choice is stored
-/// under ``AppTheme/storageKey``; `AppView` observes the same key and
+/// under the typed `.selectedAppTheme` key; `AppView` observes it and
 /// re-renders the app when it changes.
 struct ThemePickerSection: View {
-    @Shared(.appStorage(AppTheme.storageKey))
-    private var themeRaw = AppTheme.fallback.rawValue
+    @Shared(.selectedAppTheme) private var theme
 
     var body: some View {
         Section {
-            Picker(selection: Binding($themeRaw)) {
+            Picker(selection: Binding($theme)) {
                 ForEach(AppTheme.allCases) { theme in
                     ThemeOptionLabel(theme: theme)
-                        .tag(theme.rawValue)
+                        .tag(theme)
                 }
             } label: {
                 Text(String.localised("settings.theme", table: .settings))
@@ -74,9 +73,9 @@ private struct ThemeSwatch: View {
                 )
             )
             .frame(width: 40, height: 18)
-            .overlay(
+            .overlay {
                 Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
-            )
+            }
     }
 }
 #endif

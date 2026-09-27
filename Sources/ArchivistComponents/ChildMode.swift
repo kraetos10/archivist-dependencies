@@ -2,6 +2,10 @@ import SwiftUI
 
 public enum ChildMode {
     public static let enabledKey = "childModeEnabled"
+    /// The pre-Keychain `UserDefaults` key. The PIN now lives in the
+    /// Keychain behind `PinStore`, which migrates this value on first load
+    /// — nothing should read or write it any more.
+    @available(*, deprecated, message: "The PIN lives in the Keychain: use @Dependency(\\.pinStore).")
     public static let pinKey = "childModePin"
     public static let pinLength = 4
 }
@@ -40,10 +44,14 @@ public struct PinSetupSheet: View {
                     Text(String.localised("childMode.pinSetup.newPin", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
+                        .accessibilityHidden(true)
                     SecureField("", text: $pin)
                         .keyboardType(.numberPad)
                         .textContentType(.oneTimeCode)
                         .focused($focusedField, equals: .first)
+                        // The visible caption above isn't attached to the
+                        // field, so VoiceOver needs its own name for it.
+                        .accessibilityLabel(String.localised("childMode.pinSetup.newPin", table: .login))
                         .padding(12)
                         .background(Color.Surface.highlight)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -56,10 +64,12 @@ public struct PinSetupSheet: View {
                     Text(String.localised("childMode.pinSetup.confirmPin", table: .login))
                         .font(.subheadline)
                         .foregroundStyle(Color.Text.primary)
+                        .accessibilityHidden(true)
                     SecureField("", text: $confirmPin)
                         .keyboardType(.numberPad)
                         .textContentType(.oneTimeCode)
                         .focused($focusedField, equals: .second)
+                        .accessibilityLabel(String.localised("childMode.pinSetup.confirmPin", table: .login))
                         .padding(12)
                         .background(Color.Surface.highlight)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -161,6 +171,8 @@ public struct PinEntrySheet: View {
                     .keyboardType(.numberPad)
                     .textContentType(.oneTimeCode)
                     .focused($focused)
+                    .accessibilityLabel(title)
+                    .accessibilityHint(subtitle)
                     .multilineTextAlignment(.center)
                     .font(.title2)
                     .padding(12)

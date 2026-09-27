@@ -1,13 +1,25 @@
 import ArchivistNetworking
+import Dependencies
 import Foundation
 
 public enum TopShelfCache {
-    private static let appGroupID = "group.uk.co.wunsch.iarchivist"
+    /// The app group shared with the Top Shelf extension. Injected by the
+    /// app at launch — the package doesn't know the app's identifiers.
+    private static let appGroupID = LockIsolated<String?>(nil)
+
+    /// Call once at launch, before anything is cached.
+    public static func configure(appGroupID: String) {
+        self.appGroupID.setValue(appGroupID)
+    }
 
     public static var cacheDirectory: URL? {
-        FileManager.default
+        guard let appGroupID = appGroupID.value else {
+            reportIssue("TopShelfCache is not configured. Call 'TopShelfCache.configure(appGroupID:)' at launch.")
+            return nil
+        }
+        return FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
-            .appendingPathComponent("TopShelfCache", isDirectory: true)
+            .appending(path: "TopShelfCache", directoryHint: .isDirectory)
     }
 
     public static func cacheTopShelfContent(

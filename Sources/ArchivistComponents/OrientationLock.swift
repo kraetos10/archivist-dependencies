@@ -19,15 +19,6 @@ public final class OrientationLock {
         }
     }
 
-    public func lockLandscape() {
-        orientationLock = .landscape
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .landscape)
-            scene.requestGeometryUpdate(geometryPreferences)
-        }
-    }
-
     public func unlock() {
         orientationLock = .allButUpsideDown
     }

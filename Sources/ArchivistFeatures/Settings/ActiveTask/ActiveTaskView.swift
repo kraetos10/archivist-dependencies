@@ -5,7 +5,7 @@ import ArchivistComponents
 
 @ViewAction(for: ActiveTaskReducer.self)
 public struct ActiveTaskView: View {
-    public let store: StoreOf<ActiveTaskReducer>
+    @Bindable public var store: StoreOf<ActiveTaskReducer>
 
     public init(store: StoreOf<ActiveTaskReducer>) {
         self.store = store
@@ -18,11 +18,7 @@ public struct ActiveTaskView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .tint(Color.Accent.dark)
-                        Text(
-                            active.currentStep.isEmpty
-                                ? String.localised("video.downloading", table: .videos)
-                                : active.currentStep
-                        )
+                        Text(store.stepDescription)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Accent.dark)
@@ -36,16 +32,18 @@ public struct ActiveTaskView: View {
                             .lineLimit(2)
                     }
 
-                    if active.messages.count > 1 {
+                    if !store.completedMessages.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
-                            ForEach(active.messages.dropLast(), id: \.self) { message in
-                                HStack(spacing: 6) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(Color.Accent.dark)
+                            ForEach(Array(store.completedMessages.enumerated()), id: \.offset) { _, message in
+                                Label {
                                     Text(message)
                                         .font(.caption)
                                         .foregroundStyle(Color.Brand.secondary)
+                                } icon: {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.Accent.dark)
+                                        .accessibilityHidden(true)
                                 }
                             }
                         }
@@ -55,12 +53,11 @@ public struct ActiveTaskView: View {
             } header: {
                 Text(String.localised("settings.activeTasks", table: .settings))
             } footer: {
-                Button {
+                Button(role: .destructive) {
                     send(.cancelTaskTapped)
                 } label: {
                     if store.isCancelling {
                         ProgressView()
-                            .tint(.white)
                             .frame(maxWidth: .infinity)
                     } else {
                         Text(String.localised("settings.cancelTask", table: .settings))
@@ -69,9 +66,9 @@ public struct ActiveTaskView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
                 .disabled(store.isCancelling)
             }
+            .alert($store.scope(state: \.alert, action: \.alert))
         }
     }
 }

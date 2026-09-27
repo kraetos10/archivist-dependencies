@@ -7,18 +7,38 @@ import Foundation
 public struct SettingsReducer {
     public init() {}
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         public var serverConfig: ServerConfig
         var activeTask: ActiveTaskReducer.State
         var path = StackState<SettingsPath.State>()
         var isRescanningSubscriptions = false
-        var isReAuthenticating = false
         var supportURL: URL?
-        @Shared(.appStorage("autoPlayEnabled")) public var autoPlayEnabled = true
-        @Shared(.appStorage("autoPlayPlaylist")) public var autoPlayPlaylist = true
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        /// The libvlc log, when there's something in it to share.
+        var diagnosticLogURL: URL?
+        @Shared(.autoPlayEnabled) public var autoPlayEnabled
+        @Shared(.autoPlayPlaylist) public var autoPlayPlaylist
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
+
+        var connectionDescription: String {
+            serverConfig.useHTTP ? "HTTP" : "HTTPS"
+        }
+
+        var portDescription: String? {
+            serverConfig.port.map(String.init)
+        }
+
+        var isRescanDisabled: Bool {
+            isRescanningSubscriptions || activeTask.activeDownload != nil
+        }
+
+        /// "1.6 (42)", from the bundle.
+        var appVersion: String {
+            let info = Bundle.main.infoDictionary
+            let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+            let build = info?["CFBundleVersion"] as? String ?? "?"
+            return "\(version) (\(build))"
+        }
 
         public init(
             serverConfig: ServerConfig,
@@ -34,13 +54,11 @@ public struct SettingsReducer {
         case dismissed
     }
 
-    public enum Action: ViewAction, BindableAction {
+    public enum Action: ViewAction {
         case view(View)
-        case binding(BindingAction<State>)
         case didRequestLogout
-        case didRefreshToken(String)
+        case diagnosticLogLoaded(URL?)
         case rescanSubscriptionsResult(Result<Void, Error>)
-        case reAuthResult(Result<String, Error>)
         case alert(PresentationAction<AlertAction>)
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
         case activeTask(ActiveTaskReducer.Action)
@@ -48,10 +66,13 @@ public struct SettingsReducer {
 
         @CasePathable
         public enum View {
+            case viewDidAppear
+            case autoPlayToggled(Bool)
+            case autoPlayPlaylistToggled(Bool)
+            case clearDiagnosticLogsTapped
             case logoutTapped
             case rescanSubscriptionsTapped
             case pullToRefreshTriggered
-            case reAuthTapped
             case downloadsTapped
             case statsTapped
             case historyTapped
@@ -61,42 +82,38 @@ public struct SettingsReducer {
         }
     }
 
+    @Dependency(\.diagnosticsLog) var diagnosticsLog
     @Dependency(\.taskService) var taskService
-    @Dependency(\.keychainService) var keychainService
-    @Dependency(\.userService) var userService
 
     public var body: some Reducer<State, Action> {
-        BindingReducer()
         Scope(state: \.activeTask, action: \.activeTask) {
             ActiveTaskReducer()
         }
         Reduce { state, action in
             switch action {
-            case .binding:
-                return .none
-            case .alert:
-                return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
-                state.videoDetail = nil
-                return .none
-            case .videoDetail(.presented(.delegate(.didDismiss))):
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))),
+                 .videoDetail(.presented(.delegate(.didDismiss))):
                 state.videoDetail = nil
                 return .none
             case .path(.element(_, action: .history(.delegate(.videoSelected(let video))))):
-                @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled1 = true
                 state.videoDetail = VideoDetailReducer.State(
                     serverConfig: state.serverConfig,
                     video: video,
                     nextVideos: [],
-                    shouldAutoPlayNextVideo: autoPlayEnabled1
+                    shouldAutoPlayNextVideo: state.autoPlayEnabled
                 )
                 return .none
-            case .path:
+            case .activeTask(.downloadCompleted):
+                return handleDownloadCompleted(state: &state)
+            case .diagnosticLogLoaded(let url):
+                state.diagnosticLogURL = url
                 return .none
-            default:
-                return handleInternalAction(action, state: &state)
+            case .rescanSubscriptionsResult(let result):
+                return handleRescanResult(result, state: &state)
+            case .alert, .activeTask, .didRequestLogout, .path, .videoDetail:
+                return .none
             }
         }
         .ifLet(\.$alert, action: \.alert)

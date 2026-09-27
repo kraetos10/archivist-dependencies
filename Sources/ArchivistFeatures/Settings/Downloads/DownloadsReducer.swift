@@ -19,7 +19,7 @@ public struct DownloadsReducer {
         var isLoading = false
         var isLoadingMore = false
         var hasLoaded = false
-        @Shared(.appStorage("downloadsSortOrder")) var sortOrder: DownloadSortOrder = .newestFirst
+        @Shared(.downloadsSortOrder) var sortOrder
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<DownloadResponse> = []
         var isSearching = false
@@ -39,14 +39,33 @@ public struct DownloadsReducer {
             let localMatches = downloads.filter { download in
                 let title = download.title ?? ""
                 let channel = download.channelName ?? ""
-                return title.localizedCaseInsensitiveContains(searchQuery)
-                    || channel.localizedCaseInsensitiveContains(searchQuery)
+                return title.localizedStandardContains(searchQuery)
+                    || channel.localizedStandardContains(searchQuery)
             }
             var merged = searchResults
             for download in localMatches {
                 merged.updateOrAppend(download)
             }
             return merged
+        }
+
+        /// Redacted placeholder cards while the first page loads.
+        var showsPlaceholders: Bool {
+            isLoading && downloads.isEmpty
+        }
+
+        /// Loaded, nothing queued, not searching.
+        var showsEmptyQueue: Bool {
+            hasLoaded && !isSearchActive && filteredDownloads.isEmpty
+        }
+
+        /// Loaded, searching, nothing matches.
+        var showsNoSearchResults: Bool {
+            hasLoaded && isSearchActive && filteredDownloads.isEmpty
+        }
+
+        public init(serverConfig: ServerConfig) {
+            self.serverConfig = serverConfig
         }
     }
 
@@ -58,16 +77,19 @@ public struct DownloadsReducer {
         case view(View)
         case binding(BindingAction<State>)
         case alert(PresentationAction<AlertAction>)
+        case bumpResult(Result<Void, Error>)
         case downloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case searchResult(Result<PaginatedResponse<DownloadResponse>, Error>)
         case deleteResult(Result<String, Error>)
         case downloadDetail(PresentationAction<DownloadDetailReducer.Action>)
+        /// Entry point for parents: reload the queue from page one.
+        case refresh
 
         @CasePathable
         public enum View {
             case viewDidAppear
             case pullToRefreshTriggered
-            case lastItemAppeared
+            case itemAppeared(String)
             case downloadTapped(DownloadResponse)
             case deleteTapped(DownloadResponse)
             case sortOrderChanged(DownloadSortOrder)
@@ -75,6 +97,9 @@ public struct DownloadsReducer {
     }
 
     nonisolated enum CancelID: Hashable, Sendable {
+        /// Page loads. A refresh or sort change supersedes whatever page
+        /// was in flight, so its stale result can't land on the new list.
+        case fetch
         case search
     }
 
@@ -91,45 +116,23 @@ public struct DownloadsReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .downloadDetail(.presented(.view(.dismissTapped))):
-                state.downloadDetail = nil
-                return .none
-            case .downloadDetail(.presented(.downloadResult(.success))):
-                let videoId = state.downloadDetail?.download.youtubeId
-                state.downloadDetail = nil
-                if let videoId {
-                    anchorScrollBeforeRemoval(of: videoId, state: &state)
-                    state.downloads.remove(id: videoId)
-                }
-                return .none
-            case .downloadDetail(.presented(.deleteResult(.success))):
-                let videoId = state.downloadDetail?.download.youtubeId
-                state.downloadDetail = nil
-                if let videoId {
-                    anchorScrollBeforeRemoval(of: videoId, state: &state)
-                    state.downloads.remove(id: videoId)
-                }
-                return .none
-            case .downloadDetail:
-                return .none
+            case .refresh:
+                return handleRefresh(state: &state)
+            case .downloadDetail(.presented(.delegate(.didQueueDownload(let videoId)))),
+                 .downloadDetail(.presented(.delegate(.didDelete(let videoId)))):
+                return handleDetailFinished(videoId, state: &state)
             case .alert(.presented(.confirmDownload(let videoId))):
-                let config = state.serverConfig
-                anchorScrollBeforeRemoval(of: videoId, state: &state)
-                state.downloads.remove(id: videoId)
-                state.searchResults.remove(id: videoId)
-                return .run { [downloadService] send in
-                    try? await downloadService.updateDownload(config: config, id: videoId, status: "priority")
-                    // Reconcile with the server. Optimistic removal alone
-                    // empties the visible queue when the user bulk-bumps
-                    // items, and tvOS has no pull-to-refresh — without
-                    // this the user sees an empty list even when more
-                    // pending items still exist server-side.
-                    await send(.view(.pullToRefreshTriggered))
-                }
-            case .alert:
+                return handleConfirmDownload(videoId, state: &state)
+            case .bumpResult(let result):
+                return handleBumpResult(result, state: &state)
+            case .downloadsResult(let result):
+                return handleDownloadsResult(result, state: &state)
+            case .searchResult(let result):
+                return handleSearchResult(result, state: &state)
+            case .deleteResult(let result):
+                return handleDeleteResult(result, state: &state)
+            case .alert, .downloadDetail:
                 return .none
-            default:
-                return handleInternalAction(action, state: &state)
             }
         }
         .ifLet(\.$downloadDetail, action: \.downloadDetail) {

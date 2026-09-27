@@ -16,6 +16,7 @@ import UIKit
 public struct PlayerControlsOverlay: View {
     @Bindable private var playerManager = PlayerManager.shared
     @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
+    @Environment(\.accessibilityVoiceOverEnabled) private var isVoiceOverEnabled
 
     public init() {}
 
@@ -86,6 +87,13 @@ public struct PlayerControlsOverlay: View {
                 playerManager.scheduleHideVLCControls()
             }
         }
+        // `PlayerManager` stops auto-hiding while VoiceOver runs; bring the
+        // chrome back if it was already hidden when VoiceOver came on.
+        .onChange(of: isVoiceOverEnabled) { _, isEnabled in
+            if isEnabled, !childModeEnabled {
+                playerManager.showVLCControls()
+            }
+        }
     }
 
     private func controlsOverlay(safeArea: EdgeInsets) -> some View {
@@ -99,13 +107,7 @@ public struct PlayerControlsOverlay: View {
         // screen edge). No window-insets snapshot needed.
         Color.black.opacity(0.35)
             .overlay {
-                GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        tapHalf(skip: { playerManager.skipBackward(15) })
-                        tapHalf(skip: { playerManager.skipForward(15) })
-                    }
-                    .frame(width: geo.size.width, height: geo.size.height)
-                }
+                tapAreas
             }
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 12) {
@@ -117,15 +119,7 @@ public struct PlayerControlsOverlay: View {
                         iconSize: 16,
                         padding: 12
                     ) {
-                        playerManager.startPiPIfAvailable()
-                        playerManager.scheduleHideVLCControls()
-                        // PiP renders through its own window — leaving the
-                        // fullscreen VC up would just show a black surface
-                        // behind the PiP tile. Drop back to the inline
-                        // detail screen.
-                        if playerManager.isVLCFullscreen {
-                            playerManager.exitFullscreen()
-                        }
+                        pictureInPictureTapped()
                     }
 
                     if playerManager.isVLCFullscreen {
@@ -172,6 +166,17 @@ public struct PlayerControlsOverlay: View {
             }
     }
 
+    private func pictureInPictureTapped() {
+        playerManager.startPiPIfAvailable()
+        playerManager.scheduleHideVLCControls()
+        // PiP renders through its own window — leaving the fullscreen VC up
+        // would just show a black surface behind the PiP tile. Drop back to
+        // the inline detail screen.
+        if playerManager.isVLCFullscreen {
+            playerManager.exitFullscreen()
+        }
+    }
+
     // MARK: - Speed
 
     /// Shows the current speed and opens the picker. The picker is a
@@ -216,13 +221,28 @@ public struct PlayerControlsOverlay: View {
     /// visibility. Both modifiers attached to the same view so SwiftUI's
     /// gesture disambiguation routes a double-tap to the count:2 handler
     /// without firing the single-tap first.
+    ///
+    /// For VoiceOver the pair is one button that shows or hides the
+    /// controls, with the skips as named actions — bare `onTapGesture`
+    /// zones carry no traits and would otherwise be unreachable.
     private var tapAreas: some View {
-        GeometryReader { geo in
-            HStack(spacing: 0) {
-                tapHalf(skip: { playerManager.skipBackward(15) })
-                tapHalf(skip: { playerManager.skipForward(15) })
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
+        HStack(spacing: 0) {
+            tapHalf(skip: { playerManager.skipBackward(15) })
+            tapHalf(skip: { playerManager.skipForward(15) })
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            playerManager.vlcControlsVisible
+                ? String.localised("video.controls.hide", table: .videos)
+                : String.localised("video.controls.show", table: .videos)
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { controlsTapped() }
+        .accessibilityAction(named: String.localised("video.skipBackward", table: .videos)) {
+            playerManager.skipBackward(15)
+        }
+        .accessibilityAction(named: String.localised("video.skipForward", table: .videos)) {
+            playerManager.skipForward(15)
         }
     }
 
@@ -233,13 +253,15 @@ public struct PlayerControlsOverlay: View {
                 skip()
                 HapticFeedback.light.play()
             }
-            .onTapGesture {
-                if playerManager.vlcControlsVisible {
-                    playerManager.hideVLCControls()
-                } else {
-                    playerManager.showVLCControls()
-                }
-            }
+            .onTapGesture { controlsTapped() }
+    }
+
+    private func controlsTapped() {
+        if playerManager.vlcControlsVisible {
+            playerManager.hideVLCControls()
+        } else {
+            playerManager.showVLCControls()
+        }
     }
 
     /// - Parameter label: Spoken name for the control. Required rather than
@@ -291,8 +313,7 @@ public struct PlayerControlsOverlay: View {
     private var transportRow: some View {
         HStack(spacing: 12) {
             Button {
-                playerManager.togglePlayPause()
-                playerManager.scheduleHideVLCControls()
+                playPauseTapped()
             } label: {
                 Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 22, weight: .semibold))
@@ -317,17 +338,15 @@ public struct PlayerControlsOverlay: View {
             }
 
             SeekBar(
-                progress: playerManager.effectiveDuration > 0
-                    ? playerManager.currentTime / playerManager.effectiveDuration
-                    : 0,
-                onDragStarted: {
-                    playerManager.cancelVLCHideControls()
-                },
-                onSeek: { value in
-                    let target = value * playerManager.effectiveDuration
-                    playerManager.seekTo(target)
-                    playerManager.scheduleHideVLCControls()
-                }
+                progress: playerManager.playbackFraction,
+                accessibilityValue: String.localised(
+                    "video.progressValue \(playerManager.currentTimeDisplay) \(playerManager.durationDisplay)",
+                    table: .videos
+                ),
+                onDragStarted: { playerManager.cancelVLCHideControls() },
+                onSeek: { seekEnded(atFraction: $0) },
+                onIncrement: { playerManager.skipForward(15) },
+                onDecrement: { playerManager.skipBackward(15) }
             )
 
             Text("\(playerManager.currentTimeDisplay) / \(playerManager.durationDisplay)")
@@ -335,6 +354,16 @@ public struct PlayerControlsOverlay: View {
                 .foregroundStyle(.white)
                 .monospacedDigit()
         }
+    }
+
+    private func playPauseTapped() {
+        playerManager.togglePlayPause()
+        playerManager.scheduleHideVLCControls()
+    }
+
+    private func seekEnded(atFraction fraction: Double) {
+        playerManager.seek(toFraction: fraction)
+        playerManager.scheduleHideVLCControls()
     }
 
     @ViewBuilder
@@ -352,6 +381,8 @@ public struct PlayerControlsOverlay: View {
                     }
                     .frame(width: 24, height: 24)
                     .clipShape(Circle())
+                    // Decorative: the channel name beside it says who it is.
+                    .accessibilityHidden(true)
                 }
                 Text(metadata.artist)
                     .font(.subheadline.weight(.semibold))
@@ -360,6 +391,7 @@ public struct PlayerControlsOverlay: View {
                 Text("·")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
+                    .accessibilityHidden(true)
                 Text(metadata.title)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.9))
@@ -373,8 +405,13 @@ public struct PlayerControlsOverlay: View {
 
 struct SeekBar: View {
     let progress: Double
+    /// Spoken position, e.g. "1:02 of 10:30".
+    let accessibilityValue: String
     var onDragStarted: (() -> Void)?
     let onSeek: (Double) -> Void
+    /// VoiceOver swipe up / down on the adjustable element.
+    let onIncrement: () -> Void
+    let onDecrement: () -> Void
 
     @State private var isDragging = false
     @State private var dragProgress: Double = 0
@@ -433,6 +470,16 @@ struct SeekBar: View {
             )
         }
         .frame(height: 36)
+        .accessibilityElement()
+        .accessibilityLabel(String.localised("video.watchProgress", table: .videos))
+        .accessibilityValue(accessibilityValue)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onIncrement()
+            case .decrement: onDecrement()
+            @unknown default: break
+            }
+        }
     }
 }
 #endif

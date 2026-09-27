@@ -119,7 +119,13 @@ extension PlaylistService: DependencyKey {
             _ = try await request.execute()
         },
         modifyCustomPlaylist: { config, id, action, videoId, position in
-            let body = try JSONEncoder().encode(CustomPlaylistRequest(action: action, videoId: videoId, position: position))
+            let body = try JSONEncoder().encode(
+                CustomPlaylistRequest(
+                    action: action,
+                    videoId: videoId,
+                    position: position
+                )
+            )
             let request = NetworkAPIRequest<EmptyResponse>(
                 config: config,
                 path: .playlistCustomAction(id: id),

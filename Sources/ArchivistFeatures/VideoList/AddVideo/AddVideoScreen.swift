@@ -85,23 +85,26 @@ public struct AddVideoScreen: View {
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
+                    Button(
+                        String.localised("generic.close", table: .generic),
+                        systemImage: "xmark"
+                    ) {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(Color.Text.primary)
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Color.Text.primary)
                 }
             }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .alert($store.scope(state: \.alert, action: \.alert))
         .sheet(isPresented: $store.isPresentingPin) {
             PinEntrySheet(
-                expectedPin: store.childModePin,
+                expectedPin: store.expectedPin,
                 subtitle: String.localised("childMode.pinEntry.addVideo.subtitle", table: .login),
-                onSuccess: { store.send(.pinConfirmed) },
-                onCancel: { store.send(.pinCancelled) }
+                onSuccess: { send(.pinConfirmed) },
+                onCancel: { send(.pinCancelled) }
             )
         }
     }
@@ -125,7 +128,7 @@ public struct AddVideoScreen: View {
         }
         .background(Color.Accent.dark)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .disabled(store.videoInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isAdding)
+        .disabled(!store.canAdd)
     }
 }
 #endif

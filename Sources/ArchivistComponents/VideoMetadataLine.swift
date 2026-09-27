@@ -36,11 +36,13 @@ public struct VideoMetadataLine: View {
 
             if let views = viewCount {
                 Text("·")
-                Text("\(views) views")
+                    .accessibilityHidden(true)
+                Text(String.localised("\(views) views"))
             }
 
             if let published = publishedRelative {
                 Text("·")
+                    .accessibilityHidden(true)
                 Text(published)
             }
         }

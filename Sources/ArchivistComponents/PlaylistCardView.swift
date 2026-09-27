@@ -33,7 +33,8 @@ public struct PlaylistCardView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "list.bullet")
                         .font(.caption2)
-                    Text("\(playlist.entryCount) videos")
+                        .accessibilityHidden(true)
+                    Text(String.localised("\(playlist.entryCount) videos"))
                         .font(.caption)
                 }
                 .foregroundStyle(Color.Brand.secondary)

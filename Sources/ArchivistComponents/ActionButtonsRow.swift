@@ -5,23 +5,32 @@ import SwiftUI
 public struct ActionPillLabel: View {
     let systemImage: String
     let label: String
+    let accessibilityLabel: String?
 
+    /// - Parameter accessibilityLabel: Replaces what VoiceOver reads when
+    ///   the visible text alone doesn't say what the pill is — a bare
+    ///   like count, say.
     public init(
         systemImage: String,
-        label: String
+        label: String,
+        accessibilityLabel: String? = nil
     ) {
         self.systemImage = systemImage
         self.label = label
+        self.accessibilityLabel = accessibilityLabel
     }
 
     public var body: some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
                 .font(.subheadline)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.subheadline)
                 .fontWeight(.medium)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel ?? label)
         .foregroundStyle(Color.Text.primary)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -69,10 +78,14 @@ public struct DownloadPill: View {
                         .frame(width: 18, height: 18)
                         .rotationEffect(.degrees(-90))
                 }
+                .accessibilityHidden(true)
                 Text(String.localised("video.downloadToDevice", table: .videos))
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String.localised("video.downloading", table: .videos))
+            .accessibilityValue(Double(downloadProgress).formatted(.percent.precision(.fractionLength(0))))
             .foregroundStyle(Color.Text.primary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -111,7 +124,11 @@ public struct DownloadPill: View {
                     Label(String.localised("video.deleteFromServer", table: .videos), systemImage: "trash")
                 }
             } label: {
-                ActionPillLabel(systemImage: "ellipsis", label: "")
+                ActionPillLabel(
+                    systemImage: "ellipsis",
+                    label: "",
+                    accessibilityLabel: String.localised("generic.more", table: .generic)
+                )
             }
         }
     }
@@ -174,14 +191,22 @@ public struct ActionButtonsRow: View {
     }
 
     public var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 if let likes {
-                    ActionPillLabel(systemImage: "hand.thumbsup", label: likes)
+                    ActionPillLabel(
+                        systemImage: "hand.thumbsup",
+                        label: likes,
+                        accessibilityLabel: String.localised("video.likes \(likes)", table: .videos)
+                    )
                 }
 
                 if let dislikes {
-                    ActionPillLabel(systemImage: "hand.thumbsdown", label: dislikes)
+                    ActionPillLabel(
+                        systemImage: "hand.thumbsdown",
+                        label: dislikes,
+                        accessibilityLabel: String.localised("video.dislikes \(dislikes)", table: .videos)
+                    )
                 }
 
                 Button {
@@ -259,5 +284,6 @@ public struct ActionButtonsRow: View {
                 )
             }
         }
+        .scrollIndicators(.hidden)
     }
 }

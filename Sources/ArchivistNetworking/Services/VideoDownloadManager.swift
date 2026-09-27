@@ -2,16 +2,39 @@ import Dependencies
 import Foundation
 
 public nonisolated protocol VideoDownloadManagerType: Sendable {
+    /// Downloads `url` into local storage for `videoId`. Progress is reported
+    /// through the `Progress` the manager was created with, not a callback.
     func download(
+        url: URL,
+        videoId: String,
+        authHeaders: [String: String]
+    ) async throws -> URL
+}
+
+extension VideoDownloadManagerType {
+    /// `expectedSize` and `onProgress` were never read — progress flows
+    /// through the manager's `Progress`. Kept so existing callers compile.
+    @available(
+        *,
+        deprecated,
+        message: "Use download(url:videoId:authHeaders:); observe the manager's Progress instead."
+    )
+    public func download(
         url: URL,
         videoId: String,
         expectedSize: Int64?,
         authHeaders: [String: String],
         onProgress: @escaping @Sendable (Double) -> Void
-    ) async throws -> URL
+    ) async throws -> URL {
+        try await download(
+            url: url,
+            videoId: videoId,
+            authHeaders: authHeaders
+        )
+    }
 }
 
-public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
+public nonisolated struct VideoDownloadManager: VideoDownloadManagerType {
     private let progress: Progress
 
     public init(progress: Progress) {
@@ -21,9 +44,7 @@ public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
     public func download(
         url: URL,
         videoId: String,
-        expectedSize: Int64?,
-        authHeaders: [String: String],
-        onProgress: @escaping @Sendable (Double) -> Void
+        authHeaders: [String: String]
     ) async throws -> URL {
         @Dependency(\.localVideoStorage) var storage
         var request = URLRequest(url: url)
@@ -31,20 +52,17 @@ public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
+        // The session-level delegate adopts each task's `Progress` as a child
+        // of ours in `didCreateTask`, which is how progress reaches callers.
         let delegate = DownloadDelegate(progress: progress)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
 
-        // Don't pass delegate to download(for:) — the session-level delegate
-        // handles didWriteData for progress. Passing it here as a task delegate
-        // would override the session delegate and skip progress callbacks.
-        let (tempURL, response) = try await session.download(
-            for: request,
-            delegate: delegate
-        )
+        let (tempURL, response) = try await session.download(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
+            try? FileManager.default.removeItem(at: tempURL)
             throw URLError(.badServerResponse)
         }
 
@@ -52,7 +70,7 @@ public struct VideoDownloadManager: VideoDownloadManagerType, Sendable {
     }
 }
 
-final class DownloadDelegate: NSObject, URLSessionTaskDelegate {
+private nonisolated final class DownloadDelegate: NSObject, URLSessionTaskDelegate, Sendable {
     private let progress: Progress
 
     init(progress: Progress) {

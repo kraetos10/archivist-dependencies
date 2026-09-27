@@ -2,7 +2,7 @@
 import ArchivistNetworking
 import Foundation
 
-public struct WatchDownloadItem: Sendable {
+public struct WatchDownloadItem: Codable, Equatable, Sendable {
     public let videoId: String
     public let title: String
     public let channelName: String
@@ -28,41 +28,102 @@ public struct WatchDownloadItem: Sendable {
         self.durationStr = durationStr
         self.thumbPath = thumbPath
     }
+
+    /// Encoded into the download task's `taskDescription`, which the system
+    /// keeps with a background task, so a download that finishes after the
+    /// app was relaunched still knows what it was.
+    var taskDescription: String? {
+        (try? JSONEncoder().encode(self)).flatMap { String(bytes: $0, encoding: .utf8) }
+    }
+
+    init?(taskDescription: String?) {
+        guard let taskDescription,
+              let item = try? JSONDecoder().decode(Self.self, from: Data(taskDescription.utf8)) else {
+            return nil
+        }
+        self = item
+    }
+
+    func record(
+        fileSize: Int?,
+        downloadedAt: Date
+    ) -> WatchDownload {
+        WatchDownload(
+            id: videoId,
+            title: title,
+            channelName: channelName,
+            duration: duration,
+            durationStr: durationStr,
+            fileSize: fileSize,
+            downloadedAt: downloadedAt.timeIntervalSince1970,
+            lastPlayedPosition: 0,
+            thumbPath: thumbPath
+        )
+    }
 }
 
-public enum WatchDownloadError: Error {
+public enum WatchDownloadError: Error, Equatable {
     case alreadyDownloading
     case noMediaURL
+    case httpStatus(Int)
     case exportFailed
     case downloadFailed
+    case cancelled
+
+    /// Whether a response is a real file rather than an error page.
+    static func validate(_ response: URLResponse?) -> WatchDownloadError? {
+        guard let http = response as? HTTPURLResponse else { return .downloadFailed }
+        return (200..<300).contains(http.statusCode) ? nil : .httpStatus(http.statusCode)
+    }
 }
 
+/// Downloads audio for offline playback on a background `URLSession`.
+///
+/// Its delegate queue is the main queue, so every delegate callback runs on
+/// the main actor and all bookkeeping is main-actor state — no locks. The
+/// session is created once and kept: cancelling cancels tasks, never the
+/// session, so a session with the same identifier is never recreated while
+/// the old one is still being torn down.
 @MainActor
 @Observable
-public final class WatchDownloadManager {
-    public static let shared = WatchDownloadManager()
+public final class WatchDownloadManager: NSObject {
+    public private(set) var progress: Double = 0
+    public private(set) var isDownloading = false
+    public private(set) var activeDownloadTitle: String?
+    public private(set) var activeDownloadChannel: String?
 
-    public var progress: Double = 0
-    public var isDownloading: Bool = false
-    public var activeDownloadTitle: String?
-    public var activeDownloadChannel: String?
+    @ObservationIgnored private let sessionIdentifier: String
+    @ObservationIgnored private let storage: WatchAudioStorage
+    @ObservationIgnored private let catalog: WatchDownloadCatalog
+    @ObservationIgnored private var session: URLSession?
+    @ObservationIgnored private var continuations: [Int: CheckedContinuation<Void, any Error>] = [:]
+    @ObservationIgnored private var failures: [Int: WatchDownloadError] = [:]
+    @ObservationIgnored private var backgroundCompletionHandler: (@MainActor () -> Void)?
 
-    private let storage = WatchAudioStorage()
-    private let sessionDelegate: DownloadSessionDelegate
-
-    private var activeItem: WatchDownloadItem?
-
-    public init() {
-        let delegate = DownloadSessionDelegate()
-        self.sessionDelegate = delegate
+    public init(
+        sessionIdentifier: String,
+        catalog: WatchDownloadCatalog,
+        storage: WatchAudioStorage = WatchAudioStorage()
+    ) {
+        self.sessionIdentifier = sessionIdentifier
+        self.catalog = catalog
+        self.storage = storage
     }
 
-    public func reconnectBackgroundSession() {
-        _ = sessionDelegate.backgroundSession
+    /// Reattaches to the background session after a launch, so downloads the
+    /// system finished (or is still running) while the app was away are
+    /// delivered, and an in-flight one shows as downloading again.
+    public func reconnectBackgroundSession() async {
+        let tasks = await backgroundSession.allTasks
+        guard !isDownloading,
+              let task = tasks.first(where: { $0.state == .running }),
+              let item = WatchDownloadItem(taskDescription: task.taskDescription) else { return }
+        begin(item)
     }
 
-    public func handleBackgroundSessionCompletion(_ handler: @escaping @Sendable () -> Void) {
-        sessionDelegate.backgroundCompletionHandler = handler
+    public func handleBackgroundSessionCompletion(_ handler: @escaping @MainActor () -> Void) {
+        backgroundCompletionHandler = handler
+        _ = backgroundSession
     }
 
     public func downloadAudio(
@@ -77,59 +138,57 @@ public final class WatchDownloadManager {
             throw WatchDownloadError.noMediaURL
         }
 
-        activeItem = video
-        isDownloading = true
-        progress = 0
-        activeDownloadTitle = video.title
-        activeDownloadChannel = video.channelName
-
-        storage.ensureDirectoryExists()
-
         var request = URLRequest(url: mediaURL)
-        for (key, value) in config.authHeaders {
-            request.setValue(value, forHTTPHeaderField: key)
+        if config.isServerURL(mediaURL) {
+            for (key, value) in config.authHeaders {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
         }
 
-        let delegate = sessionDelegate
-        let storageRef = storage
-
-        do {
-            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-                delegate.configure(
-                    continuation: cont,
-                    item: video,
-                    storage: storageRef,
-                    onProgress: { [weak self] fraction in
-                        Task { @MainActor in
-                            self?.progress = fraction
-                        }
-                    },
-                    onComplete: { [weak self] record in
-                        Task { @MainActor in
-                            if let record {
-                                WatchDownloadCatalog.shared.add(record)
-                            }
-                            self?.clearState()
-                        }
-                    }
-                )
-                delegate.backgroundSession.downloadTask(with: request).resume()
-            }
-        } catch {
-            clearState()
-            throw error
+        begin(video)
+        let session = backgroundSession
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            let task = session.downloadTask(with: request)
+            task.taskDescription = video.taskDescription
+            continuations[task.taskIdentifier] = continuation
+            task.resume()
         }
     }
 
+    /// Cancels the running download. Its continuation is resumed from
+    /// `didCompleteWithError` with the cancellation, so nothing is leaked.
     public func cancelDownload() {
-        sessionDelegate.backgroundSession.invalidateAndCancel()
-        sessionDelegate.resetSession()
-        clearState()
+        session?.getAllTasks { tasks in
+            tasks.forEach { $0.cancel() }
+        }
     }
 
     public func deleteDownload(videoId: String) throws {
         try storage.deleteAudio(videoId: videoId)
-        WatchDownloadCatalog.shared.remove(videoId: videoId)
+        catalog.remove(videoId: videoId)
+    }
+
+    private var backgroundSession: URLSession {
+        if let session {
+            return session
+        }
+        let configuration = URLSessionConfiguration.background(withIdentifier: sessionIdentifier)
+        configuration.isDiscretionary = false
+        configuration.sessionSendsLaunchEvents = true
+        let session = URLSession(
+            configuration: configuration,
+            delegate: self,
+            delegateQueue: .main
+        )
+        self.session = session
+        return session
+    }
+
+    private func begin(_ item: WatchDownloadItem) {
+        isDownloading = true
+        progress = 0
+        activeDownloadTitle = item.title
+        activeDownloadChannel = item.channelName
     }
 
     private func clearState() {
@@ -137,69 +196,72 @@ public final class WatchDownloadManager {
         progress = 0
         activeDownloadTitle = nil
         activeDownloadChannel = nil
-        activeItem = nil
+    }
+
+    private func finish(
+        location: URL,
+        task: URLSessionDownloadTask
+    ) {
+        if let failure = WatchDownloadError.validate(task.response) {
+            failures[task.taskIdentifier] = failure
+            return
+        }
+        guard let item = WatchDownloadItem(taskDescription: task.taskDescription) else {
+            failures[task.taskIdentifier] = .downloadFailed
+            return
+        }
+        do {
+            _ = try storage.store(downloadedFile: location, videoId: item.videoId)
+        } catch {
+            failures[task.taskIdentifier] = .exportFailed
+            return
+        }
+        catalog.add(
+            item.record(
+                fileSize: storage.fileSize(videoId: item.videoId),
+                downloadedAt: .now
+            )
+        )
+    }
+
+    private func complete(
+        task: URLSessionTask,
+        error: (any Error)?
+    ) {
+        let failure = failures.removeValue(forKey: task.taskIdentifier)
+        let continuation = continuations.removeValue(forKey: task.taskIdentifier)
+        clearState()
+
+        if let error {
+            let isCancelled = (error as? URLError)?.code == .cancelled
+            continuation?.resume(throwing: isCancelled ? WatchDownloadError.cancelled : error)
+        } else if let failure {
+            continuation?.resume(throwing: failure)
+        } else {
+            continuation?.resume()
+        }
+    }
+
+    private func invalidate(error: (any Error)?) {
+        session = nil
+        let pending = continuations
+        continuations = [:]
+        failures = [:]
+        clearState()
+        for continuation in pending.values {
+            continuation.resume(throwing: error ?? WatchDownloadError.cancelled)
+        }
+    }
+
+    private func finishBackgroundEvents() {
+        let handler = backgroundCompletionHandler
+        backgroundCompletionHandler = nil
+        handler?()
     }
 }
 
-// MARK: - URLSession Delegate
-
-private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private static let backgroundSessionID = "uk.co.wunsch.iarchivist.watch.download"
-
-    var backgroundCompletionHandler: (@Sendable () -> Void)?
-
-    private var continuation: CheckedContinuation<Void, Error>?
-    private var activeItem: WatchDownloadItem?
-    private var storage: WatchAudioStorage?
-    private var onProgress: ((Double) -> Void)?
-    private var onComplete: ((WatchDownload?) -> Void)?
-
-    private var _backgroundSession: URLSession?
-
-    var backgroundSession: URLSession {
-        if let session = _backgroundSession {
-            return session
-        }
-        let config = URLSessionConfiguration.background(
-            withIdentifier: Self.backgroundSessionID
-        )
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
-        let session = URLSession(
-            configuration: config,
-            delegate: self,
-            delegateQueue: nil
-        )
-        _backgroundSession = session
-        return session
-    }
-
-    func resetSession() {
-        _backgroundSession = nil
-        continuation = nil
-        activeItem = nil
-        storage = nil
-        onProgress = nil
-        onComplete = nil
-    }
-
-    func configure(
-        continuation: CheckedContinuation<Void, Error>,
-        item: WatchDownloadItem,
-        storage: WatchAudioStorage,
-        onProgress: @escaping (Double) -> Void,
-        onComplete: @escaping (WatchDownload?) -> Void
-    ) {
-        self.continuation = continuation
-        self.activeItem = item
-        self.storage = storage
-        self.onProgress = onProgress
-        self.onComplete = onComplete
-    }
-
-    // MARK: - URLSessionDownloadDelegate
-
-    func urlSession(
+extension WatchDownloadManager: URLSessionDownloadDelegate {
+    nonisolated public func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didWriteData bytesWritten: Int64,
@@ -208,73 +270,47 @@ private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegat
     ) {
         guard totalBytesExpectedToWrite > 0 else { return }
         let fraction = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        onProgress?(fraction)
+        MainActor.assumeIsolated {
+            progress = fraction
+        }
     }
 
-    func urlSession(
+    /// The file at `location` is deleted as soon as this returns, so it is
+    /// moved into place synchronously here.
+    nonisolated public func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        guard let item = activeItem, let storage else {
-            continuation?.resume(throwing: WatchDownloadError.downloadFailed)
-            continuation = nil
-            onComplete?(nil)
-            return
+        MainActor.assumeIsolated {
+            finish(location: location, task: downloadTask)
         }
-
-        let outputURL = storage.localFileURL(for: item.videoId)
-        try? FileManager.default.removeItem(at: outputURL)
-
-        do {
-            try FileManager.default.moveItem(at: location, to: outputURL)
-        } catch {
-            try? FileManager.default.removeItem(at: location)
-            continuation?.resume(throwing: WatchDownloadError.exportFailed)
-            continuation = nil
-            onComplete?(nil)
-            return
-        }
-
-        let attributes = try? FileManager.default.attributesOfItem(atPath: outputURL.path)
-        let fileSize = attributes?[.size] as? Int
-
-        let record = WatchDownload(
-            id: item.videoId,
-            title: item.title,
-            channelName: item.channelName,
-            duration: item.duration,
-            durationStr: item.durationStr,
-            fileSize: fileSize,
-            downloadedAt: Date().timeIntervalSince1970,
-            lastPlayedPosition: 0,
-            thumbPath: item.thumbPath
-        )
-
-        onComplete?(record)
-        continuation?.resume()
-        continuation = nil
     }
 
-    func urlSession(
+    nonisolated public func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
-        didCompleteWithError error: Error?
+        didCompleteWithError error: (any Error)?
     ) {
-        if let error {
-            continuation?.resume(throwing: error)
-            continuation = nil
-            onComplete?(nil)
+        MainActor.assumeIsolated {
+            complete(task: task, error: error)
         }
     }
 
-    func urlSessionDidFinishEvents(
+    nonisolated public func urlSession(
+        _ session: URLSession,
+        didBecomeInvalidWithError error: (any Error)?
+    ) {
+        MainActor.assumeIsolated {
+            invalidate(error: error)
+        }
+    }
+
+    nonisolated public func urlSessionDidFinishEvents(
         forBackgroundURLSession session: URLSession
     ) {
-        let handler = backgroundCompletionHandler
-        backgroundCompletionHandler = nil
-        Task { @MainActor in
-            handler?()
+        MainActor.assumeIsolated {
+            finishBackgroundEvents()
         }
     }
 }

@@ -1,45 +1,62 @@
 #if os(watchOS)
 import Foundation
+import IssueReporting
 import SQLiteData
-import StructuredQueries
 
+/// The downloaded-audio records, mirrored from the `watchDownloads` table so
+/// views observe them without their own queries.
 @MainActor
 @Observable
 public final class WatchDownloadCatalog {
-    public static let shared = WatchDownloadCatalog()
+    public private(set) var records: [WatchDownload] = []
 
-    public var records: [WatchDownload] = []
-
-    private var database: DatabaseWriter?
+    @ObservationIgnored private var database: (any DatabaseWriter)?
 
     public init() {}
 
-    public func setup(database: DatabaseWriter) {
+    /// Connects the database and drops records whose audio file has gone
+    /// (removed by the system or a failed move), so the list only shows
+    /// what can actually play.
+    public func setup(
+        database: any DatabaseWriter,
+        storage: WatchAudioStorage
+    ) {
         self.database = database
+        loadAll()
+        let missing = records.filter { !storage.isDownloaded(videoId: $0.id) }.map(\.id)
+        guard !missing.isEmpty else { return }
+        withErrorReporting {
+            try database.write { db in
+                try WatchDownload
+                    .where { $0.id.in(missing) }
+                    .delete()
+                    .execute(db)
+            }
+        }
         loadAll()
     }
 
     public func add(_ record: WatchDownload) {
-        guard let database else { return }
-        do {
+        guard let database else {
+            reportIssue("WatchDownloadCatalog used before setup(database:storage:)")
+            return
+        }
+        withErrorReporting {
             try database.write { db in
                 try WatchDownload.upsert { record }.execute(db)
             }
-            loadAll()
-        } catch {}
+        }
+        loadAll()
     }
 
     public func remove(videoId: String) {
         guard let database else { return }
-        do {
+        withErrorReporting {
             try database.write { db in
-                try WatchDownload
-                    .delete()
-                    .where { $0.id.eq(videoId) }
-                    .execute(db)
+                try WatchDownload.find(videoId).delete().execute(db)
             }
-            loadAll()
-        } catch {}
+        }
+        loadAll()
     }
 
     public func updatePosition(
@@ -47,34 +64,36 @@ public final class WatchDownloadCatalog {
         position: Double
     ) {
         guard let database else { return }
-        do {
+        withErrorReporting {
             try database.write { db in
                 try WatchDownload
+                    .find(videoId)
                     .update { $0.lastPlayedPosition = position }
-                    .where { $0.id.eq(videoId) }
                     .execute(db)
             }
-            if let index = records.firstIndex(where: { $0.id == videoId }) {
-                records[index].lastPlayedPosition = position
-            }
-        } catch {}
+        }
+        if let index = records.firstIndex(where: { $0.id == videoId }) {
+            records[index].lastPlayedPosition = position
+        }
     }
 
     public func record(for videoId: String) -> WatchDownload? {
         records.first { $0.id == videoId }
     }
 
-    // MARK: - Private
+    public func contains(videoId: String) -> Bool {
+        record(for: videoId) != nil
+    }
 
     private func loadAll() {
         guard let database else { return }
-        do {
-            records = try database.read { db in
+        records = withErrorReporting {
+            try database.read { db in
                 try WatchDownload
                     .order { $0.downloadedAt.desc() }
                     .fetchAll(db)
             }
-        } catch {}
+        } ?? records
     }
 }
 #endif

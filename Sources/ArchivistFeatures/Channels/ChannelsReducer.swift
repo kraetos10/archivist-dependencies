@@ -8,6 +8,16 @@ public enum ChannelListFilter: String, Sendable, Equatable {
     case withUnwatched
 }
 
+/// What the channel list shows. Worked out once per read so the view only
+/// switches on it, and so the filtered list is built a single time.
+public enum ChannelsContent: Equatable, Sendable {
+    case placeholders
+    case emptyUnwatched
+    case noChannels
+    case noSearchResults
+    case channels(IdentifiedArrayOf<ChannelResponse>)
+}
+
 @Reducer
 public struct ChannelsReducer {
     public init() {}
@@ -26,16 +36,17 @@ public struct ChannelsReducer {
         var useSplitView = false
         var channelIdsWithUnwatchedVideos: Set<String> = []
         var isLoadingUnwatchedIds = false
-        @Shared(.appStorage("channelsFilter")) var filter: ChannelListFilter = .all
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
-        @Shared(.appStorage("autoPlayEnabled")) var autoPlayEnabled = true
+        @Shared(.channelsFilter) var filter
+        @Shared(.autoPlayEnabled) var autoPlayEnabled
 
         @Presents var alert: AlertState<AlertAction>?
         @Presents var addChannel: AddChannelReducer.State?
         @Presents var videoDetail: VideoDetailReducer.State?
-        // Split view (iPad)
+        /// The detail shown beside the list in split view (iPad), or
+        /// presented over the tvOS home screen. Never set alongside a `path`
+        /// push — a channel detail has exactly one home.
         @Presents var selectedChannel: ChannelDetailReducer.State?
-        // Stack navigation (iPhone)
+        // Stack navigation (iPhone, tvOS "All channels")
         var path = StackState<ChannelsPath.State>()
 
         var isSearchActive: Bool {
@@ -46,7 +57,7 @@ public struct ChannelsReducer {
             let base: IdentifiedArrayOf<ChannelResponse>
             if isSearchActive {
                 let localMatches = channels.filter {
-                    $0.channelName.localizedCaseInsensitiveContains(searchQuery)
+                    $0.channelName.localizedStandardContains(searchQuery)
                 }
                 var merged = searchResults
                 for channel in localMatches {
@@ -62,6 +73,16 @@ public struct ChannelsReducer {
             case .withUnwatched:
                 return base.filter { channelIdsWithUnwatchedVideos.contains($0.channelId) }
             }
+        }
+
+        var content: ChannelsContent {
+            let filtered = filteredChannels
+            guard filtered.isEmpty else { return .channels(filtered) }
+            if hasLoaded {
+                if filter == .withUnwatched { return .emptyUnwatched }
+                return searchQuery.isEmpty ? .noChannels : .noSearchResults
+            }
+            return isLoading ? .placeholders : .channels([])
         }
     }
 
@@ -91,19 +112,22 @@ public struct ChannelsReducer {
         @CasePathable
         public enum View {
             case viewDidAppear
+            /// The iPad split view appeared: switch to split-view selection
+            /// and load, in one step.
+            case splitViewDidAppear
             case pullToRefreshTriggered
             case lastItemAppeared
             case channelTapped(ChannelResponse)
             case addChannelTapped
             case unsubscribeTapped(ChannelResponse)
             case filterChanged(ChannelListFilter)
-            case splitViewEnabled
         }
     }
 
     nonisolated enum CancelID: Hashable, Sendable {
         case loadChannels
         case search
+        case unwatchedIds
     }
 
     @Dependency(\.channelService) var channelService
@@ -121,57 +145,37 @@ public struct ChannelsReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .channelDetail(.presented(.unsubscribeResult(.success))):
-                if let channelId = state.selectedChannel?.channel.channelId {
-                    state.channels.remove(id: channelId)
-                }
-                state.selectedChannel = nil
-                return .none
-            case .channelDetail(.presented(.delegate(.videoSelected(let video, let nextVideos)))):
-                state.videoDetail = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video,
-                    nextVideos: nextVideos,
-                    shouldAutoPlayNextVideo: state.autoPlayEnabled
+            case .channelDetail(.presented(.delegate(.didUnsubscribe(let channelId)))):
+                return handleSelectedChannelUnsubscribed(channelId, state: &state)
+            case .path(.element(id: let id, action: .channelDetail(.delegate(.didUnsubscribe(let channelId))))):
+                return handlePushedChannelUnsubscribed(
+                    channelId,
+                    elementID: id,
+                    state: &state
                 )
-                return .none
-            case .path(.element(_, action: .channelDetail(.delegate(.videoSelected(let video, let nextVideos))))):
-                state.videoDetail = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video,
+            case .channelDetail(.presented(.delegate(.videoSelected(let video, let nextVideos)))),
+                 .path(.element(_, action: .channelDetail(.delegate(.videoSelected(let video, let nextVideos))))):
+                return handleVideoSelected(
+                    video,
                     nextVideos: nextVideos,
-                    shouldAutoPlayNextVideo: state.autoPlayEnabled
+                    state: &state
                 )
-                return .none
-            case .path(.element(_, action: .channelDetail(.unsubscribeResult(.success)))):
-                if let last = state.path.last,
-                   case .channelDetail(let detail) = last {
-                    state.channels.remove(id: detail.channel.channelId)
-                }
-                _ = state.path.popLast()
-                return .none
             case .refreshPendingDownloads:
-                if state.selectedChannel != nil {
-                    return .send(.channelDetail(.presented(.view(.viewDidAppear))))
-                }
-                return .none
-            case .addChannel(.presented(.subscribeResult(.success))):
-                return handleInternalAction(action, state: &state)
+                return handleRefreshPendingDownloads(state: &state)
+            case .addChannel(.presented(.delegate(.didSubscribe))):
+                return handleSubscribeSucceeded(state: &state)
             case .alert(.presented(.confirmUnsubscribe(let channelId))):
                 return handleConfirmedUnsubscribe(channelId, state: &state)
             case .alert:
                 return .none
-            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
+            case .videoDetail(.presented(.delegate(.didRequestMinimize))),
+                 .videoDetail(.presented(.delegate(.didDismiss))):
                 state.videoDetail = nil
                 return .none
-            case .videoDetail(.presented(.delegate(.didDismiss))):
-                state.videoDetail = nil
+            case .videoDetail, .addChannel, .channelDetail, .path:
                 return .none
-            case .videoDetail:
-                return .none
-            case .addChannel, .channelDetail, .path:
-                return .none
-            default:
+            case .channelsResult, .searchResult, .unsubscribeResult,
+                 .unwatchedChannelIdsLoaded, .openChannel:
                 return handleInternalAction(action, state: &state)
             }
         }

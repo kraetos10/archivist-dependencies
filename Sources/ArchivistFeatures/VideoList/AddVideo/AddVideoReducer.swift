@@ -16,43 +16,61 @@ public struct AddVideoReducer {
         var autoDownload = false
         var isAdding = false
         var isPresentingPin = false
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
-        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
+        /// The PIN the child-mode sheet checks against, loaded from the
+        /// Keychain when the sheet is raised and cleared when it closes.
+        var expectedPin = ""
+        @Shared(.childModeEnabled) public var childModeEnabled
+        @Presents var alert: AlertState<AlertAction>?
+
+        var trimmedInput: String {
+            videoInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var canAdd: Bool {
+            !trimmedInput.isEmpty && !isAdding
+        }
+
+        public init(
+            serverConfig: ServerConfig,
+            playlistId: String? = nil
+        ) {
+            self.serverConfig = serverConfig
+            self.playlistId = playlistId
+        }
     }
+
+    public enum AlertAction: Equatable, Sendable {}
 
     public enum Action: ViewAction, BindableAction {
         case binding(BindingAction<State>)
         case view(View)
+        case alert(PresentationAction<AlertAction>)
         case addResult(Result<Void, Error>)
-        case pinConfirmed
-        case pinCancelled
 
         @CasePathable
         public enum View {
             case addButtonTapped
+            case pinConfirmed
+            case pinCancelled
         }
     }
 
     @Dependency(\.downloadService) var downloadService
     @Dependency(\.playlistService) var playlistService
+    @Dependency(\.pinStore) var pinStore
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
         Reduce { state, action in
             switch action {
-            case .binding:
+            case .binding, .alert:
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .pinConfirmed:
-                state.isPresentingPin = false
-                return performAdd(state: &state)
-            case .pinCancelled:
-                state.isPresentingPin = false
-                return .none
             default:
                 return handleInternalAction(action, state: &state)
             }
         }
+        .ifLet(\.$alert, action: \.alert)
     }
 }

@@ -23,26 +23,7 @@ public nonisolated struct ChannelResponse: Decodable, Sendable, Equatable, Ident
     }
 
     public var formattedSubs: String? {
-        guard let subs = channelSubs else { return nil }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 1
-        formatter.roundingMode = .halfUp
-        let number = Double(subs)
-        switch number {
-        case 1_000_000_000...:
-            formatter.positiveSuffix = "B"
-            return formatter.string(from: NSNumber(value: number / 1_000_000_000))
-        case 1_000_000...:
-            formatter.positiveSuffix = "M"
-            return formatter.string(from: NSNumber(value: number / 1_000_000))
-        case 1_000...:
-            formatter.positiveSuffix = "K"
-            return formatter.string(from: NSNumber(value: number / 1_000))
-        default:
-            formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: subs))
-        }
+        channelSubs?.formatted(.number.notation(.compactName))
     }
 
     public static let placeholder = ChannelResponse(

@@ -638,6 +638,149 @@
           }
         }
       }
+    },
+    "channel.selectPrompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a channel"
+          }
+        }
+      }
+    },
+    "channel.subscribeFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't subscribe to the channel. Check the URL or ID and try again."
+          }
+        }
+      }
+    },
+    "channel.subscriberCount %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ subscribers"
+          }
+        }
+      }
+    },
+    "channel.unsubscribeConfirm %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Are you sure you want to unsubscribe from %@?"
+          }
+        }
+      }
+    },
+    "channel.unsubscribeFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't unsubscribe from the channel. Please try again."
+          }
+        }
+      }
+    },
+    "playlist.addMode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How to add a playlist"
+          }
+        }
+      }
+    },
+    "playlist.createFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create the playlist. Please try again."
+          }
+        }
+      }
+    },
+    "playlist.selectPrompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a playlist"
+          }
+        }
+      }
+    },
+    "playlist.subscribeFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't subscribe to the playlist. Check the URL or ID and try again."
+          }
+        }
+      }
+    },
+    "login.saveFailed.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Save Your Login"
+          }
+        }
+      }
+    },
+    "login.saveFailed.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server accepted your API key, but it couldn't be stored on this device. Please try again."
+          }
+        }
+      }
+    },
+    "childMode.saveFailed.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't Update Child Mode"
+          }
+        }
+      }
+    },
+    "childMode.saveFailed.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The PIN couldn't be stored on this device, so child mode wasn't changed. Please try again."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -3,32 +3,27 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchChannelsListView: View {
-    @State var viewModel: WatchChannelsViewModel
-    let appState: WatchAppState
+    let viewModel: WatchChannelsViewModel
 
-    public init(
-        viewModel: WatchChannelsViewModel,
-        appState: WatchAppState
-    ) {
+    public init(viewModel: WatchChannelsViewModel) {
         self.viewModel = viewModel
-        self.appState = appState
     }
 
     public var body: some View {
         NavigationStack {
             List {
-                if viewModel.isLoading && viewModel.channels.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else if viewModel.channels.isEmpty {
-                    Text(String(localized: "channel.empty", bundle: .module))
-                        .foregroundStyle(.secondary)
+                if viewModel.channels.isEmpty {
+                    WatchListStatus(
+                        isLoading: viewModel.isLoading,
+                        errorMessage: viewModel.errorMessage,
+                        emptyText: String(localized: "channel.empty", bundle: .module)
+                    )
                 } else {
                     ForEach(viewModel.channels) { channel in
                         NavigationLink(value: channel) {
                             HStack(spacing: 10) {
                                 WatchChannelThumb(
-                                    path: channel.channelThumbUrl,
+                                    url: viewModel.thumbnailURL(for: channel),
                                     config: viewModel.config
                                 )
 
@@ -37,16 +32,16 @@ public struct WatchChannelsListView: View {
                                         .font(.headline)
                                         .lineLimit(1)
 
-                                    if let subs = channel.formattedSubs {
-                                        Text("\(subs) subscribers")
-                                            .font(.caption2)
+                                    if let subscribers = viewModel.subscribersText(for: channel) {
+                                        Text(subscribers)
+                                            .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }
                             }
                         }
-                        .onAppear {
-                            viewModel.loadNextPageIfNeeded(currentItem: channel)
+                        .task {
+                            await viewModel.rowAppeared(channel)
                         }
                     }
 
@@ -58,21 +53,16 @@ public struct WatchChannelsListView: View {
             }
             .navigationTitle(String(localized: "tab.channels", bundle: .module))
             .navigationDestination(for: ChannelResponse.self) { channel in
-                if let config = appState.serverConfig {
-                    WatchChannelDetailView(
-                        viewModel: WatchChannelDetailViewModel(
-                            config: config,
-                            channelId: channel.channelId
-                        ),
-                        channel: channel
-                    )
-                }
+                WatchChannelDetailView(
+                    viewModel: viewModel.detailViewModel(for: channel),
+                    channel: channel
+                )
             }
             .refreshable {
                 await viewModel.refresh()
             }
-            .onAppear {
-                Task { await viewModel.viewDidAppear() }
+            .task {
+                await viewModel.viewDidAppear()
             }
         }
     }

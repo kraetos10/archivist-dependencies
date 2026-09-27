@@ -71,7 +71,7 @@ public struct TVPlaylistDetailScreen: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(String.localised("\(store.playlist.entryCount) videos"))
+                Text(String.localised("playlist.entryCount \(store.playlist.entryCount)", table: .videos))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -87,7 +87,7 @@ public struct TVPlaylistDetailScreen: View {
             }
             .focused($headerFocus, equals: .loop)
 
-            if let description = store.playlist.playlistDescription,
+            if let description = store.displayDescription,
                !store.descriptionBlocks.isEmpty {
                 TVDescriptionCard(text: description) {
                     send(.descriptionTapped)
@@ -117,18 +117,15 @@ public struct TVPlaylistDetailScreen: View {
         } else {
             // Direct children of the lazy stack, so rows are built as
             // they scroll in rather than all up front.
+            // Read once per pass: builds a dictionary over every entry.
+            let thumbURLs = store.entryThumbURLs
             ForEach(store.entries) { entry in
-                let isAvailable = store.state.isEntryAvailable(entry)
                 TVPlaylistEntryRow(
                     entry: entry,
-                    thumbURL: entry.thumbURL(config: store.serverConfig),
-                    isAvailable: isAvailable
+                    thumbURL: entry.youtubeId.flatMap { thumbURLs[$0] },
+                    isAvailable: store.state.isEntryAvailable(entry)
                 ) {
-                    if isAvailable {
-                        send(.entryTapped(entry))
-                    } else {
-                        send(.queueServerDownloadTapped(entry))
-                    }
+                    send(.entryTapped(entry))
                 }
             }
         }
@@ -171,7 +168,9 @@ private struct TVPlaylistEntryRow: View {
                     Image(systemName: "arrow.down.circle")
                         .font(.title3)
                         .foregroundStyle(Color.Accent.dark)
-                        .accessibilityHidden(true)
+                        .accessibilityLabel(
+                            String.localised("playlist.notOnServer", table: .videos)
+                        )
                 }
             }
             .opacity(isAvailable ? 1 : 0.6)

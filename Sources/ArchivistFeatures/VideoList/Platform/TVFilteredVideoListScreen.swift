@@ -89,11 +89,8 @@ public struct TVFilteredVideoListScreen: View {
                 focusedVideoId = newId
             }
         }
-        .onAppear {
-            if store.videos.isEmpty {
-                send(.viewDidAppear)
-            }
-        }
+        // The reducer skips the fetch once the first page has loaded.
+        .onAppear { send(.viewDidAppear) }
     }
 
     private var emptyStateView: some View {

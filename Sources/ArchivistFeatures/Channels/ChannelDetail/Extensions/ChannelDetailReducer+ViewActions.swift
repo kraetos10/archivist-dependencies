@@ -4,7 +4,7 @@ import ComposableArchitecture
 import Foundation
 
 extension ChannelDetailReducer {
-    public func handleViewAction(
+    func handleViewAction(
         _ action: Action.View,
         state: inout State
     ) -> Effect<Action> {
@@ -36,6 +36,8 @@ extension ChannelDetailReducer {
             return handleDeleteFromServerTapped(video, state: &state)
         case .playNextTapped(let video):
             return handlePlayNextTapped(video, state: &state)
+        case .addToPlaylistTapped(let video):
+            return handleAddToPlaylistTapped(video, state: &state)
         case .downloadSortToggled:
             return handleDownloadSortToggled(state: &state)
         case .videoSortOrderChanged(let sort):
@@ -48,50 +50,16 @@ extension ChannelDetailReducer {
     // MARK: - Private Handlers
 
     private func handleViewDidAppear(state: inout State) -> Effect<Action> {
-        let config = state.serverConfig
-        let channelId = state.channel.channelId
-
         var effects: [Effect<Action>] = []
 
         if state.videos.isEmpty, !state.isLoadingVideos {
             state.isLoadingVideos = true
-            let sort = state.videoSortOrder.apiValue
-            effects.append(
-                .run { send in
-                    let result = await Result {
-                        try await videoService.getVideos(
-                            config: config,
-                            page: 1,
-                            sort: sort,
-                            order: "desc",
-                            type: nil,
-                            watch: nil,
-                            channel: channelId,
-                            playlist: nil
-                        )
-                    }
-                    await send(.videosResult(result))
-                }
-            )
+            effects.append(fetchVideos(page: 1, state: state))
         }
 
         if state.pendingDownloads.isEmpty, !state.isLoadingDownloads {
             state.isLoadingDownloads = true
-            effects.append(
-                .run { send in
-                    let result = await Result {
-                        try await downloadService.getDownloads(
-                            config: config,
-                            page: 1,
-                            filter: "pending",
-                            channel: channelId,
-                            query: nil,
-                            vidType: nil
-                        )
-                    }
-                    await send(.downloadsResult(result))
-                }
-            )
+            effects.append(fetchPendingDownloads(page: 1, state: state))
         }
 
         return .merge(effects)
@@ -99,65 +67,23 @@ extension ChannelDetailReducer {
 
     private func handlePullToRefreshTriggered(state: inout State) -> Effect<Action> {
         state.isLoadingVideos = true
+        state.isLoadingMoreVideos = false
         state.isLoadingDownloads = true
         state.currentPage = 1
-        let config = state.serverConfig
-        let channelId = state.channel.channelId
-        let sort = state.videoSortOrder.apiValue
         return .merge(
-            .run { send in
-                let result = await Result {
-                    try await videoService.getVideos(
-                        config: config,
-                        page: 1,
-                        sort: sort,
-                        order: "desc",
-                        type: nil,
-                        watch: nil,
-                        channel: channelId,
-                        playlist: nil
-                    )
-                }
-                await send(.videosResult(result))
-            },
-            .run { send in
-                let result = await Result {
-                    try await downloadService.getDownloads(
-                        config: config,
-                        page: 1,
-                        filter: "pending",
-                        channel: channelId,
-                        query: nil,
-                        vidType: nil
-                    )
-                }
-                await send(.downloadsResult(result))
-            }
+            fetchVideos(page: 1, state: state),
+            fetchPendingDownloads(page: 1, state: state)
         )
     }
 
     private func handleLastVideoAppeared(state: inout State) -> Effect<Action> {
-        guard state.currentPage < state.lastPage, !state.isLoadingMoreVideos else { return .none }
+        // A first-page load in flight owns the video request; paging now
+        // would cancel it.
+        guard state.currentPage < state.lastPage,
+              !state.isLoadingMoreVideos,
+              !state.isLoadingVideos else { return .none }
         state.isLoadingMoreVideos = true
-        let config = state.serverConfig
-        let channelId = state.channel.channelId
-        let nextPage = state.currentPage + 1
-        let sort = state.videoSortOrder.apiValue
-        return .run { send in
-            let result = await Result {
-                try await videoService.getVideos(
-                    config: config,
-                    page: nextPage,
-                    sort: sort,
-                    order: "desc",
-                    type: nil,
-                    watch: nil,
-                    channel: channelId,
-                    playlist: nil
-                )
-            }
-            await send(.videosResult(result))
-        }
+        return fetchVideos(page: state.currentPage + 1, state: state)
     }
 
     private func handleVideoCardTapped(
@@ -165,8 +91,8 @@ extension ChannelDetailReducer {
         state: inout State
     ) -> Effect<Action> {
         let nextVideos: [VideoResponse]
-        if let index = state.videos.firstIndex(where: { $0.id == video.id }) {
-            nextVideos = Array(state.videos.suffix(from: state.videos.index(after: index)).filter { !$0.isWatched })
+        if let index = state.videos.index(id: video.id) {
+            nextVideos = state.videos.elements[(index + 1)...].filter { !$0.isWatched }
         } else {
             nextVideos = []
         }
@@ -200,6 +126,7 @@ extension ChannelDetailReducer {
     }
 
     private func handleUnsubscribeTapped(state: inout State) -> Effect<Action> {
+        let channelName = state.channel.channelName
         state.alert = AlertState {
             TextState(String.localised("generic.unsubscribe", table: .generic))
         } actions: {
@@ -209,10 +136,10 @@ extension ChannelDetailReducer {
             ButtonState(role: .destructive, action: .confirmUnsubscribe) {
                 TextState(String.localised("generic.unsubscribe", table: .generic))
             }
-        } message: { [state] in
+        } message: {
             TextState(
                 String.localised(
-                    "Are you sure you want to unsubscribe from \(state.channel.channelName)?",
+                    "channel.unsubscribeConfirm \(channelName)",
                     table: .login
                 )
             )
@@ -241,6 +168,7 @@ extension ChannelDetailReducer {
         let authHeaders = state.serverConfig.authHeaders
         let expectedSize = video.mediaSize.map { Int64($0) }
         let expectedSizeInt = video.mediaSize
+        let createdAt = now.timeIntervalSince1970
         return .run { _ in
             let download = DeviceDownload(
                 id: videoId,
@@ -250,7 +178,7 @@ extension ChannelDetailReducer {
                 status: .downloading,
                 progress: 0,
                 fileSize: expectedSizeInt,
-                createdAt: Date().timeIntervalSince1970
+                createdAt: createdAt
             )
             try? deviceDownloadDatabase.insertDownload(download)
             await persistentDownloadManager.startDownload(
@@ -275,6 +203,8 @@ extension ChannelDetailReducer {
         }
     }
 
+    /// Flips the card straight away; `setWatchedResult` rolls it back if
+    /// the server refuses.
     private func handleMarkAsWatchedTapped(
         _ video: VideoResponse,
         state: inout State
@@ -282,12 +212,19 @@ extension ChannelDetailReducer {
         let config = state.serverConfig
         let videoId = video.videoId
         let newIsWatched = !video.isWatched
-        return .run { _ in
-            try? await videoService.setWatched(
-                config: config,
-                videoId: videoId,
-                isWatched: newIsWatched
-            )
+        if let current = state.videos[id: videoId] {
+            state.videos[id: videoId] = current.settingWatched(newIsWatched)
+        }
+        let videoService = self.videoService
+        return .run { send in
+            let result = await Result {
+                try await videoService.setWatched(
+                    config: config,
+                    videoId: videoId,
+                    isWatched: newIsWatched
+                )
+            }
+            await send(.setWatchedResult(videoId: videoId, isWatched: newIsWatched, result))
         }
     }
 
@@ -297,6 +234,7 @@ extension ChannelDetailReducer {
     ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = video.videoId
+        let videoService = self.videoService
         return .run { send in
             let result = await Result {
                 try await videoService.deleteVideo(config: config, id: videoId)
@@ -309,9 +247,20 @@ extension ChannelDetailReducer {
         _ video: VideoResponse,
         state: inout State
     ) -> Effect<Action> {
-        return .run { [playNextDatabase] _ in
+        .run { [playNextDatabase] _ in
             try? await playNextDatabase.addToQueue(video)
         }
+    }
+
+    private func handleAddToPlaylistTapped(
+        _ video: VideoResponse,
+        state: inout State
+    ) -> Effect<Action> {
+        state.playlistPicker = PlaylistPickerReducer.State(
+            serverConfig: state.serverConfig,
+            videoId: video.videoId
+        )
+        return .none
     }
 
     private func handleDownloadSortToggled(state: inout State) -> Effect<Action> {
@@ -319,33 +268,15 @@ extension ChannelDetailReducer {
         state.pendingDownloads = []
         state.hasLoadedDownloads = false
         state.isLoadingDownloads = true
-
-        let config = state.serverConfig
-        let channelId = state.channel.channelId
-        return .run { send in
-            let result = await Result {
-                try await downloadService.getDownloads(
-                    config: config,
-                    page: 1,
-                    filter: "pending",
-                    channel: channelId,
-                    query: nil,
-                    vidType: nil
-                )
-            }
-            await send(.downloadsResult(result))
-        }
+        return fetchPendingDownloads(page: 1, state: state)
     }
 
     private func handleClearFilteredTapped(state: inout State) -> Effect<Action> {
         let count = state.filteredVideos.count
         guard count > 0 else { return .none }
-        let undoNote = String(localized: "This cannot be undone.")
         let message = state.videoFilter == .unwatched
-            ? String(localized: "Delete all \(count) unwatched videos in this channel from the server?")
-                + " " + undoNote
-            : String(localized: "Delete all \(count) videos in this channel from the server?")
-                + " " + undoNote
+            ? String.localised("video.clearFiltered.unwatchedMessage \(count)", table: .videos)
+            : String.localised("video.clearFiltered.allMessage \(count)", table: .videos)
         state.alert = AlertState {
             TextState(String.localised("video.clearFiltered.title", table: .videos))
         } actions: {
@@ -392,22 +323,8 @@ extension ChannelDetailReducer {
         state.lastPage = 1
         state.hasLoadedVideos = false
         state.isLoadingVideos = true
-        let config = state.serverConfig
-        let channelId = state.channel.channelId
-        return .run { send in
-            let result = await Result {
-                try await videoService.getVideos(
-                    config: config,
-                    page: 1,
-                    sort: sort.apiValue,
-                    order: "desc",
-                    type: nil,
-                    watch: nil,
-                    channel: channelId,
-                    playlist: nil
-                )
-            }
-            await send(.videosResult(result))
-        }
+        state.isLoadingMoreVideos = false
+        // Cancels any page still loading for the previous sort.
+        return fetchVideos(page: 1, state: state)
     }
 }

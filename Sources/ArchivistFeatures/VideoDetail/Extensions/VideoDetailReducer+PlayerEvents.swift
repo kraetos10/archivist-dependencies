@@ -26,7 +26,7 @@ extension VideoDetailReducer {
     ///
     /// Declared `static` so the caller's `@Sendable` effect closure doesn't
     /// have to capture the non-`Sendable` reducer struct — the same reason
-    /// `periodicProgressSaveTask` is static.
+    /// `periodicProgressSave` is static.
     ///
     /// - Parameter videoId: Events are broadcast for *every* video, so each
     ///   payload is filtered against this before it's acted on. Without the
@@ -97,7 +97,7 @@ extension VideoDetailReducer {
     /// before the write reached the server, losing the resume position.
     /// Nothing is sent into the store here, so this stays invisible to
     /// `TestStore` and doesn't reintroduce the escaping-`send` problem.
-    private static func saveProgressDetached(
+    static func saveProgressDetached(
         config: ServerConfig,
         videoId: String,
         position: Int,

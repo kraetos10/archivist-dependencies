@@ -3,7 +3,7 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchVideoListView: View {
-    @State var viewModel: WatchVideoListViewModel
+    let viewModel: WatchVideoListViewModel
 
     public init(viewModel: WatchVideoListViewModel) {
         self.viewModel = viewModel
@@ -11,48 +11,51 @@ public struct WatchVideoListView: View {
 
     public var body: some View {
         NavigationStack {
-            List {
-                if viewModel.isLoading && viewModel.videos.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else if viewModel.videos.isEmpty {
-                    Text(String(localized: "video.empty", bundle: .module))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(viewModel.videos) { video in
-                        NavigationLink(value: video) {
-                            WatchVideoRow(
-                                title: video.title,
-                                thumbPath: video.vidThumbUrl,
-                                config: viewModel.config,
-                                videoId: video.videoId,
-                                isWatched: video.isWatched,
-                                watchProgress: video.watchProgress,
-                                durationStr: video.durationStr,
-                                remainingStr: video.remainingStr
-                            )
-                        }
-                        .onAppear {
-                            viewModel.loadNextPageIfNeeded(currentItem: video)
-                        }
-                    }
+            WatchVideoListContent(viewModel: viewModel)
+                .navigationTitle(String(localized: "tab.videos", bundle: .module))
+        }
+    }
+}
 
-                    if viewModel.isLoadingMore {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
+/// The list itself, shared by the Videos tab and a channel's screen.
+struct WatchVideoListContent: View {
+    let viewModel: WatchVideoListViewModel
+
+    var body: some View {
+        List {
+            if viewModel.isEmpty {
+                WatchListStatus(
+                    isLoading: viewModel.isLoading,
+                    errorMessage: viewModel.errorMessage,
+                    emptyText: String(localized: "video.empty", bundle: .module)
+                )
+            } else {
+                ForEach(viewModel.videos) { video in
+                    NavigationLink(value: video) {
+                        WatchVideoRow(
+                            model: viewModel.rowModel(for: video),
+                            config: viewModel.config
+                        )
+                    }
+                    .task {
+                        await viewModel.rowAppeared(video)
                     }
                 }
+
+                if viewModel.isLoadingMore {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                }
             }
-            .navigationTitle(String(localized: "tab.videos", bundle: .module))
-            .navigationDestination(for: VideoResponse.self) { video in
-                WatchNowPlayingView(viewModel: viewModel.player(for: video))
-            }
-            .refreshable {
-                await viewModel.refresh()
-            }
-            .onAppear {
-                Task { await viewModel.viewDidAppear() }
-            }
+        }
+        .navigationDestination(for: VideoResponse.self) { video in
+            WatchNowPlayingView(viewModel: viewModel.player(for: video))
+        }
+        .refreshable {
+            await viewModel.refresh()
+        }
+        .task {
+            await viewModel.viewDidAppear()
         }
     }
 }

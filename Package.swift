@@ -108,10 +108,24 @@ let package = Package(
         .testTarget(
             name: "ArchivistFeaturesTests",
             dependencies: [
+                // ArchivistComponents (for `PlayerEvent`) comes transitively
+                // through ArchivistFeatures; linking it again here duplicates
+                // its classes in the test bundle.
                 "ArchivistFeatures",
-                // For `PlayerEvent`, which the VideoDetail playback tests
-                // feed through the reducer's event consumer directly.
-                .target(name: "ArchivistComponents", condition: .when(platforms: [.iOS, .tvOS])),
+                .product(name: "DependenciesTestSupport", package: "swift-dependencies")
+            ]
+        ),
+        .testTarget(
+            name: "ArchivistNetworkingTests",
+            dependencies: [
+                "ArchivistNetworking",
+                .product(name: "DependenciesTestSupport", package: "swift-dependencies")
+            ]
+        ),
+        .testTarget(
+            name: "ArchivistWatchTests",
+            dependencies: [
+                "ArchivistWatch",
                 .product(name: "DependenciesTestSupport", package: "swift-dependencies")
             ]
         )

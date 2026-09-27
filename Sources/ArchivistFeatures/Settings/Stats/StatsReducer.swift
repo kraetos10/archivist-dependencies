@@ -1,3 +1,4 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
@@ -23,6 +24,41 @@ public struct StatsReducer {
         var isLoading = false
         var hasLoaded = false
         var loadedSections: Set<StatsSection> = []
+
+        /// Rows shown before "Show All".
+        static let collapsedHistoryCount = 7
+
+        var visibleDownloadHistory: [DownloadHistResponse] {
+            isDownloadHistoryExpanded
+                ? downloadHistory
+                : Array(downloadHistory.prefix(Self.collapsedHistoryCount))
+        }
+
+        var canExpandDownloadHistory: Bool {
+            downloadHistory.count > Self.collapsedHistoryCount
+        }
+
+        var downloadHistoryToggleTitle: String {
+            isDownloadHistoryExpanded
+                ? String.localised("generic.showLess", table: .generic)
+                : String.localised("generic.showAll \(downloadHistory.count)", table: .generic)
+        }
+
+        var hasApplicationStats: Bool {
+            channelStats != nil || playlistStats != nil || downloadStats != nil
+        }
+
+        var showsOverviewPlaceholder: Bool {
+            videoStats == nil && !loadedSections.contains(.video)
+        }
+
+        var showsApplicationPlaceholder: Bool {
+            !hasApplicationStats && !loadedSections.contains(.channel)
+        }
+
+        init(serverConfig: ServerConfig) {
+            self.serverConfig = serverConfig
+        }
     }
 
     public enum Action: ViewAction {

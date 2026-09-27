@@ -7,13 +7,14 @@ public struct WatchSetupRequiredView: View {
     public var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "iphone.and.arrow.right.inward")
-                .font(.system(size: 36))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
-            Text(String(localized: "setup.title", bundle: Bundle.module))
+            Text(String(localized: "setup.title", bundle: .module))
                 .font(.headline)
 
-            Text(String(localized: "setup.description", bundle: Bundle.module))
+            Text(String(localized: "setup.description", bundle: .module))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

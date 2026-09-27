@@ -7,7 +7,9 @@ public struct LoginReducer {
     public init() {}
     @ObservableState
     public struct State: Equatable, Sendable {
-        @Shared var registrationDetails: RegistrationDetails
+        /// The server entered on the previous screen. A plain value: login
+        /// only reads it, and the parent keeps its own copy.
+        var registrationDetails: RegistrationDetails
         var apiToken = ""
         var isLoading = false
         /// Set once the user confirms their server runs with
@@ -20,8 +22,8 @@ public struct LoginReducer {
         /// environment variable, so it's never translated.
         let staticAuthVariable = "DISABLE_STATIC_AUTH=true"
 
-        public init(registrationDetails: Shared<RegistrationDetails>) {
-            _registrationDetails = registrationDetails
+        public init(registrationDetails: RegistrationDetails) {
+            self.registrationDetails = registrationDetails
         }
     }
 
@@ -53,10 +55,10 @@ public struct LoginReducer {
                 return handleViewAction(viewAction, state: &state)
             case .alert(.presented(.staticAuthDisabledConfirmed)):
                 return handleStaticAuthDisabledConfirmed(state: &state)
+            case .pingResult(let result):
+                return handlePingResult(result, state: &state)
             case .alert, .loginSucceeded, .binding:
                 return .none
-            default:
-                return handleInternalAction(action, state: &state)
             }
         }
         .ifLet(\.$alert, action: \.alert)

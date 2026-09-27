@@ -18,7 +18,7 @@ extension VideoDetailScreen {
                         .foregroundStyle(Color.Text.primary)
                         .padding(.horizontal, 16)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         LazyHStack(spacing: 12) {
                             ForEach(store.playNextItems) { item in
                                 PlayNextRowView(
@@ -47,6 +47,7 @@ extension VideoDetailScreen {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 4)
                     }
+                    .scrollIndicators(.hidden)
                     .scrollClipDisabled()
                 }
             }
@@ -63,7 +64,7 @@ extension VideoDetailScreen {
                 .foregroundStyle(Color.Text.primary)
                 .padding(.horizontal, 16)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(spacing: 12) {
                     ForEach(
                         store.nextVideos.prefix(10),
@@ -91,6 +92,7 @@ extension VideoDetailScreen {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 4)
             }
+            .scrollIndicators(.hidden)
             .scrollClipDisabled()
         }
     }
@@ -106,7 +108,7 @@ extension VideoDetailScreen {
                 .padding(.horizontal, 16)
 
             if store.isLoadingSimilar {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     LazyHStack(spacing: 12) {
                         ForEach(
                             VideoResponse.placeholders.prefix(4)
@@ -121,11 +123,12 @@ extension VideoDetailScreen {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 4)
                 }
+                .scrollIndicators(.hidden)
                 .scrollClipDisabled()
             } else if store.similarVideos.isEmpty {
                 emptyStateSimilar
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     LazyHStack(spacing: 12) {
                         ForEach(store.similarVideos) { video in
                             SimilarVideoCard(
@@ -140,6 +143,7 @@ extension VideoDetailScreen {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 4)
                 }
+                .scrollIndicators(.hidden)
                 .scrollClipDisabled()
             }
         }

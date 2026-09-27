@@ -22,8 +22,8 @@ struct ChannelVideosSectionHeader: View {
             }
 
             HStack(spacing: 8) {
-                filterPill(String(localized: "All"), filter: .all)
-                filterPill(String(localized: "Unwatched"), filter: .unwatched)
+                filterPill(String.localised("generic.all", table: .generic), filter: .all)
+                filterPill(String.localised("generic.unwatched", table: .generic), filter: .unwatched)
                 clearButton
             }
         }
@@ -65,6 +65,7 @@ struct ChannelVideosSectionHeader: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 #endif

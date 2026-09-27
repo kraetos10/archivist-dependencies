@@ -84,9 +84,12 @@ public struct MiniPlayerView: View {
                     .frame(width: 24, height: 24)
                     .background(.black.opacity(0.6))
                     .clipShape(Circle())
+                    // The visible disc stays 24pt, but the tap target is
+                    // the 44pt minimum around it.
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .padding(6)
             .accessibilityLabel(String.localised("video.miniPlayer.close", table: .videos))
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))

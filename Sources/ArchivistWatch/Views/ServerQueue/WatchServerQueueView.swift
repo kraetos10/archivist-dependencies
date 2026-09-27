@@ -3,9 +3,7 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchServerQueueView: View {
-    @State var viewModel: WatchServerQueueViewModel
-    @State private var showingAddSheet = false
-    @State private var selectedDownload: DownloadResponse?
+    @Bindable var viewModel: WatchServerQueueViewModel
     @Environment(\.scenePhase) private var scenePhase
 
     public init(viewModel: WatchServerQueueViewModel) {
@@ -15,112 +13,99 @@ public struct WatchServerQueueView: View {
     public var body: some View {
         NavigationStack {
             List {
-                if viewModel.isLoading && viewModel.downloads.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else if viewModel.downloads.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "arrow.down.to.line")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        Text(String(localized: "queue.empty", bundle: Bundle.module))
-                            .font(.headline)
+                if let errorMessage = viewModel.errorMessage, !viewModel.downloads.isEmpty {
+                    Text(errorMessage)
+                        .foregroundStyle(.secondary)
+                }
+
+                if viewModel.downloads.isEmpty {
+                    if viewModel.isLoading || viewModel.errorMessage != nil {
+                        WatchListStatus(
+                            isLoading: viewModel.isLoading,
+                            errorMessage: viewModel.errorMessage,
+                            emptyText: ""
+                        )
+                    } else {
+                        ContentUnavailableView(
+                            String(localized: "queue.empty", bundle: .module),
+                            systemImage: "arrow.down.to.line"
+                        )
+                        .listRowBackground(Color.clear)
                     }
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
                 } else {
-                    ForEach(viewModel.sortedDownloads) { download in
+                    ForEach(viewModel.downloads) { download in
                         Button {
-                            selectedDownload = download
+                            viewModel.downloadTapped(download)
                         } label: {
-                        HStack(spacing: 10) {
-                            WatchThumbnail(
-                                path: download.vidThumbUrl,
-                                config: viewModel.config
-                            )
+                            HStack(spacing: 10) {
+                                WatchThumbnail(
+                                    url: viewModel.thumbnailURL(for: download),
+                                    config: viewModel.config
+                                )
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(download.title ?? download.youtubeId)
-                                    .font(.headline)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(viewModel.title(for: download))
+                                        .font(.headline)
+                                        .lineLimit(1)
 
-                                if let channel = download.channelName {
-                                    Text(channel)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                    if let channel = download.channelName {
+                                        Text(channel)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                         }
-                        }
                     }
                 }
             }
-            .navigationTitle(String(localized: "tab.queue", bundle: Bundle.module))
+            .animation(.default, value: viewModel.downloadIDs)
+            .navigationTitle(String(localized: "tab.queue", bundle: .module))
             .toolbar {
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Button {
-                        withAnimation {
-                            viewModel.toggleSortOrder()
-                        }
-                    } label: {
-                        Label(
-                            viewModel.sortOrder == .recentlyAdded
-                                ? String(localized: "queue.recentlyAdded", bundle: Bundle.module)
-                                : String(localized: "queue.oldestAdded", bundle: Bundle.module),
-                            systemImage: "arrow.up.arrow.down"
-                        )
-                        .font(.caption2)
+                    Button(viewModel.sortOrderLabel, systemImage: "arrow.up.arrow.down") {
+                        Task { await viewModel.sortOrderButtonTapped() }
                     }
+                    .font(.caption)
 
-                    Button {
-                        showingAddSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+                    Button(
+                        String(localized: "queue.addTitle", bundle: .module),
+                        systemImage: "plus",
+                        action: viewModel.addButtonTapped
+                    )
+                    .labelStyle(.iconOnly)
                 }
             }
-            .sheet(isPresented: $showingAddSheet) {
-                WatchAddDownloadSheet(
-                    viewModel: WatchAddDownloadViewModel(config: viewModel.config)
-                ) {
-                    Task {
-                        await viewModel.refresh()
-                    }
+            .sheet(item: $viewModel.addDownload) { addDownload in
+                WatchAddDownloadSheet(viewModel: addDownload) {
+                    await viewModel.downloadAdded()
                 }
             }
             .refreshable {
                 await viewModel.refresh()
             }
-            .task { await viewModel.viewDidAppear() }
-            .onChange(of: scenePhase) {
-                if scenePhase == .active {
+            .task {
+                await viewModel.viewDidAppear()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
                     Task { await viewModel.refresh() }
                 }
             }
             .confirmationDialog(
-                selectedDownload?.title ?? "",
-                isPresented: Binding(
-                    get: { selectedDownload != nil },
-                    set: { if !$0 { selectedDownload = nil } }
-                )
+                viewModel.selectedDownloadTitle,
+                isPresented: $viewModel.isShowingDownloadActions,
+                titleVisibility: .visible
             ) {
-                if let download = selectedDownload {
-                    Button(String(localized: "queue.startDownload", bundle: Bundle.module)) {
-                        Task {
-                            await viewModel.prioritizeDownload(download)
-                            selectedDownload = nil
-                        }
-                    }
+                Button(String(localized: "queue.startDownload", bundle: .module)) {
+                    Task { await viewModel.prioritizeSelectedTapped() }
+                }
 
-                    Button(
-                        String(localized: "queue.removeFromQueue", bundle: Bundle.module),
-                        role: .destructive
-                    ) {
-                        Task {
-                            await viewModel.deleteDownload(download)
-                            selectedDownload = nil
-                        }
-                    }
+                Button(
+                    String(localized: "queue.removeFromQueue", bundle: .module),
+                    role: .destructive
+                ) {
+                    Task { await viewModel.removeSelectedTapped() }
                 }
             }
         }

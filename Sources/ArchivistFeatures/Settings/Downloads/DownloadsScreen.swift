@@ -38,7 +38,7 @@ public struct DownloadsScreen: View {
             // (the navigation bar title is blanked under the tab bar).
             Text(String.localised("settings.queue", table: .settings))
                 .font(.title2)
-                .fontWeight(.bold)
+                .bold()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, TVLayout.rowVerticalPadding)
             #endif
@@ -50,7 +50,7 @@ public struct DownloadsScreen: View {
         .bind($store.focusedDownloadID, to: $focusedDownloadID)
         #endif
         .background(Color.Brand.primary.ignoresSafeArea())
-        .refreshable { send(.pullToRefreshTriggered) }
+        .refreshable { await send(.pullToRefreshTriggered).finish() }
         #if os(tvOS)
         .navigationTitle("")
         #else
@@ -69,10 +69,7 @@ public struct DownloadsScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Picker(selection: Binding(
-                        get: { store.sortOrder },
-                        set: { send(.sortOrderChanged($0)) }
-                    )) {
+                    Picker(selection: $store.sortOrder.sending(\.view.sortOrderChanged)) {
                         Text(String.localised("generic.descending", table: .generic))
                             .tag(DownloadSortOrder.newestFirst)
                         Text(String.localised("generic.ascending", table: .generic))
@@ -81,8 +78,12 @@ public struct DownloadsScreen: View {
                         EmptyView()
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .foregroundStyle(Color.Accent.dark)
+                    Label(
+                        String.localised("generic.sort", table: .generic),
+                        systemImage: "arrow.up.arrow.down"
+                    )
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Color.Accent.dark)
                 }
             }
         }
@@ -108,13 +109,13 @@ public struct DownloadsScreen: View {
         let filtered = store.filteredDownloads
 
         return Group {
-            if store.hasLoaded && filtered.isEmpty && store.searchQuery.isEmpty {
+            if store.showsEmptyQueue {
                 EmptyStateView(
                     icon: "arrow.down.circle",
                     title: String.localised("video.empty.noDownloads", table: .videos),
                     description: String.localised("video.empty.downloadsDescription", table: .videos)
                 )
-            } else if store.hasLoaded && filtered.isEmpty && !store.searchQuery.isEmpty {
+            } else if store.showsNoSearchResults {
                 EmptyStateView(
                     icon: "magnifyingglass",
                     title: String.localised("video.empty.noSearchResults", table: .videos),
@@ -122,7 +123,7 @@ public struct DownloadsScreen: View {
                 )
             } else {
                 LazyVGrid(columns: columns, spacing: gridSpacing) {
-                    if store.isLoading && store.downloads.isEmpty {
+                    if store.showsPlaceholders {
                         ForEach(DownloadResponse.placeholders) { download in
                             #if os(tvOS)
                             TVVideoCardView(
@@ -149,28 +150,14 @@ public struct DownloadsScreen: View {
                                 send(.downloadTapped(download))
                             }
                             .focused($focusedDownloadID, equals: download.id)
-                            .onAppear {
-                                // `downloads` is the unfiltered page buffer:
-                                // while searching, its last item isn't
-                                // rendered, so paging never fired.
-                                if download.id == filtered.last?.id {
-                                    send(.lastItemAppeared)
-                                }
-                            }
+                            .onAppear { send(.itemAppeared(download.id)) }
                             #else
                             DownloadQueueCardWithPopover(
                                 download: download,
                                 store: store,
                                 onDelete: { send(.deleteTapped(download)) }
                             )
-                            .onAppear {
-                                // `downloads` is the unfiltered page buffer:
-                                // while searching, its last item isn't
-                                // rendered, so paging never fired.
-                                if download.id == filtered.last?.id {
-                                    send(.lastItemAppeared)
-                                }
-                            }
+                            .onAppear { send(.itemAppeared(download.id)) }
                             #endif
                         }
                     }
@@ -239,6 +226,13 @@ private struct DownloadQueueCardWithPopover: View {
         .onChange(of: store.downloadDetail == nil) { _, isNil in
             if isNil {
                 showPopover = false
+            }
+        }
+        // Tapping outside dismisses the popover without going through the
+        // store; close the presented state too, or its effects outlive it.
+        .onChange(of: showPopover) { _, isShowing in
+            if !isShowing, store.downloadDetail != nil {
+                store.send(.downloadDetail(.dismiss))
             }
         }
     }

@@ -97,7 +97,10 @@ extension TaskService: DependencyKey {
             return try await request.execute().data
         },
         getSchedule: { config, name in
-            let request = NetworkAPIRequest<TaskScheduleResponse>(config: config, path: .taskScheduleSpecific(name: name))
+            let request = NetworkAPIRequest<TaskScheduleResponse>(
+                config: config,
+                path: .taskScheduleSpecific(name: name)
+            )
             return try await request.execute().data
         },
         updateSchedule: { config, name, schedule in

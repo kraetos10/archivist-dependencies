@@ -5,74 +5,93 @@ import Foundation
 @MainActor
 @Observable
 public final class WatchPlaylistDetailViewModel {
-    public var entries: [PlaylistEntry] = []
-    public var isLoading = false
-    public var loadedVideo: VideoResponse?
-    public var isLoadingVideo = false
+    public private(set) var entries: [PlaylistEntry] = []
+    public private(set) var isLoading = false
+    public private(set) var errorMessage: String?
+
     public let config: ServerConfig
-    private let playlistId: String
-    private let service: PlaylistService
-    private let videoService: VideoService
+
+    @ObservationIgnored private let playlistId: String
+    @ObservationIgnored private let service: PlaylistService
+    @ObservationIgnored private let playback: WatchPlaybackServices
+    @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private var generation = 0
 
     public init(
         config: ServerConfig,
         playlistId: String,
         service: PlaylistService = .liveValue,
-        videoService: VideoService = .liveValue
+        playback: WatchPlaybackServices
     ) {
         self.config = config
         self.playlistId = playlistId
         self.service = service
-        self.videoService = videoService
+        self.playback = playback
+    }
+
+    /// Entries that can be played — an entry without a video id has nothing
+    /// to open.
+    public var playableEntries: [PlaylistEntry] {
+        entries.filter { $0.youtubeId != nil }
     }
 
     public func viewDidAppear() async {
-        await loadEntries()
+        guard !hasLoaded else { return }
+        await load()
     }
 
     public func refresh() async {
-        entries = []
-        await loadEntries()
+        await load()
     }
 
-    public func playEntry(_ entry: PlaylistEntry) {
-        guard let videoId = entry.youtubeId, !isLoadingVideo else { return }
-        isLoadingVideo = true
-
-        Task {
-            do {
-                loadedVideo = try await videoService.getVideo(
-                    config: config,
-                    id: videoId
-                )
-            } catch {}
-            isLoadingVideo = false
-        }
+    public func rowModel(for entry: PlaylistEntry) -> WatchVideoRowModel {
+        WatchVideoRowModel(
+            title: entry.title ?? String(localized: "generic.unknown", bundle: .module),
+            thumbnailURL: entry.thumbURL(config: config),
+            isWatched: false,
+            isDownloaded: entry.youtubeId.map { playback.catalog.contains(videoId: $0) } ?? false,
+            watchProgress: 0,
+            subtitle: entry.uploader
+        )
     }
 
-    /// The same player for the same video: a navigation destination is rebuilt
-    /// every time this screen re-renders, and a new player there would restart
-    /// playback and take over the system Now Playing card.
-    public func player(for video: VideoResponse) -> WatchAudioPlayerViewModel {
-        WatchNowPlayingState.shared.player(for: video.videoId) {
-            WatchAudioPlayerViewModel(video: video, serverConfig: config)
-        }
+    /// The entry carries no media URL; the player fetches the full video when
+    /// it first loads.
+    public func player(for entry: PlaylistEntry) -> WatchAudioPlayerViewModel? {
+        guard let videoId = entry.youtubeId else { return nil }
+        return playback.player(
+            forVideoId: videoId,
+            title: entry.title ?? String(localized: "generic.unknown", bundle: .module),
+            channelName: entry.uploader ?? "",
+            thumbPath: entry.vidThumbUrl,
+            video: nil,
+            config: config
+        )
     }
 
-    // MARK: - Private
-
-    private func loadEntries() async {
-        guard !isLoading else { return }
+    private func load() async {
+        generation += 1
+        let current = generation
         isLoading = true
-        defer { isLoading = false }
-
+        errorMessage = nil
+        defer {
+            if current == generation {
+                isLoading = false
+            }
+        }
         do {
             let playlist = try await service.getPlaylist(
                 config: config,
                 id: playlistId
             )
+            guard current == generation else { return }
             entries = playlist.playlistEntries ?? []
-        } catch {}
+            hasLoaded = true
+        } catch {
+            if !Task.isCancelled, current == generation {
+                errorMessage = String(localized: "generic.loadFailed", bundle: .module)
+            }
+        }
     }
 }
 #endif

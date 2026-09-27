@@ -1,9 +1,10 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
 extension VideoPickerReducer {
-    public func handleInternalAction(
+    func handleInternalAction(
         _ action: Action,
         state: inout State
     ) -> Effect<Action> {
@@ -17,6 +18,7 @@ extension VideoPickerReducer {
             state.isLoading = false
             state.isLoadingMore = false
             state.hasLoaded = true
+            state.updateDisplayedItems()
             return .none
         case .videosResult(.failure):
             state.isLoading = false
@@ -28,6 +30,7 @@ extension VideoPickerReducer {
                 state.pendingDownloads.updateOrAppend(download)
             }
             state.isLoadingDownloads = false
+            state.updateDisplayedItems()
             return .none
         case .downloadsResult(.failure):
             state.isLoadingDownloads = false
@@ -35,20 +38,33 @@ extension VideoPickerReducer {
         case .searchResult(.success(let videos)):
             state.searchResults = IdentifiedArrayOf(uniqueElements: videos)
             state.isSearching = false
+            state.updateDisplayedItems()
             return .none
         case .searchResult(.failure):
             state.isSearching = false
             return .none
-        case .addResult(.success):
+        case .addFinished(let failedIds) where failedIds.isEmpty:
             state.isAdding = false
             let dismiss = self.dismiss
-            return .run { _ in await dismiss() }
-        case .addResult(.failure(let error)):
+            return .run { send in
+                await send(.delegate(.didAddVideos))
+                await dismiss()
+            }
+        case .addFinished(let failedIds):
             state.isAdding = false
+            let total = state.selectedVideoIds.count
+            // Keep only what failed selected, so trying again doesn't add the
+            // others a second time.
+            state.selectedVideoIds.removeAll { !failedIds.contains($0) }
             state.alert = AlertState {
-                TextState(String(localized: "Failed to add videos"))
+                TextState(String.localised("generic.error", table: .generic))
             } message: {
-                TextState(error.localizedDescription)
+                TextState(
+                    String.localised(
+                        "playlist.addVideosFailed \(failedIds.count) \(total)",
+                        table: .videos
+                    )
+                )
             }
             return .none
         default:

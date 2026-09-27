@@ -6,6 +6,10 @@ import UIKit
 
 public final class NowPlayingService: Sendable {
     private let commandsConfigured = OSAllocatedUnfairLock(initialState: false)
+    /// The in-flight artwork download. Replaced (and the old one cancelled)
+    /// on every `configure`, cancelled on `teardown`, so a slow download for
+    /// the previous video can't stamp its artwork onto the next one.
+    private let artworkTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
     public init() {}
 
@@ -30,21 +34,34 @@ public final class NowPlayingService: Sendable {
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        if let artworkURL {
+        let newTask: Task<Void, Never>? = artworkURL.map { artworkURL in
             Task {
                 var request = URLRequest(url: artworkURL)
                 for (key, value) in authHeaders {
                     request.setValue(value, forHTTPHeaderField: key)
                 }
+                // Artwork is decoration: a failed fetch just leaves the
+                // lock screen without a picture.
                 guard let (data, _) = try? await URLSession.shared.data(for: request),
+                      !Task.isCancelled,
                       let image = UIImage(data: data) else { return }
                 let size = image.size
                 let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
-                guard var current = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+                // Belt and braces alongside the cancellation: only decorate
+                // the entry this download was started for.
+                guard var current = MPNowPlayingInfoCenter.default().nowPlayingInfo,
+                      current[MPMediaItemPropertyTitle] as? String == title,
+                      current[MPMediaItemPropertyArtist] as? String == artist else { return }
                 current[MPMediaItemPropertyArtwork] = artwork
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = current
             }
         }
+        let previous = artworkTask.withLock { task in
+            let old = task
+            task = newTask
+            return old
+        }
+        previous?.cancel()
     }
 
     // MARK: - Playback State
@@ -77,19 +94,19 @@ public final class NowPlayingService: Sendable {
 
         center.playCommand.isEnabled = true
         center.playCommand.addTarget { _ in
-            DispatchQueue.main.async { PlayerManager.shared.resume() }
+            Task { @MainActor in PlayerManager.shared.resume() }
             return .success
         }
 
         center.pauseCommand.isEnabled = true
         center.pauseCommand.addTarget { _ in
-            DispatchQueue.main.async { PlayerManager.shared.pause() }
+            Task { @MainActor in PlayerManager.shared.pause() }
             return .success
         }
 
         center.togglePlayPauseCommand.isEnabled = true
         center.togglePlayPauseCommand.addTarget { _ in
-            DispatchQueue.main.async { PlayerManager.shared.togglePlayPause() }
+            Task { @MainActor in PlayerManager.shared.togglePlayPause() }
             return .success
         }
 
@@ -123,6 +140,10 @@ public final class NowPlayingService: Sendable {
     // MARK: - Teardown
 
     public func teardown() {
+        artworkTask.withLock { task in
+            task?.cancel()
+            task = nil
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
 
         let wasConfigured = commandsConfigured.withLock { configured in

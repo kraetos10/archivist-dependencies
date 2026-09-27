@@ -7,4 +7,4 @@ public enum VideoListPath {
     case filteredList(FilteredVideoListReducer)
 }
 
-extension VideoListPath.State: Sendable {}
+extension VideoListPath.State: Equatable, Sendable {}

@@ -69,7 +69,6 @@ public struct VideoDetailReducer {
         /// than the stored resume position.
         var playbackStartsAtBeginning = false
         var showAllComments = false
-        var currentCommentIndex = 0
         var watchedOverride: Bool?
         var localWatchProgress: Double?
         var autoPlayCountdown: AutoPlayCountdown?
@@ -88,8 +87,8 @@ public struct VideoDetailReducer {
         /// Set the first time the software-decode warning is shown. The
         /// limitation is a property of the device, not of any one video, so
         /// it's worth saying once and never again.
-        @Shared(.appStorage("hasSeenSoftwareDecodeWarning"))
-        var hasSeenSoftwareDecodeWarning = false
+        @Shared(.hasSeenSoftwareDecodeWarning)
+        var hasSeenSoftwareDecodeWarning
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
         @Presents var playlistPicker: PlaylistPickerReducer.State?
@@ -111,6 +110,26 @@ public struct VideoDetailReducer {
         var channelThumbURL: URL? {
             guard let path = video.channel.channelThumbUrl else { return nil }
             return serverConfig.fullURL(for: path)
+        }
+        /// The hero thumbnail / child-mode poster.
+        var thumbnailURL: URL? {
+            serverConfig.thumbnailURL(videoId: video.videoId, path: video.vidThumbUrl)
+        }
+        /// Whether the current video is already queued in Play Next.
+        var isInPlayNext: Bool {
+            playNextItems.contains { $0.videoId == video.videoId }
+        }
+        /// The "up next" card, in the shape both the inline overlay and the
+        /// fullscreen player (via `PlayerClient.setAutoPlayCountdown`) take.
+        var autoPlayCountdownInfo: AutoPlayCountdownInfo? {
+            guard let countdown = autoPlayCountdown else { return nil }
+            return AutoPlayCountdownInfo(
+                title: countdown.nextVideo.title,
+                thumbnailURL: countdown.nextVideo.vidThumbUrl
+                    .flatMap { serverConfig.fullURL(for: $0) },
+                remainingSeconds: countdown.remainingSeconds,
+                totalSeconds: VideoDetailReducer.autoPlayCountdownSeconds
+            )
         }
 
         public init(
@@ -147,8 +166,8 @@ public struct VideoDetailReducer {
             expandedComment = nil
             playbackStartsAtBeginning = false
             showAllComments = false
-            currentCommentIndex = 0
             watchedOverride = nil
+            localWatchProgress = nil
             playlistPicker = nil
             autoPlayCountdown = nil
         }
@@ -170,14 +189,20 @@ public struct VideoDetailReducer {
 
         case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
         case alert(PresentationAction<AlertAction>)
+        /// Results carry the video they were fetched for: an in-place
+        /// switch (similar, next up, auto-advance) can leave a response for
+        /// the previous video in flight, and it must not land on this one.
         case videoRefreshed(VideoResponse)
-        case commentsResult(Result<[VideoComment], Error>)
-        case similarResult(Result<[VideoResponse], Error>)
-        case downloadResumed(Double)
-        case downloadProgressUpdated(Double)
-        case downloadCompleted
-        case downloadFailed(String)
+        case commentsResult(videoId: String, Result<[VideoComment], Error>)
+        case similarResult(videoId: String, Result<[VideoResponse], Error>)
+        case downloadResumed(videoId: String, progress: Double)
+        case downloadProgressUpdated(videoId: String, progress: Double)
+        case downloadCompleted(videoId: String)
+        case downloadFailed(videoId: String, message: String)
         case autoPlayVideo(VideoResponse)
+        /// Nothing follows the finished video. Also a signal to `TabReducer`,
+        /// which retires the mini player when its copy sends this — so it is
+        /// sent as an action rather than run as a shared handler.
         case autoPlayExhausted
         case autoPlayCountdownStarted(VideoResponse, consumesPlayNextQueue: Bool)
         case playlistLoopAdvanced(VideoResponse, nextVideos: [VideoResponse])
@@ -195,7 +220,6 @@ public struct VideoDetailReducer {
         /// subscription to `PlayerManager.events`.
         case resumePlaybackObservation
         case serverDeleteResult(Result<Void, Error>)
-        case loadNextVideo
         case watchedToggleResult(Result<Void, Error>)
 
         public enum Delegate {
@@ -220,6 +244,7 @@ public struct VideoDetailReducer {
             case nextUpVideoTapped(VideoResponse)
             case videoPlaybackDidEnd
             case toggleDescription
+            case commentsHeaderTapped
             case commentTapped(VideoComment)
             case toggleWatchedTapped
             case addToPlaylistTapped
@@ -229,15 +254,28 @@ public struct VideoDetailReducer {
             case playNextItemTapped(PlayNextItem)
             case nextVideoRequested
             case previousVideoRequested
-            case videoChanged
             case autoPlayCountdownPlayNowTapped
             case autoPlayCountdownCancelTapped
+            /// Child mode's play/pause button.
+            case childPlayPauseTapped
+            /// Child mode's seek bar, as a fraction of the duration.
+            case childSeekRequested(Double)
         }
     }
 
     enum CancelID {
         case playback
         case autoPlayCountdown
+        /// Mirrors the countdown into the fullscreen player.
+        case countdownMirror
+        /// Resolving what plays next once a video ends.
+        case autoPlayResolve
+        /// Per-video loads. Each restarts with `cancelInFlight` whenever the
+        /// screen switches video, so the previous video's work can't land.
+        case refresh
+        case comments
+        case similar
+        case downloadObservation
     }
 
     @Dependency(\.dismiss) var dismiss
@@ -247,6 +285,9 @@ public struct VideoDetailReducer {
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
     @Dependency(\.playNextDatabase) var playNextDatabase
     @Dependency(\.miniPlayerClient) var miniPlayerClient
+    @Dependency(\.playerClient) var playerClient
+    @Dependency(\.offlineMedia) var offlineMedia
+    @Dependency(\.date.now) var now
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
@@ -281,30 +322,18 @@ public struct VideoDetailReducer {
             PlaylistPickerReducer()
         }
         .ifLet(\.$alert, action: \.alert)
-        .onChange(of: \.autoPlayCountdown) { _, countdown in
-            // Mirror the auto-play countdown into `PlayerManager` so the
-            // fullscreen player VC — which has no access to this store —
-            // can render the "up next" card. The card's button taps come
-            // back over the player event stream, whose subscription is
-            // owned by the countdown effect in
-            // `handleAutoPlayCountdownStarted` and torn down with it.
+        .onChange(of: \.autoPlayCountdown) { _, _ in
+            // Mirror the countdown into the fullscreen player, which has no
+            // access to this store. One cancellable effect, so a late write
+            // can never restore a card that has since been cleared. The
+            // card's taps come back over the player event stream, owned by
+            // the countdown effect in `handleAutoPlayCountdownStarted`.
             Reduce { state, _ in
-                let config = state.serverConfig
-                return .run { _ in
-                    await MainActor.run {
-                        if let countdown {
-                            PlayerManager.shared.autoPlayCountdown = AutoPlayCountdownInfo(
-                                title: countdown.nextVideo.title,
-                                thumbnailURL: countdown.nextVideo.vidThumbUrl
-                                    .flatMap { config.fullURL(for: $0) },
-                                remainingSeconds: countdown.remainingSeconds,
-                                totalSeconds: VideoDetailReducer.autoPlayCountdownSeconds
-                            )
-                        } else {
-                            PlayerManager.shared.autoPlayCountdown = nil
-                        }
-                    }
+                let info = state.autoPlayCountdownInfo
+                return .run { [playerClient] _ in
+                    await playerClient.setAutoPlayCountdown(info)
                 }
+                .cancellable(id: CancelID.countdownMirror, cancelInFlight: true)
             }
         }
     }
@@ -322,6 +351,11 @@ extension VideoDetailReducer.State {
             video.publishedRelative
         ].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The hero thumbnail, straight from the server's thumbnail path.
+    var heroThumbnailURL: URL? {
+        video.vidThumbUrl.flatMap { serverConfig.fullURL(for: $0) }
     }
 
     /// Whether the hero's second metadata line (quality pill, duration) has
@@ -356,5 +390,13 @@ extension VideoDetailReducer.State {
             )
         }
     }
+}
+
+extension VideoComment {
+    /// Heading of the tvOS full-text view for this comment.
+    var fullTextTitle: String { commentAuthor ?? "" }
+
+    /// The comment cut into focusable blocks for the tvOS full-text view.
+    var fullTextBlocks: [String] { (commentText ?? "").descriptionBlocks() }
 }
 #endif

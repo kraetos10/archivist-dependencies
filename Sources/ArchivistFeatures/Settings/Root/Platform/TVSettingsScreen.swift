@@ -44,6 +44,7 @@ public struct TVSettingsScreen: View {
                 Button { send(.statsTapped) } label: {
                     HStack(spacing: 16) {
                         Image(systemName: "chart.bar")
+                            .accessibilityHidden(true)
                         Text(String.localised("settings.stats", table: .settings))
                     }
                     .padding(.vertical, 8)
@@ -72,7 +73,7 @@ public struct TVSettingsScreen: View {
                     }
                     .padding(.vertical, 8)
                 }
-                .disabled(store.isRescanningSubscriptions || store.activeTask.activeDownload != nil)
+                .disabled(store.isRescanDisabled)
             } header: {
                 Text(String.localised("generic.actions", table: .generic))
             }
@@ -82,14 +83,14 @@ public struct TVSettingsScreen: View {
                     Text(store.serverConfig.hostname)
                         .foregroundStyle(.secondary)
                 }
-                if let port = store.serverConfig.port {
+                if let port = store.portDescription {
                     LabeledContent(String.localised("settings.port", table: .settings)) {
-                        Text(String(port))
+                        Text(port)
                             .foregroundStyle(.secondary)
                     }
                 }
                 LabeledContent(String.localised("settings.connection", table: .settings)) {
-                    Text(store.serverConfig.useHTTP ? "HTTP" : "HTTPS")
+                    Text(store.connectionDescription)
                         .foregroundStyle(.secondary)
                 }
             } header: {
@@ -99,11 +100,11 @@ public struct TVSettingsScreen: View {
             Section {
                 Toggle(
                     String.localised("video.autoplay", table: .videos),
-                    isOn: Binding(store.withState { $0.$autoPlayEnabled })
+                    isOn: $store.autoPlayEnabled.sending(\.view.autoPlayToggled)
                 )
                 Toggle(
                     String.localised("video.autoplayPlaylist", table: .videos),
-                    isOn: Binding(store.withState { $0.$autoPlayPlaylist })
+                    isOn: $store.autoPlayPlaylist.sending(\.view.autoPlayPlaylistToggled)
                 )
             } header: {
                 Text(String.localised("video.autoplaySection", table: .videos))
@@ -116,7 +117,7 @@ public struct TVSettingsScreen: View {
             // button never came into view.
             Section {
                 LabeledContent(String.localised("settings.appVersion", table: .settings)) {
-                    Text(appVersionString)
+                    Text(store.appVersion)
                         .foregroundStyle(.secondary)
                 }
             } header: {
@@ -135,12 +136,6 @@ public struct TVSettingsScreen: View {
             }
         }
         .navigationTitle("")
-    }
-
-    private var appVersionString: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        return "\(version) (\(build))"
     }
 }
 #endif

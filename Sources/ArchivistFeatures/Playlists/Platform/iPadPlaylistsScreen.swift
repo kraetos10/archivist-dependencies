@@ -16,26 +16,44 @@ public struct iPadPlaylistsScreen: View {
 
     public var body: some View {
         NavigationSplitView {
-            playlistListContent
-                .navigationTitle(String.localised("generic.playlists", table: .generic))
-                .navigationBarTitleDisplayMode(.inline)
-                .searchable(
-                    text: $store.searchQuery,
-                    placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: String.localised("login.searchPlaylists", table: .login)
-                )
-                .background(Color.Brand.primary)
-                .onAppear {
-                    send(.splitViewEnabled)
-                    send(.viewDidAppear)
+            PlaylistsGridContent(
+                store: store,
+                columns: columns,
+                highlightsSelection: true
+            )
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Spacer()
+                    FloatingAddButton(
+                        accessibilityLabel: String.localised("login.addPlaylist", table: .login)
+                    ) {
+                        send(.addPlaylistTapped)
+                    }
+                    .button
+                    .popover(item: $store.scope(state: \.addPlaylist, action: \.addPlaylist)) { addPlaylistStore in
+                        AddPlaylistScreen(store: addPlaylistStore)
+                            .frame(width: 400)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 8)
                 }
+            }
+            .navigationTitle(String.localised("generic.playlists", table: .generic))
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(
+                text: $store.searchQuery,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: String.localised("login.searchPlaylists", table: .login)
+            )
+            .background(Color.Brand.primary)
+            .onAppear { send(.splitViewDidAppear) }
             .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
         } detail: {
             if let detailStore = store.scope(state: \.selectedPlaylist, action: \.playlistDetail.presented) {
                 PlaylistDetailScreen(store: detailStore)
                     .id(store.selectedPlaylist?.playlist.playlistId)
             } else {
-                emptyDetailView
+                PlaylistsEmptyDetailView()
             }
         }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
@@ -44,102 +62,23 @@ public struct iPadPlaylistsScreen: View {
             }
         }
     }
+}
 
-    // MARK: - Empty Detail
-
-    private var emptyDetailView: some View {
+/// The split view's detail column before any playlist is picked.
+private struct PlaylistsEmptyDetailView: View {
+    var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "music.note.list")
                 .scaledSystemFont(size: 48, relativeTo: .largeTitle)
                 // Decorative: the adjacent label carries the meaning.
                 .accessibilityHidden(true)
                 .foregroundStyle(Color.Brand.secondary)
-            Text(String(localized: "Select a playlist"))
+            Text(String.localised("playlist.selectPrompt", table: .login))
                 .font(.headline)
                 .foregroundStyle(Color.Brand.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Brand.primary)
-    }
-
-    // MARK: - List Content
-
-    private var playlistListContent: some View {
-        // Read once per pass: `filteredPlaylists` merges the search results
-        // with a locale-aware filter over every playlist.
-        let filtered = store.filteredPlaylists
-
-        return ScrollView {
-            if store.hasLoaded && filtered.isEmpty && store.searchQuery.isEmpty {
-                EmptyStateView(
-                    icon: "music.note.list",
-                    title: String.localised("login.noPlaylists", table: .login),
-                    description: String.localised("login.subscribePlaylistsDescription", table: .login)
-                )
-            } else if store.hasLoaded && filtered.isEmpty && !store.searchQuery.isEmpty {
-                EmptyStateView(
-                    icon: "magnifyingglass",
-                    title: String.localised("video.empty.noSearchResults", table: .videos),
-                    description: String.localised("video.empty.tryDifferentSearch", table: .videos)
-                )
-            } else {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    if store.isLoading && store.playlists.isEmpty {
-                        ForEach(PlaylistResponse.placeholders) { playlist in
-                            PlaylistCardView(
-                                playlist: playlist,
-                                serverConfig: store.serverConfig
-                            )
-                            .redacted(reason: .placeholder)
-                        }
-                    } else {
-                        ForEach(filtered) { playlist in
-                            let isSelected = store.selectedPlaylist?.playlist.playlistId == playlist.playlistId
-                            PlaylistCardView(
-                                playlist: playlist,
-                                serverConfig: store.serverConfig
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.Accent.dark, lineWidth: isSelected ? 2.5 : 0)
-                            )
-                            .pressable {
-                                send(.playlistCardTapped(playlist))
-                            }
-                            .onAppear {
-                                // See iPhonePlaylistsScreen: anchor on the
-                                // list actually shown.
-                                if playlist.id == filtered.last?.id {
-                                    send(.lastItemAppeared)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding()
-
-                if store.isLoadingMore {
-                    ProgressView()
-                        .tint(Color.Progress.tint)
-                        .padding()
-                }
-            }
-        }
-        .background(Color.Brand.primary)
-        .refreshable { send(.pullToRefreshTriggered) }
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Spacer()
-                FloatingAddButton(action: { send(.addPlaylistTapped) })
-                    .button
-                    .popover(item: $store.scope(state: \.addPlaylist, action: \.addPlaylist)) { addPlaylistStore in
-                        AddPlaylistScreen(store: addPlaylistStore)
-                            .frame(width: 400)
-                    }
-                    .padding(.trailing, 24)
-                    .padding(.bottom, 8)
-            }
-        }
     }
 }
 #endif

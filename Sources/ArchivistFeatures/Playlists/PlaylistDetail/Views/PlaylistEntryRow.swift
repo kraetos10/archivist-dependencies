@@ -24,7 +24,7 @@ struct PlaylistEntryRow: View {
                     .foregroundStyle(Color.Accent.dark)
                     .padding(.trailing, 16)
                     .accessibilityLabel(
-                        String.localised("video.downloadToDevice", table: .videos)
+                        String.localised("playlist.notOnServer", table: .videos)
                     )
             }
         }

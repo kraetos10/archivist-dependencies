@@ -4,17 +4,15 @@ import ComposableArchitecture
 import Foundation
 
 extension LoginReducer {
-    public func handleInternalAction(
-        _ action: Action,
+    func handlePingResult(
+        _ result: Result<Void, Error>,
         state: inout State
     ) -> Effect<Action> {
-        switch action {
-        case .pingResult(.success):
+        switch result {
+        case .success:
             return handlePingSucceeded(state: &state)
-        case .pingResult(.failure(let error)):
+        case .failure(let error):
             return handlePingFailed(error, state: &state)
-        default:
-            return .none
         }
     }
 

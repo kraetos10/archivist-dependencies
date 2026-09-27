@@ -40,10 +40,10 @@ public enum AppTheme: String, CaseIterable, Identifiable, Sendable {
     /// User-facing name shown in the theme picker.
     public var displayName: String {
         switch self {
-        case .forest: return "Forest"
-        case .ocean: return "Ocean"
-        case .sunset: return "Sunset"
-        case .amethyst: return "Amethyst"
+        case .forest: String.localised("theme.forest", table: .settings)
+        case .ocean: String.localised("theme.ocean", table: .settings)
+        case .sunset: String.localised("theme.sunset", table: .settings)
+        case .amethyst: String.localised("theme.amethyst", table: .settings)
         }
     }
 

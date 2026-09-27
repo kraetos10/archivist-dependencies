@@ -14,16 +14,21 @@ public struct TVChannelsScreen: View {
 
     public var body: some View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
+            // Read once per pass: `content` filters every channel.
+            let content = store.content
             ScrollView {
                 VStack(alignment: .leading, spacing: TVLayout.cardSpacing) {
                     filterRow
 
-                    if store.hasLoaded && store.filteredChannels.isEmpty && store.filter == .withUnwatched {
+                    switch content {
+                    case .emptyUnwatched:
                         emptyUnwatchedView
-                    } else if store.hasLoaded && store.filteredChannels.isEmpty {
+                    case .noChannels, .noSearchResults:
                         emptyStateView
-                    } else {
-                        channelGrid
+                    case .placeholders:
+                        placeholderGrid
+                    case .channels(let channels):
+                        channelGrid(channels)
 
                         if store.isLoadingMore {
                             ProgressView()
@@ -87,32 +92,35 @@ public struct TVChannelsScreen: View {
 
     // MARK: - Grid
 
-    private var channelGrid: some View {
+    private var placeholderGrid: some View {
         LazyVGrid(columns: TVLayout.channelGridColumns, spacing: TVLayout.cardSpacing) {
-            if store.isLoading && store.filteredChannels.isEmpty {
-                ForEach(ChannelResponse.placeholders) { channel in
-                    TVChannelCardView(
-                        channel: channel,
-                        serverConfig: store.serverConfig
-                    )
-                    .redacted(reason: .placeholder)
-                    .disabled(true)
+            ForEach(ChannelResponse.placeholders) { channel in
+                TVChannelCardView(
+                    channel: channel,
+                    serverConfig: store.serverConfig
+                )
+                .redacted(reason: .placeholder)
+                .disabled(true)
+            }
+        }
+        .focusSection()
+    }
+
+    private func channelGrid(_ channels: IdentifiedArrayOf<ChannelResponse>) -> some View {
+        LazyVGrid(columns: TVLayout.channelGridColumns, spacing: TVLayout.cardSpacing) {
+            ForEach(channels) { channel in
+                TVChannelCardView(
+                    channel: channel,
+                    serverConfig: store.serverConfig
+                ) {
+                    send(.channelTapped(channel))
                 }
-            } else {
-                ForEach(store.filteredChannels) { channel in
-                    TVChannelCardView(
-                        channel: channel,
-                        serverConfig: store.serverConfig
-                    ) {
-                        send(.channelTapped(channel))
-                    }
-                    // Anchor on the rendered list: under the Unwatched
-                    // filter the unfiltered list's last channel is never
-                    // drawn, so paging would stop at page one.
-                    .onAppear {
-                        if channel.id == store.filteredChannels.last?.id {
-                            send(.lastItemAppeared)
-                        }
+                // Anchor on the rendered list: under the Unwatched
+                // filter the unfiltered list's last channel is never
+                // drawn, so paging would stop at page one.
+                .onAppear {
+                    if channel.id == channels.last?.id {
+                        send(.lastItemAppeared)
                     }
                 }
             }

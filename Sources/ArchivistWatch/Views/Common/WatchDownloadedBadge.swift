@@ -2,18 +2,18 @@
 import SwiftUI
 
 public struct WatchDownloadedBadge: View {
-    let videoId: String
-    private let storage = WatchAudioStorage()
+    let isDownloaded: Bool
 
-    public init(videoId: String) {
-        self.videoId = videoId
+    public init(isDownloaded: Bool) {
+        self.isDownloaded = isDownloaded
     }
 
     public var body: some View {
-        if storage.isDownloaded(videoId: videoId) {
-            Image(systemName: "iphone.gen3.radiowaves.left.and.right")
+        if isDownloaded {
+            Image(systemName: "arrow.down.circle.fill")
                 .font(.caption2)
                 .foregroundStyle(.green)
+                .accessibilityLabel(String(localized: "action.downloaded", bundle: .module))
         }
     }
 }

@@ -116,4 +116,12 @@ extension LocalVideoStorage: DependencyKey {
     )
 
     public static var testValue: LocalVideoStorage { LocalVideoStorage() }
+    public static var previewValue: LocalVideoStorage {
+        LocalVideoStorage(
+            isDownloaded: { _ in false },
+            deleteVideo: { _ in },
+            deleteAllVideos: {},
+            moveDownloadedFile: { from, _ in from }
+        )
+    }
 }

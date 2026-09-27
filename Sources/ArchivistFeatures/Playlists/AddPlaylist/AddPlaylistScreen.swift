@@ -22,14 +22,19 @@ public struct AddPlaylistScreen: View {
                     LottieView(animation: LottieAnimationFile.playlist.animation)
                         .playing(loopMode: .playOnce)
                         .frame(width: 200, height: 200)
+                        .accessibilityHidden(true)
 
-                    Picker("", selection: $store.mode) {
+                    Picker(
+                        String.localised("playlist.addMode", table: .login),
+                        selection: $store.mode
+                    ) {
                         Text(String.localised("generic.subscribe", table: .generic))
                             .tag(AddPlaylistMode.subscribe)
                         Text(String.localised("login.createCustom", table: .login))
                             .tag(AddPlaylistMode.createCustom)
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
 
                     switch store.mode {
                     case .subscribe:
@@ -55,23 +60,26 @@ public struct AddPlaylistScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
+                    Button(
+                        String.localised("generic.close", table: .generic),
+                        systemImage: "xmark"
+                    ) {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(Color.Text.primary)
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Color.Text.primary)
                 }
             }
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        .sheet(isPresented: $store.isPresentingPin) {
+        .alert($store.scope(state: \.alert, action: \.alert))
+        .sheet(item: $store.pinRequest) { request in
             PinEntrySheet(
-                expectedPin: store.childModePin,
+                expectedPin: request.expectedPin,
                 subtitle: String.localised("childMode.pinEntry.addPlaylist.subtitle", table: .login),
-                onSuccess: { store.send(.pinConfirmed) },
-                onCancel: { store.send(.pinCancelled) }
+                onSuccess: { send(.pinConfirmed) },
+                onCancel: { send(.pinCancelled) }
             )
         }
     }
@@ -104,8 +112,8 @@ public struct AddPlaylistScreen: View {
             }
         }
         .background(Color.Accent.dark)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .disabled(store.playlistInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isSubscribing)
+        .clipShape(.rect(cornerRadius: 12))
+        .disabled(!store.canSubscribe)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
     }
@@ -137,8 +145,8 @@ public struct AddPlaylistScreen: View {
             }
         }
         .background(Color.Accent.dark)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .disabled(store.customName.trimmingCharacters(in: .newlines).isEmpty || store.isSubscribing)
+        .clipShape(.rect(cornerRadius: 12))
+        .disabled(!store.canCreateCustom)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
     }

@@ -34,7 +34,7 @@ public struct TVChannelDetailScreen: View {
                             .focusSection()
                     }
 
-                    if !store.pendingDownloads.isEmpty || store.isLoadingDownloads {
+                    if store.showsPendingDownloads {
                         Section {
                             pendingDownloadsContent
                         } header: {
@@ -131,7 +131,7 @@ public struct TVChannelDetailScreen: View {
                 .fontWeight(.bold)
 
             if let subs = store.channel.formattedSubs {
-                Text(String.localised("\(subs) subscribers"))
+                Text(String.localised("channel.subscriberCount \(subs)", table: .login))
                     .font(.headline)
                     .foregroundStyle(.secondary)
             }
@@ -176,7 +176,9 @@ public struct TVChannelDetailScreen: View {
     // MARK: - Sections
 
     private var videosContent: some View {
-        Group {
+        // Read once per pass; the grid and its paging anchor share it.
+        let visible = store.filteredVideos
+        return Group {
             if store.isLoadingVideos && store.videos.isEmpty {
                 LazyVGrid(columns: TVLayout.cardGridColumns, spacing: TVLayout.cardSpacing) {
                     ForEach(VideoResponse.placeholders) { video in
@@ -189,7 +191,7 @@ public struct TVChannelDetailScreen: View {
                     }
                 }
                 .focusSection()
-            } else if store.videos.isEmpty && store.hasLoadedVideos {
+            } else if visible.isEmpty && store.hasLoadedVideos {
                 Text(String.localised("video.empty.noVideos", table: .videos))
                     .font(.headline)
                     .foregroundStyle(.secondary)
@@ -198,7 +200,7 @@ public struct TVChannelDetailScreen: View {
                     .padding(.top, 48)
             } else {
                 LazyVGrid(columns: TVLayout.cardGridColumns, spacing: TVLayout.cardSpacing) {
-                    ForEach(store.videos) { video in
+                    ForEach(visible) { video in
                         TVVideoCardView(
                             video: video,
                             serverConfig: store.serverConfig
@@ -206,7 +208,7 @@ public struct TVChannelDetailScreen: View {
                             send(.videoCardTapped(video))
                         }
                         .onAppear {
-                            if video.id == store.videos.last?.id {
+                            if video.id == visible.last?.id {
                                 send(.lastVideoAppeared)
                             }
                         }

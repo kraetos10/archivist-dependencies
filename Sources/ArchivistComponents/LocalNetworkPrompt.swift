@@ -31,7 +31,8 @@ public struct LocalNetworkPrompt {
         var message = [UInt8]("!".utf8)
         for address in addresses {
             address.withUnsafeBytes { buf in
-                let saffa = buf.baseAddress!.assumingMemoryBound(to: sockaddr.self)
+                guard let base = buf.baseAddress else { return }
+                let saffa = base.assumingMemoryBound(to: sockaddr.self)
                 let saLen = socklen_t(buf.count)
                 let sock = saffa.pointee.sa_family == AF_INET ? sock4 : sock6
                 _ = sendto(sock, &message, message.count, MSG_DONTWAIT, saffa, saLen)
@@ -58,12 +59,14 @@ public struct LocalNetworkPrompt {
                 switch CInt(saffa.pointee.sa_family) {
                 case AF_INET:
                     result.withUnsafeMutableBytes { buf in
-                        let sin = buf.baseAddress!.assumingMemoryBound(to: sockaddr_in.self)
+                        guard let base = buf.baseAddress else { return }
+                        let sin = base.assumingMemoryBound(to: sockaddr_in.self)
                         sin.pointee.sin_port = UInt16(9).bigEndian
                     }
                 case AF_INET6:
                     result.withUnsafeMutableBytes { buf in
-                        let sin6 = buf.baseAddress!.assumingMemoryBound(to: sockaddr_in6.self)
+                        guard let base = buf.baseAddress else { return }
+                        let sin6 = base.assumingMemoryBound(to: sockaddr_in6.self)
                         sin6.pointee.sin6_port = UInt16(9).bigEndian
                     }
                 default:

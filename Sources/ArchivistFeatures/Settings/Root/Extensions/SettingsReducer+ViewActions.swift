@@ -8,23 +8,27 @@ extension SettingsReducer {
         state: inout State
     ) -> Effect<Action> {
         switch action {
+        case .viewDidAppear:
+            return .run { [diagnosticsLog] send in
+                await send(.diagnosticLogLoaded(diagnosticsLog.logFileURL()))
+            }
+        case .autoPlayToggled(let isOn):
+            state.$autoPlayEnabled.withLock { $0 = isOn }
+            return .none
+        case .autoPlayPlaylistToggled(let isOn):
+            state.$autoPlayPlaylist.withLock { $0 = isOn }
+            return .none
+        case .clearDiagnosticLogsTapped:
+            state.diagnosticLogURL = nil
+            return .run { [diagnosticsLog] _ in
+                await diagnosticsLog.clear()
+            }
         case .logoutTapped:
             return .send(.didRequestLogout)
         case .rescanSubscriptionsTapped:
-            state.isRescanningSubscriptions = true
-            let config = state.serverConfig
-            let taskService = self.taskService
-            return .run { send in
-                let result = await Result {
-                    _ = try await taskService.startTask(config: config, name: TaskName.updateSubscribed.rawValue)
-                }
-                await send(.rescanSubscriptionsResult(result))
-            }
+            return handleRescanSubscriptionsTapped(state: &state)
         case .pullToRefreshTriggered:
-            return .send(.activeTask(.view(.startPolling)))
-        case .reAuthTapped:
-            state.isReAuthenticating = true
-            return handleReAuthTapped(config: state.serverConfig)
+            return .send(.activeTask(.startPolling))
         case .downloadsTapped:
             state.path.append(
                 .downloads(DownloadsReducer.State(serverConfig: state.serverConfig))
@@ -48,11 +52,17 @@ extension SettingsReducer {
         }
     }
 
-    private func handleReAuthTapped(config: ServerConfig) -> Effect<Action> {
-        // With API-key auth there is no username/password to re-login with.
-        // If the current token has stopped working the user must log out and
-        // paste a new API key. Surface that by triggering logout.
-        _ = config
-        return .send(.didRequestLogout)
+    // MARK: - Private Handlers
+
+    private func handleRescanSubscriptionsTapped(state: inout State) -> Effect<Action> {
+        guard !state.isRescanningSubscriptions else { return .none }
+        state.isRescanningSubscriptions = true
+        let config = state.serverConfig
+        return .run { [taskService] send in
+            let result = await Result {
+                _ = try await taskService.startTask(config: config, name: TaskName.updateSubscribed.rawValue)
+            }
+            await send(.rescanSubscriptionsResult(result))
+        }
     }
 }

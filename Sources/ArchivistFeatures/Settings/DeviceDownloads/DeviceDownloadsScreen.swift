@@ -2,8 +2,6 @@
 import ArchivistNetworking
 import ArchivistComponents
 import ComposableArchitecture
-internal import SQLiteData
-import StructuredQueries
 import SwiftUI
 
 @ViewAction(for: DeviceDownloadsReducer.self)
@@ -14,7 +12,6 @@ public struct DeviceDownloadsScreen: View {
         self.store = store
     }
 
-    @FetchAll(DeviceDownload.order { $0.createdAt.desc() }) var downloads
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private let iPhoneColumns = [GridItem(.flexible())]
@@ -22,20 +19,24 @@ public struct DeviceDownloadsScreen: View {
 
     public var body: some View {
         ScrollView {
-            if downloads.isEmpty {
-                emptyStateView
+            if store.downloads.isEmpty {
+                EmptyStateView(
+                    icon: "arrow.down.to.line",
+                    title: String.localised("video.empty.noDeviceDownloads", table: .videos),
+                    description: String.localised("video.empty.deviceDownloadDescription", table: .videos)
+                )
             } else {
                 LazyVGrid(
                     columns: sizeClass == .regular ? iPadColumns : iPhoneColumns,
                     spacing: 16
                 ) {
-                    ForEach(downloads) { download in
+                    ForEach(store.downloads) { download in
                         VideoCardView(
-                            data: cardData(for: download),
+                            data: download.cardData,
                             serverConfig: store.serverConfig
                         )
                         .contextMenu {
-                            if let url = URL(string: "https://www.youtube.com/watch?v=\(download.id)") {
+                            if let url = download.shareURL {
                                 ShareLink(item: url) {
                                     Label(
                                         String.localised("generic.share", table: .generic),
@@ -44,7 +45,7 @@ public struct DeviceDownloadsScreen: View {
                                 }
                             }
 
-                            if download.status == .completed {
+                            if download.isCompleted {
                                 Button {
                                     send(.addToPlaylistTapped(download))
                                 } label: {
@@ -71,18 +72,23 @@ public struct DeviceDownloadsScreen: View {
                         ))
                     }
                 }
-                .animation(.default, value: downloads.map(\.id))
+                .animation(.default, value: store.downloads.map(\.id))
                 .padding()
             }
         }
         .safeAreaInset(edge: .bottom) {
-            storageOverlay
+            DeviceStorageBar(
+                fraction: store.downloadsFraction,
+                downloadsText: store.downloadsSizeText,
+                availableText: store.availableStorageText
+            )
         }
         .background(Color.Brand.primary)
         .onAppear { send(.viewDidAppear) }
         .onDisappear { send(.viewDidDisappear) }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(String.localised("video.saved", table: .videos))
+        .alert($store.scope(state: \.alert, action: \.alert))
         .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
             PlaylistPickerScreen(store: pickerStore)
         }
@@ -92,98 +98,42 @@ public struct DeviceDownloadsScreen: View {
             }
         }
     }
+}
 
-    private func cardData(for download: DeviceDownload) -> CardData {
-        let fileSizeStr: String? = {
-            guard let bytes = download.fileSize else { return nil }
-            let formatter = ByteCountFormatter()
-            formatter.countStyle = .file
-            return formatter.string(fromByteCount: Int64(bytes))
-        }()
+/// How much room the app's downloads take against what's still free.
+private struct DeviceStorageBar: View {
+    let fraction: Double?
+    let downloadsText: String
+    let availableText: String
 
-        let statusText: String? = {
-            switch download.status {
-            case .downloading:
-                return download.progress > 0
-                    ? "\(Int(download.progress * 100))%"
-                    : String.localised("video.downloading", table: .videos)
-            case .failed:
-                return String.localised("generic.tapToRetry", table: .generic)
-            case .completed, .none:
-                return nil
-            }
-        }()
-
-        return CardData(
-            videoId: download.id,
-            title: download.title,
-            channelName: download.channelName,
-            thumbPath: download.thumbUrl,
-            duration: nil,
-            publishedRelative: statusText,
-            isWatched: false,
-            isPartiallyWatched: false,
-            watchProgress: 0,
-            isPending: false,
-            isDownloaded: download.status == .completed,
-            fileSize: fileSizeStr
-        )
-    }
-
-    private var storageOverlay: some View {
+    var body: some View {
         VStack(spacing: 10) {
-            // Scaled to what this app accounts for — its downloads plus the
-            // space still free — rather than the whole volume. Space taken
-            // by other apps isn't actionable from this screen, and including
-            // it squeezed our own slice down to a sliver on a full device,
-            // which is exactly when the number matters most.
-            let scale = store.downloadsSize + store.availableStorage
-            if scale > 0 {
-                let downloadsFraction = Double(store.downloadsSize) / Double(scale)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.Brand.secondary.opacity(0.3))
-                        Capsule()
-                            .fill(Color.Accent.dark)
-                            .frame(width: geo.size.width * downloadsFraction)
-                    }
-                }
-                .frame(height: 10)
+            if let fraction {
+                ProgressView(value: fraction)
+                    .tint(Color.Accent.dark)
+                    .accessibilityHidden(true)
             }
 
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color.Accent.dark)
                     .frame(width: 10, height: 10)
-                Text("Downloads: \(formattedBytes(store.downloadsSize))")
+                    .accessibilityHidden(true)
+                Text(downloadsText)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.Text.primary)
 
                 Spacer()
 
-                Text("\(formattedBytes(store.availableStorage)) available")
+                Text(availableText)
                     .font(.subheadline)
                     .foregroundStyle(Color.Brand.secondary)
             }
+            .accessibilityElement(children: .combine)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(.ultraThinMaterial)
-    }
-
-    private func formattedBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
-    }
-
-    private var emptyStateView: some View {
-        EmptyStateView(
-            icon: "arrow.down.to.line",
-            title: String.localised("video.empty.noDeviceDownloads", table: .videos),
-            description: String.localised("video.empty.deviceDownloadDescription", table: .videos)
-        )
     }
 }
 #endif

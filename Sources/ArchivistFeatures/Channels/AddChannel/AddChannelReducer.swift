@@ -11,43 +11,58 @@ public struct AddChannelReducer {
         var serverConfig: ServerConfig
         var channelInput: String = ""
         var isSubscribing: Bool = false
-        var isPresentingPin = false
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
-        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
+        /// Set while child mode's PIN sheet is up. Carries the PIN to check
+        /// against, loaded from the Keychain when the sheet is raised.
+        var pinRequest: ChildModePinRequest?
+        @Shared(.childModeEnabled) var childModeEnabled
+        @Presents var alert: AlertState<AlertAction>?
+
+        var trimmedInput: String {
+            channelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var canSubmit: Bool {
+            !trimmedInput.isEmpty && !isSubscribing
+        }
     }
+
+    public enum AlertAction: Equatable, Sendable {}
 
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
+        case alert(PresentationAction<AlertAction>)
+        case delegate(Delegate)
         case subscribeResult(Result<Void, Error>)
-        case pinConfirmed
-        case pinCancelled
 
         @CasePathable
         public enum View {
             case addButtonTapped
+            case pinConfirmed
+            case pinCancelled
+        }
+
+        public enum Delegate: Equatable, Sendable {
+            case didSubscribe
         }
     }
 
     @Dependency(\.channelService) var channelService
+    @Dependency(\.pinStore) var pinStore
+    @Dependency(\.dismiss) var dismiss
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
         Reduce { state, action in
             switch action {
-            case .binding:
+            case .binding, .alert, .delegate:
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .pinConfirmed:
-                state.isPresentingPin = false
-                return performSubscribe(state: &state)
-            case .pinCancelled:
-                state.isPresentingPin = false
-                return .none
-            default:
+            case .subscribeResult:
                 return handleInternalAction(action, state: &state)
             }
         }
+        .ifLet(\.$alert, action: \.alert)
     }
 }

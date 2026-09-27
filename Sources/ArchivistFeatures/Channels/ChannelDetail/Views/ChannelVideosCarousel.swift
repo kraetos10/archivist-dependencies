@@ -17,20 +17,24 @@ struct ChannelVideosCarousel: View {
     }
 
     var body: some View {
+        // Read once per pass: `filteredVideos` rebuilds the queued set and
+        // filters every video.
+        let visible = store.filteredVideos
+
         VStack(spacing: 12) {
             if store.isLoadingVideos && store.videos.isEmpty {
                 loadingCarousel
-            } else if store.filteredVideos.isEmpty && store.hasLoadedVideos {
+            } else if visible.isEmpty && store.hasLoadedVideos {
                 emptyState
             } else {
-                carousel
+                carousel(visible)
             }
         }
         .padding(.bottom, 8)
     }
 
     private var loadingCarousel: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             LazyHStack(spacing: 12) {
                 ForEach(VideoResponse.placeholders.prefix(4)) { video in
                     VideoCardView(
@@ -44,6 +48,7 @@ struct ChannelVideosCarousel: View {
             .padding(.vertical, 8)
             .scrollTargetLayout()
         }
+        .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .contentMargins(.horizontal, 16)
         .scrollTargetBehavior(.viewAligned)
@@ -60,17 +65,18 @@ struct ChannelVideosCarousel: View {
         .hidden()
         .overlay {
             Text(store.videoFilter == .unwatched
-                 ? String(localized: "No unwatched videos")
+                 ? String.localised("video.empty.noUnwatched", table: .videos)
                  : String.localised("video.empty.noVideos", table: .videos))
                 .font(.subheadline)
                 .foregroundStyle(Color.Brand.secondary)
         }
     }
 
-    private var carousel: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+    private func carousel(_ videos: IdentifiedArrayOf<VideoResponse>) -> some View {
+        let downloadedIDs = store.downloadedVideoIDs
+        return ScrollView(.horizontal) {
             LazyHStack(spacing: 12) {
-                ForEach(store.filteredVideos) { video in
+                ForEach(videos) { video in
                     VideoCardView(
                         video: video,
                         serverConfig: store.serverConfig
@@ -79,11 +85,13 @@ struct ChannelVideosCarousel: View {
                     .contextMenu {
                         VideoContextMenu(
                             youtubeURL: video.youtubeURL,
+                            isDownloaded: downloadedIDs.contains(video.videoId),
                             isWatched: video.isWatched,
                             onPlayNext: { send(.playNextTapped(video), animation: .default) },
-                            onAddToPlaylist: {},
+                            onAddToPlaylist: { send(.addToPlaylistTapped(video)) },
                             onDownloadToDevice: { send(.downloadToDeviceTapped(video)) },
-                            onToggleWatched: { send(.markAsWatchedTapped(video)) },
+                            onDeleteFromDevice: { send(.deleteFromDeviceTapped(video)) },
+                            onToggleWatched: { send(.markAsWatchedTapped(video), animation: .default) },
                             onDeleteFromServer: { send(.deleteFromServerTapped(video)) }
                         )
                     }
@@ -91,7 +99,9 @@ struct ChannelVideosCarousel: View {
                         send(.videoCardTapped(video))
                     }
                     .onAppear {
-                        if video.id == store.videos.last?.id {
+                        // Anchor on the rendered list: under the Unwatched
+                        // filter the last fetched video may never be drawn.
+                        if video.id == videos.last?.id {
                             send(.lastVideoAppeared)
                         }
                     }
@@ -106,6 +116,7 @@ struct ChannelVideosCarousel: View {
             .padding(.vertical, 8)
             .scrollTargetLayout()
         }
+        .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .contentMargins(.horizontal, 16)
         .scrollTargetBehavior(.viewAligned)

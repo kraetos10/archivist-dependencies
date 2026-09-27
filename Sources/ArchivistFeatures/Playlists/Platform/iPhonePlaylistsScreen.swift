@@ -15,65 +15,12 @@ public struct iPhonePlaylistsScreen: View {
     private let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
 
     public var body: some View {
-        // Read once per pass: `filteredPlaylists` merges the search results
-        // with a locale-aware filter over every playlist.
-        let filtered = store.filteredPlaylists
-
-        return NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
-            ScrollView {
-                if store.hasLoaded && filtered.isEmpty && store.searchQuery.isEmpty {
-                    EmptyStateView(
-                        icon: "music.note.list",
-                        title: String.localised("login.noPlaylists", table: .login),
-                        description: String.localised("login.subscribePlaylistsDescription", table: .login)
-                    )
-                } else if store.hasLoaded && filtered.isEmpty && !store.searchQuery.isEmpty {
-                    EmptyStateView(
-                        icon: "magnifyingglass",
-                        title: String.localised("video.empty.noSearchResults", table: .videos),
-                        description: String.localised("video.empty.tryDifferentSearch", table: .videos)
-                    )
-                } else {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        if store.isLoading && store.playlists.isEmpty {
-                            ForEach(PlaylistResponse.placeholders) { playlist in
-                                PlaylistCardView(
-                                    playlist: playlist,
-                                    serverConfig: store.serverConfig
-                                )
-                                .redacted(reason: .placeholder)
-                            }
-                        } else {
-                            ForEach(filtered) { playlist in
-                                PlaylistCardView(
-                                    playlist: playlist,
-                                    serverConfig: store.serverConfig
-                                )
-                                .pressable {
-                                    send(.playlistCardTapped(playlist))
-                                }
-                                .onAppear {
-                                    // `playlists` is the unfiltered page
-                                    // buffer: while searching, its last item
-                                    // isn't rendered, so paging never fired.
-                                    if playlist.id == filtered.last?.id {
-                                        send(.lastItemAppeared)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding()
-
-                    if store.isLoadingMore {
-                        ProgressView()
-                            .tint(Color.Progress.tint)
-                            .padding()
-                    }
-                }
-            }
-            .background(Color.Brand.primary)
-            .refreshable { send(.pullToRefreshTriggered) }
+        NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
+            PlaylistsGridContent(
+                store: store,
+                columns: columns,
+                highlightsSelection: false
+            )
             .navigationTitle(String.localised("generic.playlists", table: .generic))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
@@ -82,7 +29,11 @@ public struct iPhonePlaylistsScreen: View {
                 prompt: String.localised("login.searchPlaylists", table: .login)
             )
             .safeAreaInset(edge: .bottom) {
-                FloatingAddButton { send(.addPlaylistTapped) }
+                FloatingAddButton(
+                    accessibilityLabel: String.localised("login.addPlaylist", table: .login)
+                ) {
+                    send(.addPlaylistTapped)
+                }
             }
             .sheet(item: $store.scope(state: \.addPlaylist, action: \.addPlaylist)) { addPlaylistStore in
                 AddPlaylistScreen(store: addPlaylistStore)

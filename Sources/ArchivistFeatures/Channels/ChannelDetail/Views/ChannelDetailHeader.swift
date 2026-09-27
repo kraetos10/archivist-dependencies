@@ -19,7 +19,7 @@ struct ChannelDetailHeader: View {
             StretchyBannerView(url: store.channelBannerURL)
 
             ChannelThumbView(url: store.channelThumbURL, size: avatarSize)
-                .overlay(Circle().stroke(Color.Brand.primary, lineWidth: 3))
+                .overlay { Circle().stroke(Color.Brand.primary, lineWidth: 3) }
                 .offset(y: -(avatarSize / 2))
                 .padding(.bottom, -(avatarSize / 2))
 
@@ -29,7 +29,7 @@ struct ChannelDetailHeader: View {
                 .foregroundStyle(Color.Text.primary)
 
             if let subs = store.channel.formattedSubs {
-                Text("\(subs) subscribers")
+                Text(String.localised("channel.subscriberCount \(subs)", table: .login))
                     .font(.subheadline)
                     .foregroundStyle(Color.Brand.secondary)
             }

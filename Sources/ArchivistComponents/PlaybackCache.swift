@@ -1,5 +1,7 @@
 #if !os(watchOS)
+import Dependencies
 import Foundation
+import os
 
 /// On-disk cache for played videos so seeks become instant on subsequent plays
 /// (and, once a parallel download finishes, instant mid-playback via a
@@ -9,12 +11,17 @@ import Foundation
 /// survives app launches but is fair game for the OS to purge under pressure.
 /// We also sweep entries older than `expirationTTL` at app launch.
 ///
-/// Concurrency: all public API is `@MainActor`. Background download work
-/// runs inside a detached `Task`; only `onCompleted` callbacks bounce back
+/// Concurrency: all public API is `@MainActor`. Downloads run on a
+/// `URLSession` delegate queue; only the completion callbacks bounce back
 /// to the main actor.
 @MainActor
 public final class PlaybackCache {
     public static let shared = PlaybackCache()
+
+    nonisolated static let logger = Logger(
+        subsystem: "ArchivistComponents",
+        category: "PlaybackCache"
+    )
 
     /// Files older than this (measured by last-access `contentModificationDate`)
     /// are swept at app launch. One day by default — long enough for "watch the
@@ -39,18 +46,9 @@ public final class PlaybackCache {
     public nonisolated static let defaultPrebufferWifiOnly: Bool = true
     #endif
 
-    /// Default value for the `useVLCPlayer` app-storage flag. VLC is now the
-    /// default on every platform — it handles the end-of-media event reliably,
-    /// has better streaming resilience (`:http-reconnect`), and works with the
-    /// existing prebuffer cache. AVPlayer stays available as an opt-in.
-    public nonisolated static let defaultUseVLCPlayer: Bool = true
-
     /// Upper bound on the playback cache (5 GB), in bytes. A value of `0`
     /// means unlimited.
     public nonisolated static let defaultCacheSizeLimitBytes: Int = 5_000_000_000
-
-    /// Sentinel meaning "no upper bound" for the cache size limit.
-    public nonisolated static let unlimitedCacheSizeBytes: Int = 0
 
     /// True when caching `expectedSize` bytes on top of what's already on
     /// disk would exceed `limitBytes`. `expectedSize == nil` falls back to
@@ -61,9 +59,7 @@ public final class PlaybackCache {
         limitBytes: Int
     ) -> Bool {
         guard limitBytes > 0 else { return false }
-        let current = totalSize()
-        let projected = current + Int64(expectedSize ?? 0)
-        return projected > Int64(limitBytes)
+        return Self.projectedSize(entries(), adding: expectedSize) > Int64(limitBytes)
     }
 
     /// Evict least-recently-used entries until `expectedSize` bytes can be
@@ -78,22 +74,46 @@ public final class PlaybackCache {
         limitBytes: Int,
         protecting videoId: String? = nil
     ) -> Bool {
-        guard limitBytes > 0 else { return true }
+        evictToFit(
+            entries: entries(),
+            expectedSize: expectedSize,
+            limitBytes: limitBytes,
+            protecting: videoId
+        ).fitted
+    }
+
+    /// Eviction against an already-scanned listing, so a caller that has
+    /// just read the directory doesn't pay for a second scan. Returns
+    /// whether it fits and the resulting cache size.
+    private func evictToFit(
+        entries: [Entry],
+        expectedSize: Int64?,
+        limitBytes: Int,
+        protecting videoId: String?
+    ) -> (fitted: Bool, size: Int64) {
+        var current = entries.reduce(Int64(0)) { $0 + $1.size }
+        guard limitBytes > 0 else { return (true, current) }
         let limit = Int64(limitBytes)
         let needed = Int64(expectedSize ?? 0)
-        var current = totalSize()
-        if current + needed <= limit { return true }
+        if current + needed <= limit { return (true, current) }
 
-        // entries() is most-recent-first, so reverse for LRU eviction.
-        let candidates = entries()
+        // entries is most-recent-first, so reverse for LRU eviction.
+        let candidates = entries
             .reversed()
             .filter { $0.videoId != videoId }
         for entry in candidates {
             remove(videoId: entry.videoId)
             current -= entry.size
-            if current + needed <= limit { return true }
+            if current + needed <= limit { return (true, current) }
         }
-        return current + needed <= limit
+        return (current + needed <= limit, current)
+    }
+
+    private static func projectedSize(
+        _ entries: [Entry],
+        adding expectedSize: Int64?
+    ) -> Int64 {
+        entries.reduce(Int64(expectedSize ?? 0)) { $0 + $1.size }
     }
 
     /// Pure filesystem check that can be called from any actor context.
@@ -163,53 +183,70 @@ public final class PlaybackCache {
         guard !videoId.isEmpty else { return }
         guard activeSessions[videoId] == nil else { return }
         if cachedFileURL(for: videoId) != nil {
-            print("[PlaybackCache] Already cached: \(videoId)")
+            Self.logger.debug("Already cached: \(videoId, privacy: .public)")
             onCompleted(Self.fileURL(for: videoId))
             return
         }
-        if wouldExceedLimit(expectedSize: expectedSize, limitBytes: limitBytes) {
-            let fitted = evictToFit(
-                expectedSize: expectedSize,
-                limitBytes: limitBytes,
-                protecting: videoId
-            )
-            guard fitted else {
-                print(
-                    "[PlaybackCache] Skipping \(videoId): "
-                        + "won't fit under cache limit even after eviction "
-                        + "(\(limitBytes) bytes, currently \(totalSize()) bytes, "
-                        + "needs \(expectedSize ?? 0) more)"
+        if limitBytes > 0 {
+            // One directory scan serves both the limit check and eviction.
+            let listing = entries()
+            if Self.projectedSize(listing, adding: expectedSize) > Int64(limitBytes) {
+                let result = evictToFit(
+                    entries: listing,
+                    expectedSize: expectedSize,
+                    limitBytes: limitBytes,
+                    protecting: videoId
                 )
-                return
+                guard result.fitted else {
+                    Self.logger.info(
+                        """
+                        Skipping \(videoId, privacy: .public): won't fit under the \(limitBytes) byte \
+                        limit even after eviction (currently \(result.size) bytes, needs \(expectedSize ?? 0))
+                        """
+                    )
+                    return
+                }
+                Self.logger.info(
+                    "Evicted older entries to fit \(videoId, privacy: .public) (now \(result.size) bytes used)"
+                )
             }
-            print(
-                "[PlaybackCache] Evicted older entries to fit \(videoId) "
-                    + "(now \(totalSize()) bytes used)"
-            )
         }
 
         let destination = Self.fileURL(for: videoId)
-        try? FileManager.default.createDirectory(
-            at: Self.cacheDirectory(),
-            withIntermediateDirectories: true
-        )
+        do {
+            try FileManager.default.createDirectory(
+                at: Self.cacheDirectory(),
+                withIntermediateDirectories: true
+            )
+        } catch {
+            reportIssue(error, "Couldn't create the playback cache directory")
+            return
+        }
 
         var request = URLRequest(url: url)
         for (header, value) in authHeaders {
             request.setValue(value, forHTTPHeaderField: header)
         }
 
-        print("[PlaybackCache] Starting download: \(videoId)")
+        Self.logger.debug("Starting download: \(videoId, privacy: .public)")
 
+        // The session is created after the delegate (it retains it), so the
+        // callbacks find their session through this box. They compare it by
+        // identity: a cancelled session's late failure callback must not
+        // remove the entry of a newer download for the same video — replaying
+        // a video cancels its session and immediately starts another.
+        let sessionBox = SessionBox()
         let delegate = DownloadProgressDelegate(
             videoId: videoId,
             destination: destination,
             onCompleted: { [weak self] in
-                self?.activeSessions[videoId] = nil
+                guard let self, self.releaseSession(videoId: videoId, ifCurrent: sessionBox.session) else {
+                    return
+                }
                 onCompleted(destination)
             },
             onFailed: { [weak self] in
-                self?.activeSessions[videoId] = nil
+                self?.releaseSession(videoId: videoId, ifCurrent: sessionBox.session)
             }
         )
 
@@ -218,10 +255,23 @@ public final class PlaybackCache {
             delegate: delegate,
             delegateQueue: nil
         )
+        sessionBox.session = session
         let downloadTask = session.downloadTask(with: request)
         activeSessions[videoId] = session
-        delegate.session = session
         downloadTask.resume()
+    }
+
+    /// Drop `videoId`'s session entry, but only if it is still `session`.
+    /// Returns whether it was — `false` means the callback belongs to a
+    /// cancelled or superseded download and should be ignored.
+    @discardableResult
+    private func releaseSession(
+        videoId: String,
+        ifCurrent session: URLSession?
+    ) -> Bool {
+        guard let session, activeSessions[videoId] === session else { return false }
+        activeSessions[videoId] = nil
+        return true
     }
 
     public func cancelDownload(videoId: String) {
@@ -318,12 +368,20 @@ public final class PlaybackCache {
 
 // MARK: - Download Progress Delegate
 
+/// Holds a download's session for its own callbacks, which are created
+/// before the session exists. Written once on the main actor before the
+/// task resumes, read only on the main actor afterwards.
+@MainActor
+private final class SessionBox {
+    var session: URLSession?
+}
+
+/// Only touched from the session's serial delegate queue.
 private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let videoId: String
     let destination: URL
     let onCompleted: @MainActor () -> Void
     let onFailed: @MainActor () -> Void
-    var session: URLSession?
     private var lastLoggedPercent: Int = -1
 
     init(
@@ -351,11 +409,15 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
         let bucket = percent / 10 * 10
         if bucket > lastLoggedPercent {
             lastLoggedPercent = bucket
-            let megabytes = Double(totalBytesWritten) / 1_000_000
-            let totalMegabytes = Double(totalBytesExpectedToWrite) / 1_000_000
-            let current = String(format: "%.1f", megabytes)
-            let total = String(format: "%.1f", totalMegabytes)
-            print("[PlaybackCache] \(videoId): \(percent)% (\(current)/\(total) MB)")
+            let current = Measurement(value: Double(totalBytesWritten), unit: UnitInformationStorage.bytes)
+            let total = Measurement(value: Double(totalBytesExpectedToWrite), unit: UnitInformationStorage.bytes)
+            PlaybackCache.logger.debug(
+                """
+                \(self.videoId, privacy: .public): \(percent)% \
+                (\(current.formatted(.byteCount(style: .file)), privacy: .public) of \
+                \(total.formatted(.byteCount(style: .file)), privacy: .public))
+                """
+            )
         }
     }
 
@@ -367,7 +429,7 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
         guard let http = downloadTask.response as? HTTPURLResponse,
               (200...299).contains(http.statusCode) else {
             let code = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? -1
-            print("[PlaybackCache] \(videoId): failed with status \(code)")
+            PlaybackCache.logger.error("\(self.videoId, privacy: .public): failed with status \(code)")
             try? FileManager.default.removeItem(at: location)
             session.finishTasksAndInvalidate()
             Task { @MainActor in onFailed() }
@@ -377,11 +439,11 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
         do {
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.moveItem(at: location, to: destination)
-            print("[PlaybackCache] \(videoId): complete")
+            PlaybackCache.logger.debug("\(self.videoId, privacy: .public): complete")
             session.finishTasksAndInvalidate()
             Task { @MainActor in onCompleted() }
         } catch {
-            print("[PlaybackCache] \(videoId): move failed - \(error.localizedDescription)")
+            reportIssue(error, "Couldn't move the finished download for \(videoId) into the playback cache")
             session.finishTasksAndInvalidate()
             Task { @MainActor in onFailed() }
         }
@@ -393,7 +455,15 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
         didCompleteWithError error: (any Error)?
     ) {
         guard let error else { return }
-        print("[PlaybackCache] \(videoId): error - \(error.localizedDescription)")
+        // Our own `cancelDownload` (stop, or replaying the video) lands here
+        // too; that isn't a failure worth reporting.
+        if (error as? URLError)?.code == .cancelled {
+            PlaybackCache.logger.debug("\(self.videoId, privacy: .public): cancelled")
+        } else {
+            PlaybackCache.logger.error(
+                "\(self.videoId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+        }
         session.finishTasksAndInvalidate()
         Task { @MainActor in onFailed() }
     }

@@ -25,7 +25,7 @@ public struct ChannelDetailScreen: View {
                     ChannelVideosSectionHeader(store: store)
                 }
 
-                if !store.pendingDownloads.isEmpty || store.isLoadingDownloads {
+                if store.showsPendingDownloads {
                     Section {
                         ChannelPendingDownloadsList(store: store)
                     } header: {
@@ -49,6 +49,9 @@ public struct ChannelDetailScreen: View {
         }
         .alert($store.scope(state: \.alert, action: \.alert))
         .modifier(ChannelDownloadDetailSheet(store: store, sizeClass: horizontalSizeClass))
+        .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
+            PlaylistPickerScreen(store: pickerStore)
+        }
     }
 
     private var channelMenu: some View {
@@ -62,16 +65,18 @@ public struct ChannelDetailScreen: View {
                 }
             }
 
-            Button(role: .destructive) {
+            Button(
+                String.localised("generic.unsubscribe", table: .generic),
+                systemImage: "xmark.circle",
+                role: .destructive
+            ) {
                 send(.unsubscribeTapped)
-            } label: {
-                Label(String.localised("generic.unsubscribe", table: .generic), systemImage: "xmark.circle")
             }
         } label: {
-            Image(systemName: "ellipsis")
+            Label(String.localised("generic.actions", table: .generic), systemImage: "ellipsis")
+                .labelStyle(.iconOnly)
                 .font(.title3.weight(.semibold))
         }
-        .accessibilityLabel(String.localised("generic.actions", table: .generic))
     }
 }
 #endif

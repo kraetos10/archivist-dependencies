@@ -33,28 +33,15 @@ public enum VideoListItem: Identifiable, Sendable, Equatable {
         }
     }
 
+    /// Used as a sort key, so it goes through `PublishedDate`'s shared
+    /// format styles rather than building formatters on every comparison.
     var publishedDate: Date? {
         switch self {
         case .video(let video):
-            return video.publishedDate
+            video.publishedDate
         case .download(let download):
-            if let published = download.published {
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.formatOptions = [.withInternetDateTime]
-                if let date = isoFormatter.date(from: published) {
-                    return date
-                }
-                let dateOnly = DateFormatter()
-                dateOnly.dateFormat = "yyyy-MM-dd"
-                dateOnly.locale = Locale(identifier: "en_US_POSIX")
-                if let date = dateOnly.date(from: published) {
-                    return date
-                }
-            }
-            if let timestamp = download.timestamp {
-                return Date(timeIntervalSince1970: TimeInterval(timestamp))
-            }
-            return nil
+            PublishedDate.date(from: download.published)
+                ?? download.timestamp.map { Date(timeIntervalSince1970: TimeInterval($0)) }
         }
     }
 
@@ -71,7 +58,7 @@ public enum VideoListItem: Identifiable, Sendable, Equatable {
 public struct VideoListReducer {
     public init() {}
     @ObservableState
-    public struct State: Sendable {
+    public struct State: Equatable, Sendable {
         var serverConfig: ServerConfig
         var videos: IdentifiedArrayOf<VideoResponse> = []
         var currentPage: Int = 1
@@ -79,8 +66,8 @@ public struct VideoListReducer {
         var isLoading = false
         var isLoadingMore = false
         var hasLoaded = false
-        @Shared(.appStorage("videoListWatchFilter")) var watchFilter: WatchFilter = .unwatched
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
+        @Shared(.videoListWatchFilter) var watchFilter
+        @Shared(.childModeEnabled) public var childModeEnabled
         /// Home page always fetches by published date; per-filter sort is
         /// owned by the "View All" detail view now.
         let sortOrder: VideoSortOrder = .published
@@ -101,14 +88,11 @@ public struct VideoListReducer {
         var searchQuery: String = ""
         var searchResults: IdentifiedArrayOf<VideoResponse> = []
         var isSearching = false
-        var useSplitView = false
-        var selectedVideo: VideoDetailReducer.State?
-        @Presents var presentedVideo: VideoDetailReducer.State?
-        @Presents var videoDetail: VideoDetailReducer.State?
         var path = StackState<VideoListPath.State>()
-        @Presents var playlistPicker: PlaylistPickerReducer.State?
-        @Presents var addVideo: AddVideoReducer.State?
-        @Presents var alert: AlertState<AlertAction>?
+        /// Whatever is presented over the home screen. Only one at a time:
+        /// the video (iOS — tvOS pushes it onto `path`), the playlist
+        /// picker, the add-video form or an error.
+        @Presents var destination: Destination.State?
 
         var isSearchActive: Bool {
             !searchQuery.isEmpty
@@ -118,7 +102,7 @@ public struct VideoListReducer {
             let filtered: IdentifiedArrayOf<VideoResponse>
             if isSearchActive {
                 let localMatches = videos.filter {
-                    $0.title.localizedCaseInsensitiveContains(searchQuery)
+                    $0.title.localizedStandardContains(searchQuery)
                 }
                 var merged = searchResults
                 for video in localMatches {
@@ -128,10 +112,11 @@ public struct VideoListReducer {
             } else {
                 filtered = filteredVideos(for: watchFilter)
             }
+            let downloadedIDs = downloadedVideoIDs
             return filtered.map { video in
                 DisplayedVideo(
                     video: video,
-                    isDownloaded: downloadedVideoIDs.contains(video.videoId)
+                    isDownloaded: downloadedIDs.contains(video.videoId)
                 )
             }
         }
@@ -139,9 +124,8 @@ public struct VideoListReducer {
         /// Raw filtered list for a single filter, used by the per-filter
         /// home sections (each section just takes the first N + a "View All"
         /// entry). The sort order mirrors whatever the user has selected
-        /// for that filter's "View All" detail view (persisted via the
-        /// same `videoListSortOrder_<filter>` app-storage key
-        /// `FilteredVideoListReducer` reads).
+        /// for that filter's "View All" detail view (the same
+        /// `.videoListSortOrder(for:)` key `FilteredVideoListReducer` writes).
         ///
         /// Reads from `cachedHomeSections` so the home view never sorts
         /// during scroll — only the `isDownloaded` decoration runs (a
@@ -159,26 +143,18 @@ public struct VideoListReducer {
 
         /// Recompute the cached home sections from the current `videos`
         /// + per-filter sort order. Call after any mutation to `videos`
-        /// — pagination append, single-video refresh, server delete, etc.
+        /// — pagination append, single-video refresh, server delete — and
+        /// when a "View All" screen changes its sort.
         mutating func recomputeHomeSections() {
             cachedHomeSections = Self.homeSectionOrder.map { filter in
                 let raw = filteredVideos(for: filter)
-                let order = Self.savedSortOrder(for: filter)
+                @Shared(.videoListSortOrder(for: filter)) var order
                 let sorted = Self.sort(raw, by: order)
                 return HomeSectionVideos(
                     filter: filter,
                     videos: Array(sorted.prefix(Self.homeSectionItemCap))
                 )
             }
-        }
-
-        private static func savedSortOrder(for filter: WatchFilter) -> VideoSortOrder {
-            let key = "videoListSortOrder_\(filter.rawValue)"
-            if let raw = UserDefaults.standard.string(forKey: key),
-               let value = VideoSortOrder(rawValue: raw) {
-                return value
-            }
-            return .published
         }
 
         private static func sort(
@@ -235,7 +211,8 @@ public struct VideoListReducer {
             case .watched:
                 return videos.filter { $0.isWatched }
             case .downloaded:
-                var merged = videos.filter { downloadedVideoIDs.contains($0.videoId) }
+                let downloadedIDs = downloadedVideoIDs
+                var merged = videos.filter { downloadedIDs.contains($0.videoId) }
                 for video in downloadedVideos {
                     merged.updateOrAppend(video)
                 }
@@ -265,22 +242,29 @@ public struct VideoListReducer {
         case dismissed
     }
 
+    @Reducer
+    public enum Destination {
+        case addVideo(AddVideoReducer)
+        case alert(AlertState<AlertAction>)
+        case playlistPicker(PlaylistPickerReducer)
+        case videoDetail(VideoDetailReducer)
+    }
+
     public enum Action: ViewAction, BindableAction {
         case view(View)
         case binding(BindingAction<State>)
-        case selectedVideoDetail(VideoDetailReducer.Action)
-        case presentedVideo(PresentationAction<VideoDetailReducer.Action>)
-        case videoDetail(PresentationAction<VideoDetailReducer.Action>)
+        case destination(PresentationAction<Destination.Action>)
         case path(StackActionOf<VideoListPath>)
-        case playlistPicker(PresentationAction<PlaylistPickerReducer.Action>)
-        case alert(PresentationAction<AlertAction>)
+        /// Entry points for parents (tvOS Search's context menu): the same
+        /// server writes the home screen's context menu performs.
+        case markAsWatched(VideoResponse)
+        case deleteFromServer(VideoResponse)
         case videosResult(Result<PaginatedResponse<VideoResponse>, Error>)
         case contextDeleteResult(Result<String, Error>)
         case markWatchedResult(Result<String, Error>)
         case videoRefreshed(VideoResponse)
         case searchResult(Result<[VideoResponse], Error>)
         case downloadedVideosLoaded([VideoResponse])
-        case addVideo(PresentationAction<AddVideoReducer.Action>)
         @CasePathable
         public enum View {
             case viewDidAppear
@@ -295,7 +279,6 @@ public struct VideoListReducer {
             case markAsWatchedTapped(VideoResponse)
             case playNextTapped(VideoResponse)
             case addVideoTapped
-            case splitViewEnabled
             case viewAllTapped(WatchFilter)
         }
     }
@@ -307,31 +290,20 @@ public struct VideoListReducer {
     @Dependency(\.continuousClock) var clock
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
     @Dependency(\.playNextDatabase) var playNextDatabase
+    @Dependency(\.topShelf) var topShelf
+    @Dependency(\.date.now) var now
 
     nonisolated enum CancelID: Hashable, Sendable {
         case search
+        /// Every page fetch, refresh included. A refresh cancels an
+        /// in-flight page so its response can't land in the fresh list.
         case fetchVideos
     }
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
         coreReducer
-            .ifLet(\.$playlistPicker, action: \.playlistPicker) {
-                PlaylistPickerReducer()
-            }
-            .ifLet(\.$addVideo, action: \.addVideo) {
-                AddVideoReducer()
-            }
-            .ifLet(\.$alert, action: \.alert)
-            .ifLet(\.selectedVideo, action: \.selectedVideoDetail) {
-                VideoDetailReducer()
-            }
-            .ifLet(\.$presentedVideo, action: \.presentedVideo) {
-                VideoDetailReducer()
-            }
-            .ifLet(\.$videoDetail, action: \.videoDetail) {
-                VideoDetailReducer()
-            }
+            .ifLet(\.$destination, action: \.destination)
             .forEach(\.path, action: \.path)
     }
 
@@ -345,78 +317,25 @@ public struct VideoListReducer {
                 return .none
             case .view(let viewAction):
                 return handleViewAction(viewAction, state: &state)
-            case .selectedVideoDetail(.delegate(.didRequestMinimize)):
-                state.selectedVideo = nil
+            case .path(let pathAction):
+                return handlePathAction(pathAction, state: &state)
+            case .markAsWatched(let video):
+                return handleMarkAsWatched(video, state: &state)
+            case .deleteFromServer(let video):
+                return handleDeleteFromServer(video, state: &state)
+            case .destination(.presented(.addVideo(.addResult(.success)))):
+                state.destination = nil
+                return handleRefreshTriggered(state: &state)
+            case .destination(.presented(.videoDetail(.delegate(.didRequestMinimize)))):
+                state.destination = nil
                 return .none
-            case .selectedVideoDetail(.delegate(.didDismiss(let videoId))):
-                state.selectedVideo = nil
+            case .destination(.presented(.videoDetail(.delegate(.didDismiss(let videoId))))):
+                state.destination = nil
                 return refreshVideo(videoId: videoId, config: state.serverConfig)
-            case .selectedVideoDetail(.serverDeleteResult(.success)):
-                state.selectedVideo = nil
-                return .send(.view(.pullToRefreshTriggered))
-            case .selectedVideoDetail:
-                return .none
-            case .presentedVideo(.presented(.delegate(.didRequestMinimize))):
-                state.presentedVideo = nil
-                return .none
-            case .presentedVideo(.presented(.delegate(.didDismiss(let videoId)))):
-                state.presentedVideo = nil
-                return refreshVideo(videoId: videoId, config: state.serverConfig)
-            case .presentedVideo(.presented(.serverDeleteResult(.success))):
-                state.presentedVideo = nil
-                return .send(.view(.pullToRefreshTriggered))
-            case .presentedVideo:
-                return .none
-            case .path(.element(_, action: .videoDetail(.delegate(.didDismiss(let videoId))))):
-                _ = state.path.popLast()
-                return refreshVideo(videoId: videoId, config: state.serverConfig)
-            case .path(.element(_, action: .videoDetail(.serverDeleteResult(.success)))):
-                _ = state.path.popLast()
-                return .send(.view(.pullToRefreshTriggered))
-            case .path(.element(_, action: .filteredList(.delegate(.videoSelected(let video))))):
-                let detailState = VideoDetailReducer.State(
-                    serverConfig: state.serverConfig,
-                    video: video
-                )
-                #if os(tvOS)
-                state.path.append(.videoDetail(detailState))
-                #else
-                state.videoDetail = detailState
-                #endif
-                return .none
-            case .path(.element(_, action: .filteredList(.delegate(.playNextRequested(let video))))):
-                return .send(.view(.playNextTapped(video)))
-            case .path(.element(_, action: .filteredList(.delegate(.addToPlaylistRequested(let video))))):
-                return .send(.view(.addToPlaylistTapped(video)))
-            case .path(.element(_, action: .filteredList(.delegate(.downloadToDeviceRequested(let video))))):
-                return .send(.view(.downloadToDeviceTapped(video)))
-            case .path(.element(_, action: .filteredList(.delegate(.deleteFromDeviceRequested(let video))))):
-                return .send(.view(.deleteFromDeviceTapped(video)))
-            case .path(.element(_, action: .filteredList(.delegate(.markAsWatchedRequested(let video))))):
-                return .send(.view(.markAsWatchedTapped(video)))
-            case .path(.element(_, action: .filteredList(.delegate(.deleteFromServerRequested(let video))))):
-                return .send(.view(.deleteFromServerTapped(video)))
-            case .path:
-                return .none
-            case .playlistPicker:
-                return .none
-            case .addVideo(.presented(.addResult(.success))):
-                state.addVideo = nil
-                return .send(.view(.pullToRefreshTriggered))
-            case .addVideo:
-                return .none
-            case .alert:
-                return .none
-            case .videoDetail(.presented(.delegate(.didRequestMinimize))):
-                state.videoDetail = nil
-                return .none
-            case .videoDetail(.presented(.delegate(.didDismiss(let videoId)))):
-                state.videoDetail = nil
-                return refreshVideo(videoId: videoId, config: state.serverConfig)
-            case .videoDetail(.presented(.serverDeleteResult(.success))):
-                state.videoDetail = nil
-                return .send(.view(.pullToRefreshTriggered))
-            case .videoDetail:
+            case .destination(.presented(.videoDetail(.serverDeleteResult(.success)))):
+                state.destination = nil
+                return handleRefreshTriggered(state: &state)
+            case .destination:
                 return .none
             default:
                 return handleInternalAction(action, state: &state)
@@ -424,7 +343,62 @@ public struct VideoListReducer {
         }
     }
 
-    private func refreshVideo(
+    /// The navigation stack: video detail (tvOS) and the "View All" lists,
+    /// whose context-menu requests run through this reducer's handlers.
+    private func handlePathAction(
+        _ action: StackActionOf<VideoListPath>,
+        state: inout State
+    ) -> Effect<Action> {
+        switch action {
+        case .element(_, action: .videoDetail(.delegate(.didDismiss(let videoId)))):
+            _ = state.path.popLast()
+            return refreshVideo(videoId: videoId, config: state.serverConfig)
+        case .element(_, action: .videoDetail(.serverDeleteResult(.success))):
+            _ = state.path.popLast()
+            return handleRefreshTriggered(state: &state)
+        case .element(_, action: .filteredList(.delegate(let delegate))):
+            return handleFilteredListDelegate(delegate, state: &state)
+        case .element(_, action: .filteredList(.view(.sortOrderChanged))):
+            // The home carousels follow each "View All" screen's sort.
+            state.recomputeHomeSections()
+            return .none
+        default:
+            return .none
+        }
+    }
+
+    private func handleFilteredListDelegate(
+        _ delegate: FilteredVideoListReducer.Action.Delegate,
+        state: inout State
+    ) -> Effect<Action> {
+        switch delegate {
+        case .videoSelected(let video):
+            let detailState = VideoDetailReducer.State(
+                serverConfig: state.serverConfig,
+                video: video
+            )
+            #if os(tvOS)
+            state.path.append(.videoDetail(detailState))
+            #else
+            state.destination = .videoDetail(detailState)
+            #endif
+            return .none
+        case .playNextRequested(let video):
+            return handleViewAction(.playNextTapped(video), state: &state)
+        case .addToPlaylistRequested(let video):
+            return handleViewAction(.addToPlaylistTapped(video), state: &state)
+        case .downloadToDeviceRequested(let video):
+            return handleViewAction(.downloadToDeviceTapped(video), state: &state)
+        case .deleteFromDeviceRequested(let video):
+            return handleViewAction(.deleteFromDeviceTapped(video), state: &state)
+        case .markAsWatchedRequested(let video):
+            return handleMarkAsWatched(video, state: &state)
+        case .deleteFromServerRequested(let video):
+            return handleDeleteFromServer(video, state: &state)
+        }
+    }
+
+    func refreshVideo(
         videoId: String,
         config: ServerConfig
     ) -> Effect<Action> {
@@ -435,3 +409,5 @@ public struct VideoListReducer {
         }
     }
 }
+
+extension VideoListReducer.Destination.State: Equatable, Sendable {}

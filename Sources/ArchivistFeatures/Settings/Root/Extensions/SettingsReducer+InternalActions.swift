@@ -1,50 +1,34 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 
 extension SettingsReducer {
-    public func handleInternalAction(
-        _ action: Action,
+    /// A server download finished: refresh the queue screen if it's on the
+    /// stack. Walks from the top so the one the user is looking at wins.
+    func handleDownloadCompleted(state: inout State) -> Effect<Action> {
+        for (id, element) in zip(state.path.ids, state.path).reversed() {
+            if case .downloads = element {
+                return .send(.path(.element(id: id, action: .downloads(.refresh))))
+            }
+        }
+        return .none
+    }
+
+    func handleRescanResult(
+        _ result: Result<Void, Error>,
         state: inout State
     ) -> Effect<Action> {
-        switch action {
-        case .activeTask(.downloadCompleted):
-            // If the Downloads screen is currently on the stack, trigger a refresh
-            // on the topmost entry that is a downloads screen.
-            for (id, element) in zip(state.path.ids, state.path) {
-                if case .downloads = element {
-                    return .send(.path(.element(id: id, action: .downloads(.view(.pullToRefreshTriggered)))))
-                }
-            }
-            return .none
-        case .rescanSubscriptionsResult(.success):
-            state.isRescanningSubscriptions = false
-            return .send(.activeTask(.view(.startPolling)))
-        case .rescanSubscriptionsResult(.failure):
-            state.isRescanningSubscriptions = false
-            return .none
-        case .videoDetail:
-            return .none
-        case .reAuthResult(.success(let token)):
-            state.isReAuthenticating = false
-            state.serverConfig = ServerConfig(
-                baseURL: state.serverConfig.baseURL,
-                port: state.serverConfig.port,
-                apiToken: token,
-                useHTTP: state.serverConfig.useHTTP
-            )
-            return .send(.didRefreshToken(token))
-        case .reAuthResult(.failure(let error)):
-            state.isReAuthenticating = false
+        state.isRescanningSubscriptions = false
+        switch result {
+        case .success:
+            return .send(.activeTask(.startPolling))
+        case .failure(let error):
             state.alert = AlertState {
-                TextState(String.localised("generic.error", table: .generic))
+                TextState(String.localised("settings.rescanFailed", table: .settings))
             } message: {
                 TextState(error.localizedDescription)
             }
-            return .none
-        case .didRequestLogout, .activeTask:
-            return .none
-        default:
             return .none
         }
     }

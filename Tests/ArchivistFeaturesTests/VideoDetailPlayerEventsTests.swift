@@ -1,6 +1,7 @@
 import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
+import DependenciesTestSupport
 import Foundation
 import Testing
 
@@ -17,7 +18,11 @@ import Testing
 /// Nothing here touches `PlayerManager.shared` — the streams are built by
 /// hand. That's the other half of the win: this code is reachable from a test
 /// without standing up an `AVAudioSession`.
+///
+/// Time-limited: two tests wait on a detached server write, and would hang
+/// rather than fail if it never came.
 @MainActor
+@Suite(.dependencies, .timeLimit(.minutes(1)))
 struct VideoDetailPlayerEventsTests {
     let config = TestFixtures.serverConfig
 
@@ -51,27 +56,55 @@ struct VideoDetailPlayerEventsTests {
         return sent.value
     }
 
+    /// A service whose completion writes (`setWatched`, then
+    /// `deleteProgress`) finish the returned stream once both have run, so a
+    /// test can wait for the detached write instead of racing it.
+    private func completionRecordingService() -> (
+        service: VideoService,
+        written: AsyncStream<Void>,
+        calls: LockIsolated<[String]>
+    ) {
+        let calls = LockIsolated<[String]>([])
+        let (written, continuation) = AsyncStream<Void>.makeStream()
+        var service = VideoService.testValue
+        service.setWatched = { _, videoId, isWatched in
+            calls.withValue { $0.append("setWatched(\(videoId), \(isWatched))") }
+        }
+        service.deleteProgress = { _, videoId in
+            calls.withValue { $0.append("deleteProgress(\(videoId))") }
+            continuation.finish()
+        }
+        return (service, written, calls)
+    }
+
     // MARK: - Cache
 
     @Test func cacheCompletedForThisVideoMarksItCached() async {
         let sent = await run([.cacheCompleted(videoId: "video_1")])
-        #expect(sent == ["cacheStatusChanged(true)"])
+        expectNoDifference(sent, ["cacheStatusChanged(true)"])
     }
 
     @Test func cacheCompletedForAnotherVideoIsIgnored() async {
         let sent = await run([.cacheCompleted(videoId: "video_2")])
-        #expect(sent.isEmpty)
+        expectNoDifference(sent, [])
     }
 
     // MARK: - End of media
 
     @Test func playbackCompletedForThisVideoEndsPlayback() async {
-        var service = VideoService.testValue
-        service.setWatched = { _, _, _ in }
-        service.deleteProgress = { _, _ in }
+        let recording = completionRecordingService()
 
-        let sent = await run([.playbackCompleted(videoId: "video_1")], videoService: service)
-        #expect(sent == ["videoPlaybackDidEnd"])
+        let sent = await run([.playbackCompleted(videoId: "video_1")], videoService: recording.service)
+
+        // Detached so it outlives the effect; wait so it can't leak past
+        // the test.
+        for await _ in recording.written {}
+
+        expectNoDifference(sent, ["videoPlaybackDidEnd"])
+        expectNoDifference(
+            recording.calls.value,
+            ["setWatched(video_1, true)", "deleteProgress(video_1)"]
+        )
     }
 
     /// The regression this guards: with a shared stream, a detail screen
@@ -79,18 +112,18 @@ struct VideoDetailPlayerEventsTests {
     /// `VideoService.testValue` fails the test if `setWatched` is reached.
     @Test func playbackCompletedForAnotherVideoIsIgnored() async {
         let sent = await run([.playbackCompleted(videoId: "video_2")])
-        #expect(sent.isEmpty)
+        expectNoDifference(sent, [])
     }
 
     // MARK: - Progress saving
 
     @Test func pausedForThisVideoSavesThePositionCarriedInTheEvent() async {
-        let saved = LockIsolated<(videoId: String, position: Int)?>(nil)
+        let saved = LockIsolated<[String]>([])
         let finished = AsyncStream<Void>.makeStream()
 
         var service = VideoService.testValue
         service.setProgress = { _, videoId, position in
-            saved.setValue((videoId, position))
+            saved.withValue { $0.append("\(videoId)@\(position)") }
             finished.continuation.finish()
         }
 
@@ -100,9 +133,8 @@ struct VideoDetailPlayerEventsTests {
         // `saveProgressDetached`), so wait for it rather than racing it.
         for await _ in finished.stream {}
 
-        #expect(sent.isEmpty)
-        #expect(saved.value?.videoId == "video_1")
-        #expect(saved.value?.position == 42)
+        expectNoDifference(sent, [])
+        expectNoDifference(saved.value, ["video_1@42"])
     }
 
     /// The event carries the position because delivery is asynchronous — by
@@ -110,19 +142,19 @@ struct VideoDetailPlayerEventsTests {
     /// `currentTime`. Reading it live is what used to lose the final save.
     @Test func pausedForAnotherVideoDoesNotSaveProgress() async {
         let sent = await run([.paused(videoId: "video_2", position: 42)])
-        #expect(sent.isEmpty)
+        expectNoDifference(sent, [])
     }
 
     @Test func pausedAtTheStartDoesNotSaveProgress() async {
         let sent = await run([.paused(videoId: "video_1", position: 0)])
-        #expect(sent.isEmpty)
+        expectNoDifference(sent, [])
     }
 
     // MARK: - Transport
 
     @Test func transportRequestsReachTheStore() async {
         let sent = await run([.nextRequested, .previousRequested])
-        #expect(sent == ["nextVideoRequested", "previousVideoRequested"])
+        expectNoDifference(sent, ["nextVideoRequested", "previousVideoRequested"])
     }
 
     /// The countdown card has its own short-lived subscription in
@@ -130,15 +162,13 @@ struct VideoDetailPlayerEventsTests {
     /// alone or a tap would be handled twice.
     @Test func countdownTapsAreLeftToTheCountdownEffect() async {
         let sent = await run([.autoPlayPlayNowTapped, .autoPlayCancelTapped])
-        #expect(sent.isEmpty)
+        expectNoDifference(sent, [])
     }
 
     // MARK: - Ordering
 
     @Test func eventsAreHandledInOrder() async {
-        var service = VideoService.testValue
-        service.setWatched = { _, _, _ in }
-        service.deleteProgress = { _, _ in }
+        let recording = completionRecordingService()
 
         let sent = await run(
             [
@@ -146,9 +176,14 @@ struct VideoDetailPlayerEventsTests {
                 .nextRequested,
                 .playbackCompleted(videoId: "video_1")
             ],
-            videoService: service
+            videoService: recording.service
         )
-        #expect(sent == ["cacheStatusChanged(true)", "nextVideoRequested", "videoPlaybackDidEnd"])
+        for await _ in recording.written {}
+
+        expectNoDifference(
+            sent,
+            ["cacheStatusChanged(true)", "nextVideoRequested", "videoPlaybackDidEnd"]
+        )
     }
 }
 

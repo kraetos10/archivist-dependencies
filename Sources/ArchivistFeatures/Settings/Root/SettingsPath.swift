@@ -11,4 +11,4 @@ public enum SettingsPath {
     #endif
 }
 
-extension SettingsPath.State: Sendable {}
+extension SettingsPath.State: Equatable, Sendable {}

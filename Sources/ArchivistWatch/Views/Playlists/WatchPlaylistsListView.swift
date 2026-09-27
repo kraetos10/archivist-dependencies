@@ -3,32 +3,27 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchPlaylistsListView: View {
-    @State var viewModel: WatchPlaylistsViewModel
-    let appState: WatchAppState
+    let viewModel: WatchPlaylistsViewModel
 
-    public init(
-        viewModel: WatchPlaylistsViewModel,
-        appState: WatchAppState
-    ) {
+    public init(viewModel: WatchPlaylistsViewModel) {
         self.viewModel = viewModel
-        self.appState = appState
     }
 
     public var body: some View {
         NavigationStack {
             List {
-                if viewModel.isLoading && viewModel.playlists.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else if viewModel.playlists.isEmpty {
-                    Text(String(localized: "playlist.empty", bundle: .module))
-                        .foregroundStyle(.secondary)
+                if viewModel.playlists.isEmpty {
+                    WatchListStatus(
+                        isLoading: viewModel.isLoading,
+                        errorMessage: viewModel.errorMessage,
+                        emptyText: String(localized: "playlist.empty", bundle: .module)
+                    )
                 } else {
                     ForEach(viewModel.playlists) { playlist in
                         NavigationLink(value: playlist) {
                             HStack(spacing: 10) {
                                 WatchThumbnail(
-                                    path: playlist.playlistThumbnail,
+                                    url: viewModel.thumbnailURL(for: playlist),
                                     config: viewModel.config
                                 )
 
@@ -37,14 +32,14 @@ public struct WatchPlaylistsListView: View {
                                         .font(.headline)
                                         .lineLimit(1)
 
-                                    Text("\(playlist.entryCount) videos")
-                                        .font(.caption2)
+                                    Text(viewModel.videoCountText(for: playlist))
+                                        .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
                         }
-                        .onAppear {
-                            viewModel.loadNextPageIfNeeded(currentItem: playlist)
+                        .task {
+                            await viewModel.rowAppeared(playlist)
                         }
                     }
 
@@ -56,21 +51,16 @@ public struct WatchPlaylistsListView: View {
             }
             .navigationTitle(String(localized: "tab.playlists", bundle: .module))
             .navigationDestination(for: PlaylistResponse.self) { playlist in
-                if let config = appState.serverConfig {
-                    WatchPlaylistDetailView(
-                        viewModel: WatchPlaylistDetailViewModel(
-                            config: config,
-                            playlistId: playlist.playlistId
-                        ),
-                        playlist: playlist
-                    )
-                }
+                WatchPlaylistDetailView(
+                    viewModel: viewModel.detailViewModel(for: playlist),
+                    playlist: playlist
+                )
             }
             .refreshable {
                 await viewModel.refresh()
             }
-            .onAppear {
-                Task { await viewModel.viewDidAppear() }
+            .task {
+                await viewModel.viewDidAppear()
             }
         }
     }

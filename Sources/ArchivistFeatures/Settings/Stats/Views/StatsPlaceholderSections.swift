@@ -4,9 +4,9 @@ import SwiftUI
 struct StatsPlaceholderOverviewSection: View {
     var body: some View {
         Section {
-            StatRowView(label: "Total Videos", value: "0000", icon: "film.stack")
-            StatRowView(label: "Media Size", value: "00.0 GB", icon: "internaldrive")
-            StatRowView(label: "Duration", value: "000h 00m", icon: "clock")
+            StatRowView(label: String.localised("video.totalVideos", table: .videos), value: "0000", icon: "film.stack")
+            StatRowView(label: String.localised("stats.mediaSize", table: .settings), value: "00.0 GB", icon: "internaldrive")
+            StatRowView(label: String.localised("stats.duration", table: .settings), value: "000h 00m", icon: "clock")
             StatRowView(
                 label: String.localised("generic.active", table: .generic),
                 value: "000",
@@ -29,7 +29,7 @@ struct StatsPlaceholderApplicationSection: View {
     var body: some View {
         Section {
             StatRowView(label: String.localised("generic.channels", table: .generic), value: "000", icon: "person.2")
-            StatRowView(label: "Subscribed", value: "000", icon: "bell")
+            StatRowView(label: String.localised("stats.subscribed", table: .settings), value: "000", icon: "bell")
             StatRowView(
                 label: String.localised("generic.playlists", table: .generic),
                 value: "000",

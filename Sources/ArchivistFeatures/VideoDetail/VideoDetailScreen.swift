@@ -33,6 +33,10 @@ public struct VideoDetailScreen: View {
     /// ignored for the rest of its life. Decided once per gesture — see
     /// `minimizeGesture`.
     @State private var isMinimizeDrag: Bool?
+    /// Whether this screen took the portrait lock, so it releases exactly
+    /// the lock it took — the size class can change between appear and
+    /// disappear.
+    @State private var didLockOrientation = false
 
     /// Downward distance past which releasing commits to the mini player.
     private static let minimizeCommitDistance: CGFloat = 100
@@ -132,7 +136,7 @@ public struct VideoDetailScreen: View {
                         }
 
                         ScrollViewReader { scrollProxy in
-                            ScrollView(showsIndicators: false) {
+                            ScrollView {
                                 VStack(spacing: 0) {
                                     contentView(descriptionFont: isCompact ? .subheadline : .body)
                                         .padding(.top, 8)
@@ -157,8 +161,8 @@ public struct VideoDetailScreen: View {
                                 }
                                 .id("scrollTop")
                             }
+                            .scrollIndicators(.hidden)
                             .onChange(of: store.video.videoId) {
-                                send(.videoChanged)
                                 scrollProxy.scrollTo("scrollTop", anchor: .top)
                             }
                         }
@@ -170,7 +174,7 @@ public struct VideoDetailScreen: View {
                         Divider()
                             .padding(.horizontal, 4)
 
-                        ScrollView(showsIndicators: false) {
+                        ScrollView {
                             VStack(spacing: 0) {
                                 if !store.playNextItems.isEmpty {
                                     sidebarPlayNextSection(
@@ -187,6 +191,7 @@ public struct VideoDetailScreen: View {
                                 )
                             }
                         }
+                        .scrollIndicators(.hidden)
                     }
                 }
 
@@ -243,12 +248,14 @@ public struct VideoDetailScreen: View {
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button {
+                Button(
+                    String.localised("generic.close", table: .generic),
+                    systemImage: "xmark"
+                ) {
                     send(.dismissTapped)
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(Color.Text.primary)
                 }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(Color.Text.primary)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -256,11 +263,13 @@ public struct VideoDetailScreen: View {
             send(.viewDidAppear)
             if isCompact {
                 OrientationLock.shared.lockPortrait()
+                didLockOrientation = true
             }
         }
         .onDisappear {
-            if isCompact {
+            if didLockOrientation {
                 OrientationLock.shared.unlock()
+                didLockOrientation = false
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
@@ -328,9 +337,7 @@ public struct VideoDetailScreen: View {
                 dislikes: store.video.formattedDislikeCount,
                 isWatched: store.isWatched,
                 showPlayNext: store.showPlayNext,
-                isInPlayNext: store.playNextItems.contains(
-                    where: { $0.videoId == store.video.videoId }
-                ),
+                isInPlayNext: store.isInPlayNext,
                 youtubeURL: store.youtubeURL,
                 tubeArchivistURL: store.tubeArchivistURL,
                 isDownloading: store.isDownloading,

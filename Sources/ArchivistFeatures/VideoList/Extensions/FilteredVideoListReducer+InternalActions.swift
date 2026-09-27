@@ -23,8 +23,13 @@ extension FilteredVideoListReducer {
         _ response: PaginatedResponse<VideoResponse>,
         state: inout State
     ) -> Effect<Action> {
-        for video in response.data {
-            state.videos.updateOrAppend(video)
+        // Only the first page replaces the list; later pages append.
+        if response.paginate.currentPage == 1 {
+            state.videos = IdentifiedArrayOf(uniqueElements: response.data)
+        } else {
+            for video in response.data {
+                state.videos.updateOrAppend(video)
+            }
         }
         state.currentPage = response.paginate.currentPage
         state.lastPage = response.paginate.lastPage

@@ -16,4 +16,7 @@ extension PingService: DependencyKey {
     )
 
     public static var testValue: PingService { PingService() }
+    public static var previewValue: PingService {
+        PingService(ping: { _ in PingResponse(response: "pong", user: 1, version: nil) })
+    }
 }

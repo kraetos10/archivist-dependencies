@@ -3,17 +3,10 @@ import ArchivistNetworking
 import SwiftUI
 
 public struct WatchDownloadsView: View {
-    @State var viewModel: WatchDownloadsViewModel
-    @State private var showCancelConfirmation = false
-    @State private var selectedRecord: WatchDownload?
-    let config: ServerConfig
+    @Bindable var viewModel: WatchDownloadsViewModel
 
-    public init(
-        viewModel: WatchDownloadsViewModel,
-        config: ServerConfig
-    ) {
+    public init(viewModel: WatchDownloadsViewModel) {
         self.viewModel = viewModel
-        self.config = config
     }
 
     public var body: some View {
@@ -21,36 +14,27 @@ public struct WatchDownloadsView: View {
             List {
                 if viewModel.hasActiveDownload {
                     Section {
-                        Button {
-                            showCancelConfirmation = true
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(viewModel.activeDownloadTitle ?? "")
-                                    .font(.headline)
-                                    .lineLimit(1)
-
-                                if let channel = viewModel.activeDownloadChannel {
-                                    Text(channel)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                ProgressView(value: viewModel.activeDownloadProgress)
-                                    .tint(.green)
-
-                                Text(
-                                    String(
-                                        localized: "download.progress \(Int(viewModel.activeDownloadProgress * 100))",
-                                        bundle: Bundle.module
-                                    )
-                                )
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            }
+                        Button(action: viewModel.activeDownloadTapped) {
+                            WatchActiveDownloadRow(viewModel: viewModel)
+                        }
+                        .confirmationDialog(
+                            String(localized: "download.cancelTitle", bundle: .module),
+                            isPresented: $viewModel.isShowingCancelConfirmation
+                        ) {
+                            Button(
+                                String(localized: "download.cancelDownload", bundle: .module),
+                                role: .destructive,
+                                action: viewModel.cancelActiveDownloadConfirmed
+                            )
                         }
                     } header: {
-                        Text(String(localized: "download.downloading", bundle: Bundle.module))
+                        Text(String(localized: "download.downloading", bundle: .module))
                     }
+                }
+
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.secondary)
                 }
 
                 if !viewModel.records.isEmpty {
@@ -58,79 +42,74 @@ public struct WatchDownloadsView: View {
                         ForEach(viewModel.records) { record in
                             NavigationLink(value: record.id) {
                                 WatchVideoRow(
-                                    title: record.title,
-                                    thumbPath: record.thumbPath,
-                                    config: config,
-                                    videoId: record.id,
-                                    isWatched: false,
-                                    watchProgress: viewModel.watchProgress(for: record),
-                                    durationStr: record.durationStr,
-                                    remainingStr: viewModel.remainingStr(for: record),
-                                    onEllipsisTapped: { selectedRecord = record }
+                                    model: viewModel.rowModel(for: record),
+                                    config: viewModel.config,
+                                    onMoreTapped: { viewModel.recordActionsTapped(record) }
                                 )
                             }
                         }
                     }
 
                     Section {
-                        HStack {
-                            Text(String(localized: "download.storageUsed", bundle: Bundle.module))
-                                .font(.caption)
-                            Spacer()
-                            Text(viewModel.formattedStorageUsed)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        LabeledContent(
+                            String(localized: "download.storageUsed", bundle: .module),
+                            value: viewModel.formattedStorageUsed
+                        )
+                        .font(.caption)
                     }
                 }
 
                 if viewModel.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "headphones")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        Text(String(localized: "download.emptyTitle", bundle: Bundle.module))
-                            .font(.headline)
-                        Text(String(localized: "download.emptyDescription", bundle: Bundle.module))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                    ContentUnavailableView {
+                        Label(String(localized: "download.emptyTitle", bundle: .module), systemImage: "headphones")
+                    } description: {
+                        Text(String(localized: "download.emptyDescription", bundle: .module))
                     }
-                    .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
                 }
             }
-            .navigationTitle(String(localized: "tab.downloads", bundle: Bundle.module))
+            .navigationTitle(String(localized: "tab.downloads", bundle: .module))
             .navigationDestination(for: String.self) { videoId in
-                if let player = viewModel.player(for: videoId, config: config) {
+                if let player = viewModel.player(for: videoId) {
                     WatchNowPlayingView(viewModel: player)
                 }
             }
             .confirmationDialog(
-                String(localized: "download.cancelTitle", bundle: Bundle.module),
-                isPresented: $showCancelConfirmation
+                viewModel.selectedRecordTitle,
+                isPresented: $viewModel.isShowingRecordActions,
+                titleVisibility: .visible
             ) {
                 Button(
-                    String(localized: "download.cancelDownload", bundle: Bundle.module),
-                    role: .destructive
-                ) {
-                    viewModel.cancelActiveDownload()
-                }
-            }
-            .confirmationDialog(
-                selectedRecord?.title ?? "",
-                isPresented: Binding(
-                    get: { selectedRecord != nil },
-                    set: { if !$0 { selectedRecord = nil } }
+                    String(localized: "action.deleteDownload", bundle: .module),
+                    role: .destructive,
+                    action: viewModel.deleteSelectedRecordConfirmed
                 )
-            ) {
-                if let record = selectedRecord {
-                    Button(String(localized: "action.deleteDownload", bundle: Bundle.module), role: .destructive) {
-                        viewModel.deleteDownload(videoId: record.id)
-                        selectedRecord = nil
-                    }
-                }
             }
+        }
+    }
+}
+
+private struct WatchActiveDownloadRow: View {
+    let viewModel: WatchDownloadsViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(viewModel.activeDownloadTitle)
+                .font(.headline)
+                .lineLimit(1)
+
+            if let channel = viewModel.activeDownloadChannel {
+                Text(channel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: viewModel.activeDownloadProgress)
+                .tint(.green)
+
+            Text(viewModel.activeDownloadProgressText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

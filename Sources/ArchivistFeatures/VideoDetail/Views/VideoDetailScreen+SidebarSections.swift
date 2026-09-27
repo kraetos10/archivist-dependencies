@@ -86,8 +86,7 @@ extension VideoDetailScreen {
 
     func playNextThumbnail(_ item: PlayNextItem) -> some View {
         Group {
-            if let thumbPath = item.thumbUrl,
-               let thumbURL = store.serverConfig.fullURL(for: thumbPath) {
+            if let thumbURL = item.thumbnailURL(config: store.serverConfig) {
                 AsyncImage(url: thumbURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -115,18 +114,12 @@ extension VideoDetailScreen {
                 .foregroundStyle(Color.Brand.secondary)
                 .lineLimit(1)
 
-            HStack(spacing: 4) {
-                if let duration = item.duration {
-                    Text(duration)
-                }
-
-                if let published = item.publishedRelative {
-                    Text(item.duration == nil ? published : "· \(published)")
-                }
+            if let details = item.detailsLine {
+                Text(details)
+                    .font(.caption2)
+                    .foregroundStyle(Color.Brand.secondary)
+                    .lineLimit(1)
             }
-            .font(.caption2)
-            .foregroundStyle(Color.Brand.secondary)
-            .lineLimit(1)
         }
     }
 

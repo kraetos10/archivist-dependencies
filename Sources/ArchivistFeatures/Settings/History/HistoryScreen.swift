@@ -20,12 +20,12 @@ public struct HistoryScreen: View {
             // (the navigation bar title is blanked under the tab bar).
             Text(String.localised("settings.history", table: .settings))
                 .font(.title2)
-                .fontWeight(.bold)
+                .bold()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, TVLayout.rowVerticalPadding)
             #endif
 
-            if store.hasLoaded && store.continueVideos.isEmpty && store.watchedVideos.isEmpty {
+            if store.showsEmptyState {
                 emptyState
             } else {
                 #if os(tvOS)
@@ -46,7 +46,7 @@ public struct HistoryScreen: View {
             }
         }
         .background(Color.Brand.primary.ignoresSafeArea())
-        .refreshable { send(.pullToRefreshTriggered) }
+        .refreshable { await send(.pullToRefreshTriggered).finish() }
         #if os(tvOS)
         .navigationTitle("")
         #else
@@ -63,45 +63,32 @@ public struct HistoryScreen: View {
     #if !os(tvOS)
     private var iPhoneContent: some View {
         LazyVStack(spacing: 0) {
-            if store.isLoading && !store.hasLoaded {
+            if store.showsPlaceholders {
                 ForEach(VideoResponse.placeholders) { video in
-                    historyRow(video)
+                    HistoryRowView(row: HistoryRow(video: video, config: store.serverConfig))
                         .redacted(reason: .placeholder)
                 }
             } else {
-                if !store.continueVideos.isEmpty {
+                let continueRows = store.continueRows
+                if !continueRows.isEmpty {
                     sectionHeader(String.localised("video.continueWatching", table: .videos))
-                    ForEach(store.continueVideos) { video in
-                        historyRow(video)
-                            .pressable { send(.videoTapped(video)) }
+                    ForEach(continueRows) { row in
+                        HistoryRowView(row: row)
+                            .pressable { send(.videoTapped(row.video)) }
                     }
                 }
 
-                if !store.watchedVideos.isEmpty {
+                let watchedRows = store.watchedRows
+                if !watchedRows.isEmpty {
                     sectionHeader(String.localised("video.watched", table: .videos))
-                    ForEach(store.watchedVideos) { video in
-                        historyRow(video)
-                            .pressable { send(.videoTapped(video)) }
-                            .onAppear {
-                                if video.id == store.watchedVideos.last?.id {
-                                    send(.lastItemAppeared)
-                                }
-                            }
+                    ForEach(watchedRows) { row in
+                        HistoryRowView(row: row)
+                            .pressable { send(.videoTapped(row.video)) }
+                            .onAppear { send(.itemAppeared(row.id)) }
                     }
                 }
             }
         }
-    }
-
-    private func historyRow(_ video: VideoResponse) -> some View {
-        VideoRowView(
-            title: video.title,
-            subtitle: video.channelName,
-            secondarySubtitle: video.formattedViewCount.map { "\($0) views" },
-            thumbnailURL: video.vidThumbUrl.flatMap { store.serverConfig.fullURL(for: $0) },
-            badge: video.durationStr,
-            thumbnailWidth: 160
-        )
     }
 
     // MARK: - iPad Layout (grid cards)
@@ -109,7 +96,7 @@ public struct HistoryScreen: View {
     private var iPadContent: some View {
         let columns = [GridItem(.adaptive(minimum: 300), spacing: 16)]
         return LazyVGrid(columns: columns, spacing: 16) {
-            if store.isLoading && !store.hasLoaded {
+            if store.showsPlaceholders {
                 ForEach(VideoResponse.placeholders) { video in
                     VideoCardView(video: video, serverConfig: store.serverConfig)
                         .redacted(reason: .placeholder)
@@ -131,11 +118,7 @@ public struct HistoryScreen: View {
                         ForEach(store.watchedVideos) { video in
                             VideoCardView(video: video, serverConfig: store.serverConfig)
                                 .pressable { send(.videoTapped(video)) }
-                                .onAppear {
-                                    if video.id == store.watchedVideos.last?.id {
-                                        send(.lastItemAppeared)
-                                    }
-                                }
+                                .onAppear { send(.itemAppeared(video.id)) }
                         }
                     } header: {
                         sectionHeader(String.localised("video.watched", table: .videos))
@@ -152,7 +135,7 @@ public struct HistoryScreen: View {
     #if os(tvOS)
     private var tvContent: some View {
         LazyVGrid(columns: TVLayout.cardGridColumns, spacing: TVLayout.cardSpacing) {
-            if store.isLoading && !store.hasLoaded {
+            if store.showsPlaceholders {
                 ForEach(VideoResponse.placeholders) { video in
                     TVVideoCardView(video: video, serverConfig: store.serverConfig)
                         .redacted(reason: .placeholder)
@@ -177,11 +160,7 @@ public struct HistoryScreen: View {
                             TVVideoCardView(video: video, serverConfig: store.serverConfig) {
                                 send(.videoTapped(video))
                             }
-                            .onAppear {
-                                if video.id == store.watchedVideos.last?.id {
-                                    send(.lastItemAppeared)
-                                }
-                            }
+                            .onAppear { send(.itemAppeared(video.id)) }
                         }
                     } header: {
                         sectionHeader(String.localised("video.watched", table: .videos))
@@ -233,3 +212,20 @@ public struct HistoryScreen: View {
         .padding(.top, 100)
     }
 }
+
+#if !os(tvOS)
+private struct HistoryRowView: View {
+    let row: HistoryRow
+
+    var body: some View {
+        VideoRowView(
+            title: row.video.title,
+            subtitle: row.video.channelName,
+            secondarySubtitle: row.viewCountText,
+            thumbnailURL: row.thumbnailURL,
+            badge: row.video.durationStr,
+            thumbnailWidth: 160
+        )
+    }
+}
+#endif

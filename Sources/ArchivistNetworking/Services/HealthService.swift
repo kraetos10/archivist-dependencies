@@ -16,28 +16,34 @@ extension HealthService: DependencyKey {
         checkHealth: { baseURL, port, useHTTP in
             @Dependency(\.urlSession) var urlSession
 
-            var components = URLComponents()
-            components.scheme = useHTTP ? "http" : "https"
-            components.host = baseURL
-            components.port = port
-            components.path = "/api/health/"
-
-            guard let url = components.url else {
+            // Through the same builder as authenticated requests, so an
+            // address with a scheme, port or subpath resolves identically.
+            let config = ServerConfig(
+                baseURL: baseURL,
+                port: port,
+                apiToken: "",
+                useHTTP: useHTTP
+            )
+            guard let url = config.url(path: Paths.health.rawValue) else {
                 throw NetworkingError.invalidURL
             }
 
             var request = URLRequest(url: url)
-            request.httpMethod = "GET"
+            request.httpMethod = HTTPMethod.get.rawValue
 
-            let (_, response) = try await urlSession.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
 
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-                throw NetworkingError.errorStatusCode(statusCode, "")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NetworkingError.missingData
+            }
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                throw NetworkingError(statusCode: httpResponse.statusCode, body: data)
             }
         }
     )
 
     public static var testValue: HealthService { HealthService() }
+    public static var previewValue: HealthService {
+        HealthService(checkHealth: { _, _, _ in })
+    }
 }

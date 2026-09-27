@@ -13,9 +13,9 @@ public struct DownloadDetailReducer {
         var isDownloading = false
         var downloadTriggered = false
         var isDeleting = false
-        var isPresentingDownloadPin = false
-        @Shared(.appStorage(ChildMode.enabledKey)) public var childModeEnabled = false
-        @Shared(.appStorage(ChildMode.pinKey)) public var childModePin = ""
+        @Shared(.childModeEnabled) public var childModeEnabled
+        @Presents var pinEntry: PinEntryReducer.State?
+        @Presents var alert: AlertState<AlertAction>?
 
         var thumbURL: URL? {
             download.thumbURL(config: serverConfig)
@@ -24,46 +24,81 @@ public struct DownloadDetailReducer {
         var youtubeURL: URL? {
             download.youtubeURL
         }
+
+        var displayTitle: String {
+            download.title ?? download.youtubeId
+        }
+
+        /// The download button spins from the tap until the screen closes.
+        var isDownloadBusy: Bool {
+            isDownloading || downloadTriggered
+        }
+
+        init(
+            serverConfig: ServerConfig,
+            download: DownloadResponse
+        ) {
+            self.serverConfig = serverConfig
+            self.download = download
+        }
     }
 
-    public enum Action: ViewAction, BindableAction {
+    public enum AlertAction: Equatable, Sendable {
+        case dismissed
+    }
+
+    public enum Action: ViewAction {
         case view(View)
-        case binding(BindingAction<State>)
+        case alert(PresentationAction<AlertAction>)
         case downloadResult(Result<Void, Error>)
-        case performDelete
         case deleteResult(Result<Void, Error>)
-        case pinDownloadConfirmed
-        case pinDownloadCancelled
+        case pinEntry(PresentationAction<PinEntryReducer.Action>)
+        case pinLoaded(String?)
+        case delegate(Delegate)
 
         @CasePathable
         public enum View {
-            case viewDidAppear
-            case dismissTapped
             case downloadTapped
             case deleteTapped
         }
-    }
 
-    @Dependency(\.downloadService) var downloadService
-
-    public var body: some Reducer<State, Action> {
-        BindingReducer()
-        Reduce { state, action in
-            switch action {
-            case .binding:
-                return .none
-            case .view(let viewAction):
-                return handleViewAction(viewAction, state: &state)
-            case .pinDownloadConfirmed:
-                state.isPresentingDownloadPin = false
-                return performDownload(state: &state)
-            case .pinDownloadCancelled:
-                state.isPresentingDownloadPin = false
-                return .none
-            default:
-                return handleInternalAction(action, state: &state)
-            }
+        public enum Delegate: Equatable, Sendable {
+            /// The video was bumped to the front of the server queue. The
+            /// screen dismisses itself straight after.
+            case didQueueDownload(String)
+            /// The video was removed from the server queue. The screen
+            /// dismisses itself straight after.
+            case didDelete(String)
         }
     }
 
+    @Dependency(\.dismiss) var dismiss
+    @Dependency(\.downloadService) var downloadService
+    @Dependency(\.pinStore) var pinStore
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .view(let viewAction):
+                return handleViewAction(viewAction, state: &state)
+            case .pinLoaded(let pin):
+                return handlePinLoaded(pin, state: &state)
+            case .pinEntry(.presented(.succeeded)):
+                state.pinEntry = nil
+                return performDownload(state: &state)
+            case .pinEntry:
+                return .none
+            case .downloadResult(let result):
+                return handleDownloadResult(result, state: &state)
+            case .deleteResult(let result):
+                return handleDeleteResult(result, state: &state)
+            case .alert, .delegate:
+                return .none
+            }
+        }
+        .ifLet(\.$pinEntry, action: \.pinEntry) {
+            PinEntryReducer()
+        }
+        .ifLet(\.$alert, action: \.alert)
+    }
 }
