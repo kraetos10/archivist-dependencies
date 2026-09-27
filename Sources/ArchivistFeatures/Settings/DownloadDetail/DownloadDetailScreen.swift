@@ -133,6 +133,11 @@ public struct DownloadDetailScreen: View {
     /// button (and with it the popover) just as it disappears. The
     /// confirmation is the dismissal; the queued video is already visible
     /// in the list behind.
+    /// Label height shared by the download and delete buttons, so the pair
+    /// line up. The bordered style's own padding takes each button past the
+    /// 44pt minimum tap target.
+    private static let actionContentHeight: CGFloat = 32
+
     private var downloadButton: some View {
         Button {
             send(.downloadTapped)
@@ -149,8 +154,7 @@ public struct DownloadDetailScreen: View {
             }
             .font(.subheadline)
             .fontWeight(.semibold)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: Self.actionContentHeight)
         }
         .buttonStyle(.borderedProminent)
         .tint(Color.Accent.dark)
@@ -174,7 +178,7 @@ public struct DownloadDetailScreen: View {
             }
             .font(.subheadline)
             .fontWeight(.semibold)
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: Self.actionContentHeight, minHeight: Self.actionContentHeight)
         }
         .buttonStyle(.borderedProminent)
         .accessibilityLabel(String.localised("generic.delete", table: .generic))
