@@ -6,14 +6,21 @@ import ArchivistComponents
 
 public struct TabScreen: View {
     @Bindable public var store: StoreOf<TabReducer>
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     public init(store: StoreOf<TabReducer>) {
         self.store = store
     }
 
+    /// Device idiom, not size class. A Plus/Pro Max iPhone turns regular
+    /// width in landscape, and switching view trees on that tears down
+    /// anything presented from the old one — rotating a fullscreen video
+    /// dismissed it. Presentation style (sheet vs popover) still follows
+    /// size class; the layout family follows the device.
+    private var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
     public var body: some View {
-        if horizontalSizeClass == .regular {
+        if isIPad {
             iPadTabScreen(store: store)
         } else {
             PhoneTabScreen(store: store)
