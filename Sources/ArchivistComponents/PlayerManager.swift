@@ -386,6 +386,13 @@ public final class PlayerManager: NSObject {
         // headphones, disconnecting Bluetooth. Without this, iOS reroutes
         // to the built-in speaker and playback keeps going, blasting audio.
         // Matches the behaviour of every system media app.
+        //
+        // `.oldDeviceUnavailable` alone isn't proof the headphones went:
+        // Siri on Bluetooth headphones swaps the headset from its A2DP
+        // output to its HFP one, which reports the same reason. Pausing
+        // there beat the interruption's `.began`, which then saw nothing
+        // playing and so never resumed once Siri finished. Only pause once
+        // audio has really fallen back to the device itself.
         routeChangeObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.routeChangeNotification,
             object: nil,
@@ -398,14 +405,30 @@ public final class PlayerManager: NSObject {
                 guard let self else { return }
                 guard let reasonValue,
                       let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue),
-                      reason == .oldDeviceUnavailable else {
+                      reason == .oldDeviceUnavailable,
+                      Self.isBuiltInRoute(AVAudioSession.sharedInstance().currentRoute) else {
                     return
                 }
+                // Headphones pulled mid-interruption: resuming afterwards
+                // would play out of the speaker, the very thing this guards.
+                self.interruptionResumeTask?.cancel()
+                self.interruptionResumeTask = nil
+                self.pausedForInterruption = false
+                self.interruptedVideoID = nil
                 if self.isPlaying {
                     self.pause()
                 }
             }
         }
+    }
+
+    /// Whether the route plays only through the device's own speaker or
+    /// receiver — what's left once headphones or a headset disconnect.
+    private static func isBuiltInRoute(_ route: AVAudioSessionRouteDescription) -> Bool {
+        let builtIn: Set<AVAudioSession.Port> = [.builtInSpeaker, .builtInReceiver]
+        // An empty route is a switch in progress, not a fallback.
+        return !route.outputs.isEmpty
+            && route.outputs.allSatisfy { builtIn.contains($0.portType) }
     }
 
     private func observeForeground() {
