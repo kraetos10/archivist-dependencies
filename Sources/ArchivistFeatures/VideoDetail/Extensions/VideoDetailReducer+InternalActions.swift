@@ -69,7 +69,8 @@ extension VideoDetailReducer {
         case .downloadResumed(let videoId, _),
              .downloadProgressUpdated(let videoId, _),
              .downloadCompleted(let videoId),
-             .downloadFailed(let videoId, _):
+             .downloadFailed(let videoId, _),
+             .downloadCancelled(let videoId):
             guard videoId == state.video.videoId else { return Effect<Action>.none }
             return handleDownloadAction(action, state: &state)
         default:
@@ -118,6 +119,10 @@ extension VideoDetailReducer {
             } message: {
                 TextState(message)
             }
+        case .downloadCancelled:
+            state.isDownloading = false
+            state.isDownloaded = false
+            state.downloadProgress = 0
         default:
             break
         }

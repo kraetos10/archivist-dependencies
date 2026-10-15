@@ -247,6 +247,19 @@ struct VideoDetailReducerTests {
         }
     }
 
+    /// Deleted mid-transfer elsewhere: the download just stops, no alert.
+    @Test func aCancelledDownloadResetsQuietly() async {
+        let store = makeStore {
+            $0.isDownloading = true
+            $0.downloadProgress = 0.4
+        }
+
+        await store.send(.downloadCancelled(videoId: "video_1")) {
+            $0.isDownloading = false
+            $0.downloadProgress = 0
+        }
+    }
+
     @Test func deletingTheDownloadRemovesTheFileAndRowInAnEffect() async {
         let deleted = LockIsolated<[String]>([])
         let store = makeStore { $0.isDownloaded = true }
@@ -450,6 +463,10 @@ private struct IdleDownloadManager: PersistentDownloadManagerType {
     }
 
     func activeDownloads() async -> [DeviceDownloadInfo] { [] }
+
+    func cancelDownload(videoId: String) async {}
+
+    func cancelAllDownloads() async {}
 }
 
 private extension TestFixtures {

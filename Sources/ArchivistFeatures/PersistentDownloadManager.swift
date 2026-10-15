@@ -6,6 +6,8 @@ public enum DownloadEvent: Sendable {
     case progress(Double)
     case completed
     case failed(String)
+    /// Stopped because the download was deleted — not an error to report.
+    case cancelled
 }
 
 public nonisolated struct DeviceDownloadInfo: Equatable, Sendable, Identifiable {
@@ -39,6 +41,10 @@ public nonisolated protocol PersistentDownloadManagerType: Sendable {
     func progress(for videoId: String) async -> Double
     func observe(videoId: String) async -> AsyncStream<DownloadEvent>
     func activeDownloads() async -> [DeviceDownloadInfo]
+    /// Stops a transfer whose download is being deleted. Await it before
+    /// deleting the file and row, or the finished file lands with no row.
+    func cancelDownload(videoId: String) async
+    func cancelAllDownloads() async
 }
 
 public final actor PersistentDownloadManager: PersistentDownloadManagerType {
@@ -66,6 +72,7 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
         let task = Task { [weak self] in
             guard let self else { return }
             @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase
+            @Dependency(\.localVideoStorage) var localVideoStorage
             // Bind to an immutable local so the KVO/progress closures
             // capture a `let` rather than the `@Dependency`-backed mutable
             // var — capturing the mutable var trips strict-concurrency's
@@ -106,12 +113,26 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
                     onProgress: { _ in }
                 )
                 observation.invalidate()
+                // Cancelled after the transfer finished but before the move
+                // landed: the delete may already have run, so the file and
+                // thumbnail are this task's to remove.
+                if Task.isCancelled {
+                    try? localVideoStorage.deleteVideo(videoId: videoId)
+                    await self.broadcast(videoId: videoId, event: .cancelled)
+                    await self.cleanUp(videoId: videoId)
+                    return
+                }
                 // Get the actual file size for storage tracking
                 let fileSize = (try? FileManager.default.attributesOfItem(
                     atPath: savedURL.path
                 )[.size] as? Int) ?? nil
                 try? database.markCompleted(videoId, fileSize)
                 await self.broadcast(videoId: videoId, event: .completed)
+            } catch where Task.isCancelled {
+                observation.invalidate()
+                // The thumbnail may have landed after the delete removed it.
+                try? localVideoStorage.deleteVideo(videoId: videoId)
+                await self.broadcast(videoId: videoId, event: .cancelled)
             } catch {
                 observation.invalidate()
                 try? database.markFailed(videoId)
@@ -139,6 +160,16 @@ public final actor PersistentDownloadManager: PersistentDownloadManagerType {
             )
         }
         .sorted { $0.videoId < $1.videoId }
+    }
+
+    public func cancelDownload(videoId: String) {
+        activeTasks[videoId]?.cancel()
+    }
+
+    public func cancelAllDownloads() {
+        for task in activeTasks.values {
+            task.cancel()
+        }
     }
 
     public func observe(videoId: String) -> AsyncStream<DownloadEvent> {

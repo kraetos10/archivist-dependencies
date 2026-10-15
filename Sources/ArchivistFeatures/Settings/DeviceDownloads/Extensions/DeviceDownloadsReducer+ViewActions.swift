@@ -46,7 +46,8 @@ extension DeviceDownloadsReducer {
     }
 
     private func handleDeleteTapped(_ videoId: String) -> Effect<Action> {
-        .run { [deviceDownloadDatabase, deviceStorage, localVideoStorage] send in
+        .run { [deviceDownloadDatabase, deviceStorage, localVideoStorage, persistentDownloadManager] send in
+            await persistentDownloadManager.cancelDownload(videoId: videoId)
             do {
                 try localVideoStorage.deleteVideo(videoId: videoId)
                 try deviceDownloadDatabase.deleteDownload(videoId)

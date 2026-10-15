@@ -199,6 +199,7 @@ public struct VideoDetailReducer {
         case downloadProgressUpdated(videoId: String, progress: Double)
         case downloadCompleted(videoId: String)
         case downloadFailed(videoId: String, message: String)
+        case downloadCancelled(videoId: String)
         case autoPlayVideo(VideoResponse)
         /// Nothing follows the finished video. Also a signal to `TabReducer`,
         /// which retires the mini player when its copy sends this — so it is

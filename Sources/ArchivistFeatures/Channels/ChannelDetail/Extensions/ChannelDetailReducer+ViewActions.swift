@@ -251,6 +251,7 @@ extension ChannelDetailReducer {
     ) -> Effect<Action> {
         let videoId = video.videoId
         return .run { _ in
+            await persistentDownloadManager.cancelDownload(videoId: videoId)
             try? localVideoStorage.deleteVideo(videoId: videoId)
             try? deviceDownloadDatabase.deleteDownload(videoId)
         }

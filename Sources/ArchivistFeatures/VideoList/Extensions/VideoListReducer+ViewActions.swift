@@ -204,7 +204,8 @@ extension VideoListReducer {
         state: inout State
     ) -> Effect<Action> {
         let videoId = video.videoId
-        return .run { [localVideoStorage, deviceDownloadDatabase] _ in
+        return .run { [localVideoStorage, deviceDownloadDatabase, persistentDownloadManager] _ in
+            await persistentDownloadManager.cancelDownload(videoId: videoId)
             try? localVideoStorage.deleteVideo(videoId: videoId)
             try? deviceDownloadDatabase.deleteDownload(videoId)
         }

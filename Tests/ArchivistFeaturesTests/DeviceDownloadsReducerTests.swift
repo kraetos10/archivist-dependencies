@@ -94,6 +94,28 @@ struct DeviceDownloadsReducerTests {
         #expect(deletedRows.value == ["video_1"])
     }
 
+    /// A transfer still running is stopped before its file and row go, or
+    /// it would finish into a file no row points at.
+    @Test func deletingCancelsTheTransferFirst() async {
+        let steps = LockIsolated<[String]>([])
+        let store = TestStore(initialState: DeviceDownloadsReducer.State(serverConfig: config)) {
+            DeviceDownloadsReducer()
+        } withDependencies: {
+            $0.persistentDownloadManager = RecordingDownloadManager { id in
+                steps.withValue { $0.append("cancel \(id)") }
+            }
+            $0.localVideoStorage.deleteVideo = { id in steps.withValue { $0.append("file \(id)") } }
+            $0.deviceDownloadDatabase.deleteDownload = { id in steps.withValue { $0.append("row \(id)") } }
+            $0.deviceStorage.usage = { StorageUsage(downloadsSize: 0, available: 500) }
+        }
+
+        await store.send(.view(.deleteTapped("video_1")))
+        await store.receive(\.storageInfoLoaded) {
+            $0.storage = StorageUsage(downloadsSize: 0, available: 500)
+        }
+        #expect(steps.value == ["cancel video_1", "file video_1", "row video_1"])
+    }
+
     @Test func aFailedDeleteSaysSoAndKeepsTheRow() async {
         let failure = CocoaError(.fileWriteNoPermission)
         let deletedRows = LockIsolated<[String]>([])
@@ -242,9 +264,14 @@ struct DeviceDownloadsReducerTests {
 private actor RecordingDownloadManager: PersistentDownloadManagerType {
     private(set) var started: [String] = []
     private let active: [String]
+    private let onCancel: @Sendable (String) -> Void
 
-    init(active: [String] = []) {
+    init(
+        active: [String] = [],
+        onCancel: @escaping @Sendable (String) -> Void = { _ in }
+    ) {
         self.active = active
+        self.onCancel = onCancel
     }
 
     func startDownload(
@@ -269,6 +296,12 @@ private actor RecordingDownloadManager: PersistentDownloadManagerType {
     func activeDownloads() async -> [DeviceDownloadInfo] {
         active.map { DeviceDownloadInfo(videoId: $0, title: $0, progress: 0.5) }
     }
+
+    func cancelDownload(videoId: String) async {
+        onCancel(videoId)
+    }
+
+    func cancelAllDownloads() async {}
 }
 
 private extension TestFixtures {

@@ -256,6 +256,8 @@ extension VideoDetailReducer {
                 await send(.downloadCompleted(videoId: videoId))
             case .failed(let message):
                 await send(.downloadFailed(videoId: videoId, message: message))
+            case .cancelled:
+                await send(.downloadCancelled(videoId: videoId))
             }
         }
     }
@@ -668,7 +670,8 @@ extension VideoDetailReducer {
 
     /// Removes the offline file and its database row, off the reducer.
     func deleteLocalCopyEffect(videoId: String) -> Effect<Action> {
-        .run { [localVideoStorage, deviceDownloadDatabase] _ in
+        .run { [localVideoStorage, deviceDownloadDatabase, persistentDownloadManager] _ in
+            await persistentDownloadManager.cancelDownload(videoId: videoId)
             try? localVideoStorage.deleteVideo(videoId: videoId)
             try? deviceDownloadDatabase.deleteDownload(videoId)
         }
