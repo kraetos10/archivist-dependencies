@@ -29,6 +29,12 @@ public struct DeviceDownloadsReducer {
             downloads.filter(\.isCompleted)
         }
 
+        /// Counted on the folder as well as the list: files no row points
+        /// at take space but never show up as a card.
+        var canDeleteAll: Bool {
+            storage.downloadsSize > 0 || downloads.contains { $0.status != .downloading }
+        }
+
         /// The app's slice of the bar: its downloads against the downloads
         /// plus what's still free. Space other apps use isn't actionable
         /// here, and counting it squeezed our slice to a sliver on a full
@@ -59,6 +65,7 @@ public struct DeviceDownloadsReducer {
     }
 
     public enum AlertAction: Equatable, Sendable {
+        case confirmDeleteAll
         case dismissed
     }
 
@@ -75,6 +82,7 @@ public struct DeviceDownloadsReducer {
             case viewDidAppear
             case viewDidDisappear
             case deleteTapped(String)
+            case deleteAllTapped
             case downloadTapped(DeviceDownload)
             case addToPlaylistTapped(DeviceDownload)
         }
@@ -102,6 +110,8 @@ public struct DeviceDownloadsReducer {
                 return .none
             case .operationFailed(let message):
                 return handleOperationFailed(message, state: &state)
+            case .alert(.presented(.confirmDeleteAll)):
+                return handleConfirmDeleteAll()
             case .alert, .videoDetail, .playlistPicker:
                 return .none
             }

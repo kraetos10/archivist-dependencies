@@ -177,6 +177,28 @@
         }
       }
     },
+    "video.deleteAllDownloads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete All Downloads"
+          }
+        }
+      }
+    },
+    "video.deleteAllDownloads.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete every video saved on this device? Videos still downloading are kept."
+          }
+        }
+      }
+    },
     "video.deleteDownload": {
       "extractionState": "manual",
       "localizations": {

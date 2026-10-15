@@ -17,6 +17,9 @@ extension DeviceDownloadsReducer {
             return .cancel(id: CancelID.storageRefresh)
         case .deleteTapped(let videoId):
             return handleDeleteTapped(videoId)
+        case .deleteAllTapped:
+            state.alert = .confirmDeleteAll
+            return .none
         case .downloadTapped(let download):
             return handleDownloadTapped(download, state: &state)
         case .addToPlaylistTapped(let download):

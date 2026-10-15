@@ -10,7 +10,8 @@ public struct DeviceDownloadDatabase: Sendable {
     public var markCompleted: @Sendable (_ videoId: String, _ fileSize: Int?) throws -> Void
     public var markFailed: @Sendable (_ videoId: String) throws -> Void
     public var deleteDownload: @Sendable (_ videoId: String) throws -> Void
-    public var deleteAll: @Sendable () throws -> Void
+    /// Deletes every row except those for `except`.
+    public var deleteAll: @Sendable (_ except: Set<String>) throws -> Void
     public var cleanupStaleDownloads: @Sendable () throws -> Void
 }
 
@@ -74,9 +75,13 @@ extension DeviceDownloadDatabase: DependencyKey {
                         .execute(db)
                 }
             },
-            deleteAll: {
+            deleteAll: { keptVideoIds in
+                let kept = Array(keptVideoIds)
                 try database.write { db in
-                    try DeviceDownload.delete().execute(db)
+                    try DeviceDownload
+                        .where { !$0.id.in(kept) }
+                        .delete()
+                        .execute(db)
                 }
             },
             cleanupStaleDownloads: {
@@ -100,7 +105,7 @@ extension DeviceDownloadDatabase: DependencyKey {
         markCompleted: { _, _ in },
         markFailed: { _ in },
         deleteDownload: { _ in },
-        deleteAll: { },
+        deleteAll: { _ in },
         cleanupStaleDownloads: { }
     )
 }

@@ -88,6 +88,18 @@ public struct DeviceDownloadsScreen: View {
         .onDisappear { send(.viewDidDisappear) }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(String.localised("video.saved", table: .videos))
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(
+                    String.localised("video.deleteAllDownloads", table: .videos),
+                    systemImage: "trash",
+                    role: .destructive
+                ) {
+                    send(.deleteAllTapped)
+                }
+                .disabled(!store.canDeleteAll)
+            }
+        }
         .alert($store.scope(state: \.alert, action: \.alert))
         .sheet(item: $store.scope(state: \.playlistPicker, action: \.playlistPicker)) { pickerStore in
             PlaylistPickerScreen(store: pickerStore)

@@ -6,7 +6,9 @@ import Foundation
 public struct LocalVideoStorage: Sendable {
     public var isDownloaded: @Sendable (_ videoId: String) -> Bool = { _ in false }
     public var deleteVideo: @Sendable (_ videoId: String) throws -> Void
-    public var deleteAllVideos: @Sendable () throws -> Void
+    /// Deletes every file under the downloads folder — including ones no
+    /// download row points at — except those belonging to `except`.
+    public var deleteAllVideos: @Sendable (_ except: Set<String>) throws -> Void
     public var moveDownloadedFile: @Sendable (
         _ from: URL,
         _ videoId: String
@@ -96,13 +98,19 @@ extension LocalVideoStorage: DependencyKey {
             }
             try deleteThumbnail(videoId: videoId)
         },
-        deleteAllVideos: {
-            let dir = videosDirectory
-            if FileManager.default.fileExists(atPath: dir.path) {
-                let contents = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-                for file in contents {
-                    try FileManager.default.removeItem(at: file)
-                }
+        deleteAllVideos: { keptVideoIds in
+            // Videos and thumbnails are both named `<videoId>.<ext>`, so the
+            // name decides what's kept. Folders stay; only files go.
+            guard let enumerator = FileManager.default.enumerator(
+                at: videosDirectory,
+                includingPropertiesForKeys: [.isRegularFileKey]
+            ) else { return }
+            for case let file as URL in enumerator {
+                let isFile = (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
+                guard isFile,
+                      !keptVideoIds.contains(file.deletingPathExtension().lastPathComponent)
+                else { continue }
+                try FileManager.default.removeItem(at: file)
             }
         },
         moveDownloadedFile: { tempURL, videoId in
@@ -120,7 +128,7 @@ extension LocalVideoStorage: DependencyKey {
         LocalVideoStorage(
             isDownloaded: { _ in false },
             deleteVideo: { _ in },
-            deleteAllVideos: {},
+            deleteAllVideos: { _ in },
             moveDownloadedFile: { from, _ in from }
         )
     }

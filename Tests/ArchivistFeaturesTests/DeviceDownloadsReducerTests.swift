@@ -119,6 +119,54 @@ struct DeviceDownloadsReducerTests {
         #expect(deletedRows.value.isEmpty)
     }
 
+    // MARK: - Delete All
+
+    @Test func deleteAllAsksFirst() async {
+        let store = TestStore(initialState: DeviceDownloadsReducer.State(serverConfig: config)) {
+            DeviceDownloadsReducer()
+        }
+
+        await store.send(.view(.deleteAllTapped)) {
+            $0.alert = .confirmDeleteAll
+        }
+    }
+
+    /// Files no row points at count, so the button works on an empty list
+    /// that still holds space.
+    @Test func deleteAllIsAvailableForFilesTheListDoesntShow() {
+        var state = DeviceDownloadsReducer.State(serverConfig: config)
+        #expect(!state.canDeleteAll)
+
+        state.storage = StorageUsage(downloadsSize: 600_000_000, available: 1_000)
+        #expect(state.canDeleteAll)
+    }
+
+    /// Clears files and rows but spares running transfers, whose files
+    /// haven't landed yet.
+    @Test func confirmingDeleteAllKeepsActiveDownloads() async {
+        let keptFiles = LockIsolated<Set<String>?>(nil)
+        let keptRows = LockIsolated<Set<String>?>(nil)
+        var state = DeviceDownloadsReducer.State(serverConfig: config)
+        state.alert = .confirmDeleteAll
+        let store = TestStore(initialState: state) {
+            DeviceDownloadsReducer()
+        } withDependencies: {
+            $0.persistentDownloadManager = RecordingDownloadManager(active: ["video_2"])
+            $0.localVideoStorage.deleteAllVideos = { kept in keptFiles.setValue(kept) }
+            $0.deviceDownloadDatabase.deleteAll = { kept in keptRows.setValue(kept) }
+            $0.deviceStorage.usage = { StorageUsage(downloadsSize: 0, available: 500) }
+        }
+
+        await store.send(.alert(.presented(.confirmDeleteAll))) {
+            $0.alert = nil
+        }
+        await store.receive(\.storageInfoLoaded) {
+            $0.storage = StorageUsage(downloadsSize: 0, available: 500)
+        }
+        #expect(keptFiles.value == ["video_2"])
+        #expect(keptRows.value == ["video_2"])
+    }
+
     // MARK: - Retry
 
     /// Tapping a failed download fetches the video again, re-inserts the
@@ -193,6 +241,11 @@ struct DeviceDownloadsReducerTests {
 /// Records the downloads it was asked to start; never runs one.
 private actor RecordingDownloadManager: PersistentDownloadManagerType {
     private(set) var started: [String] = []
+    private let active: [String]
+
+    init(active: [String] = []) {
+        self.active = active
+    }
 
     func startDownload(
         url: URL,
@@ -213,7 +266,9 @@ private actor RecordingDownloadManager: PersistentDownloadManagerType {
         AsyncStream { $0.finish() }
     }
 
-    func activeDownloads() async -> [DeviceDownloadInfo] { [] }
+    func activeDownloads() async -> [DeviceDownloadInfo] {
+        active.map { DeviceDownloadInfo(videoId: $0, title: $0, progress: 0.5) }
+    }
 }
 
 private extension TestFixtures {
