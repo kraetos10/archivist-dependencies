@@ -56,8 +56,8 @@ extension ChannelDetailReducer {
     // MARK: - Fetching
 
     /// Every video page goes through here. A new request cancels the one in
-    /// flight, so a page fetched for the previous sort order (or before a
-    /// refresh) can never land on top of the current list.
+    /// flight, so a page fetched for the previous sort order or filter (or
+    /// before a refresh) can never land on top of the current list.
     func fetchVideos(
         page: Int,
         state: State
@@ -65,6 +65,7 @@ extension ChannelDetailReducer {
         let config = state.serverConfig
         let channelId = state.channel.channelId
         let sort = state.videoSortOrder.apiValue
+        let watch = state.videoFilter.apiValue
         let videoService = self.videoService
         return .run { send in
             let result = await Result {
@@ -74,7 +75,7 @@ extension ChannelDetailReducer {
                     sort: sort,
                     order: "desc",
                     type: nil,
-                    watch: nil,
+                    watch: watch,
                     channel: channelId,
                     playlist: nil
                 )
@@ -117,6 +118,7 @@ extension ChannelDetailReducer {
             // First page (initial load, refresh, sort change): replace, so new
             // uploads sit at the top and server-side deletions disappear.
             state.videos = IdentifiedArrayOf(uniqueElements: response.data)
+            state.selectedVideoIDs.formIntersection(state.videos.ids)
         } else {
             for video in response.data {
                 state.videos.updateOrAppend(video)
@@ -128,13 +130,14 @@ extension ChannelDetailReducer {
         state.isLoadingMoreVideos = false
         state.hasLoadedVideos = true
 
-        // Filtering (e.g. "Unwatched") can thin the rendered list far below
-        // the server's page size. If there are more pages, eagerly pull the
-        // next one so the user doesn't see a short list with content still
-        // off-screen. Recursion is implicit — the next page's response
-        // re-enters `handleVideosLoaded` and re-checks the threshold, so
-        // we keep pulling until either we hit `lastPage` or the filtered
-        // list is full enough.
+        // The server filters, but the list still drops videos queued to play
+        // next and ones whose watched state changed here, which can thin it
+        // well below the server's page size. If there are more pages, eagerly
+        // pull the next one so the user doesn't see a short list with content
+        // still off-screen. Recursion is implicit — the next page's response
+        // re-enters `handleVideosLoaded` and re-checks the threshold, so we
+        // keep pulling until either we hit `lastPage` or the filtered list is
+        // full enough.
         //
         // `paginate.pageSize` can come back as 0 from the server in some
         // edge cases; floor it so we still attempt to fill at least 10

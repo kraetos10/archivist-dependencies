@@ -27,20 +27,22 @@ public struct TVChannelDetailScreen: View {
                         .id(Self.headerID)
                         .focusSection()
 
+                    // Above the videos, folded: below a grid that pages
+                    // forever the remote could never reach it.
+                    if store.showsPendingDownloads {
+                        downloadsSectionHeader
+                            .focusSection()
+
+                        if store.isPendingDownloadsExpanded {
+                            pendingDownloadsContent
+                        }
+                    }
+
                     Section {
                         videosContent
                     } header: {
                         videosSectionHeader
                             .focusSection()
-                    }
-
-                    if store.showsPendingDownloads {
-                        Section {
-                            pendingDownloadsContent
-                        } header: {
-                            downloadsSectionHeader
-                                .focusSection()
-                        }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -63,12 +65,22 @@ public struct TVChannelDetailScreen: View {
     // MARK: - Videos Header
 
     private var videosSectionHeader: some View {
-        HStack {
-            Text(String.localised("generic.videos", table: .generic))
-                .font(.title3)
-                .fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 12) {
+                Text(String.localised("generic.videos", table: .generic))
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .padding(.trailing, 12)
 
-            Spacer()
+                ForEach(ChannelVideoFilter.allCases, id: \.self) { filter in
+                    Button(filter.label) {
+                        send(.videoFilterChanged(filter))
+                    }
+                    .buttonStyle(TVCapsuleButtonStyle(isSelected: store.videoFilter == filter))
+                }
+
+                Spacer()
+            }
 
             HStack(spacing: 12) {
                 ForEach(VideoSortOrder.allCases, id: \.self) { sort in
@@ -149,28 +161,44 @@ public struct TVChannelDetailScreen: View {
 
     private var downloadsSectionHeader: some View {
         HStack {
-            Text(String.localised("video.pendingDownloads", table: .videos))
-                .font(.title3)
-                .fontWeight(.semibold)
+            Button {
+                send(.pendingDownloadsToggled)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "tray.and.arrow.down")
+                        .accessibilityHidden(true)
+                    Text(store.pendingDownloadsTitle)
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(store.isPendingDownloadsExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(TVCapsuleButtonStyle(isSelected: store.isPendingDownloadsExpanded))
 
             Spacer()
 
-            Button {
-                send(.downloadSortToggled)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .accessibilityHidden(true)
-                    Text(
-                        store.showNewestDownloadsFirst
-                            ? String.localised("generic.descending", table: .generic)
-                            : String.localised("generic.ascending", table: .generic)
-                    )
-                }
+            if store.isPendingDownloadsExpanded {
+                downloadSortButton
             }
-            .buttonStyle(TVCapsuleButtonStyle())
         }
         .padding(.vertical, TVLayout.sectionHeaderSpacing)
+    }
+
+    private var downloadSortButton: some View {
+        Button {
+            send(.downloadSortToggled)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .accessibilityHidden(true)
+                Text(
+                    store.showNewestDownloadsFirst
+                        ? String.localised("generic.descending", table: .generic)
+                        : String.localised("generic.ascending", table: .generic)
+                )
+            }
+        }
+        .buttonStyle(TVCapsuleButtonStyle())
     }
 
     // MARK: - Sections
@@ -192,7 +220,7 @@ public struct TVChannelDetailScreen: View {
                 }
                 .focusSection()
             } else if visible.isEmpty && store.hasLoadedVideos {
-                Text(String.localised("video.empty.noVideos", table: .videos))
+                Text(store.videoFilter.emptyMessage)
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .focusable()

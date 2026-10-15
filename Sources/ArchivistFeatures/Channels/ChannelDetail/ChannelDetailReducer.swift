@@ -1,21 +1,56 @@
+import ArchivistComponents
 import ArchivistNetworking
 import ComposableArchitecture
 import Foundation
 internal import SQLiteData
 import StructuredQueries
 
-public enum ChannelVideoFilter: Sendable, Equatable {
-    case all
+/// Which of the channel's videos the list shows. Filtered by the server, so
+/// a channel whose newest videos are all watched still finds its unwatched
+/// ones further back.
+public enum ChannelVideoFilter: CaseIterable, Sendable, Equatable {
     case unwatched
+    case inProgress
+    case watched
+    case all
 
-    /// tvOS has no filter control, so it shows everything; iOS opens on
-    /// the unwatched videos.
-    static var platformDefault: Self {
-        #if os(tvOS)
-        return .all
-        #else
-        return .unwatched
-        #endif
+    /// The `watch` value for `/api/video/`.
+    var apiValue: String? {
+        switch self {
+        case .unwatched: "unwatched"
+        case .inProgress: "continue"
+        case .watched: "watched"
+        case .all: nil
+        }
+    }
+
+    /// Re-checked locally so a video marked watched (or back) here leaves a
+    /// list it no longer belongs in without a refetch.
+    func includes(_ video: VideoResponse) -> Bool {
+        switch self {
+        case .unwatched: !video.isWatched
+        case .inProgress: video.isPartiallyWatched
+        case .watched: video.isWatched
+        case .all: true
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .unwatched: String.localised("generic.unwatched", table: .generic)
+        case .inProgress: String.localised("video.inProgress", table: .videos)
+        case .watched: String.localised("video.watched", table: .videos)
+        case .all: String.localised("generic.all", table: .generic)
+        }
+    }
+
+    var emptyMessage: String {
+        switch self {
+        case .unwatched: String.localised("video.empty.noUnwatched", table: .videos)
+        case .inProgress: String.localised("video.empty.noContinueWatching", table: .videos)
+        case .watched: String.localised("video.empty.noWatched", table: .videos)
+        case .all: String.localised("video.empty.noVideos", table: .videos)
+        }
     }
 }
 
@@ -37,7 +72,13 @@ public struct ChannelDetailReducer: Sendable {
         var hasLoadedDownloads = false
         var showNewestDownloadsFirst = true
         var isDescriptionExpanded = false
-        var videoFilter: ChannelVideoFilter = .platformDefault
+        /// The pending-downloads list stays folded into one row until asked
+        /// for: below a list that pages forever it could never be reached.
+        var isPendingDownloadsExpanded = false
+        var videoFilter: ChannelVideoFilter = .unwatched
+        /// iOS multi-select. While on, tapping a card selects it.
+        var isSelecting = false
+        var selectedVideoIDs: Set<String> = []
         var videoSortOrder: VideoSortOrder = .published
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
@@ -47,17 +88,36 @@ public struct ChannelDetailReducer: Sendable {
         )
         var completedDownloads
 
-        /// The videos the carousel draws: queued-for-play-next ones are
-        /// left out, and the watched filter applies.
+        /// The videos the list draws: queued-for-play-next ones are left
+        /// out, and the watched filter is re-applied to local changes.
         var filteredVideos: IdentifiedArrayOf<VideoResponse> {
             let queuedIDs = Set(playNextItems.map(\.videoId))
-            let base = videos.filter { !queuedIDs.contains($0.videoId) }
-            switch videoFilter {
-            case .all:
-                return base
-            case .unwatched:
-                return base.filter { $0.isUnwatched }
-            }
+            let filter = videoFilter
+            return videos.filter { !queuedIDs.contains($0.videoId) && filter.includes($0) }
+        }
+
+        /// The selected videos still in the list, in list order.
+        var selectedVideos: [VideoResponse] {
+            filteredVideos.filter { selectedVideoIDs.contains($0.videoId) }
+        }
+
+        var selectionTitle: String {
+            String.localised("video.selectedCount \(selectedVideos.count)", table: .videos)
+        }
+
+        var areAllVideosSelected: Bool {
+            let visible = filteredVideos
+            return !visible.isEmpty && visible.allSatisfy { selectedVideoIDs.contains($0.videoId) }
+        }
+
+        /// Marking unwatched only makes sense once everything picked is
+        /// watched; anything else in the mix gets marked watched.
+        var selectionMarksWatched: Bool {
+            !selectedVideos.allSatisfy(\.isWatched)
+        }
+
+        var pendingDownloadsTitle: String {
+            String.localised("video.pendingDownloadsCount \(pendingDownloads.count)", table: .videos)
         }
 
         var downloadedVideoIDs: Set<String> {
@@ -65,7 +125,7 @@ public struct ChannelDetailReducer: Sendable {
         }
 
         var showsPendingDownloads: Bool {
-            !pendingDownloads.isEmpty || isLoadingDownloads
+            !pendingDownloads.isEmpty
         }
 
         @Presents var alert: AlertState<AlertAction>?
@@ -95,6 +155,7 @@ public struct ChannelDetailReducer: Sendable {
         case confirmUnsubscribe
         case confirmDownload(String)
         case confirmClearFiltered
+        case confirmDeleteSelected
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -142,6 +203,13 @@ public struct ChannelDetailReducer: Sendable {
             case downloadSortToggled
             case videoSortOrderChanged(VideoSortOrder)
             case clearFilteredTapped
+            case pendingDownloadsToggled
+            case selectTapped
+            case doneSelectingTapped
+            case selectAllTapped
+            case markSelectedWatchedTapped
+            case downloadSelectedToDeviceTapped
+            case deleteSelectedTapped
         }
     }
 
@@ -176,6 +244,8 @@ public struct ChannelDetailReducer: Sendable {
                 return handleUnsubscribeConfirmed(state: &state)
             case .alert(.presented(.confirmClearFiltered)):
                 return handleConfirmClearFiltered(state: &state)
+            case .alert(.presented(.confirmDeleteSelected)):
+                return handleConfirmDeleteSelected(state: &state)
             case .alert(.presented(.confirmDownload(let videoId))):
                 return handleConfirmDownload(videoId, state: &state)
             case .alert:

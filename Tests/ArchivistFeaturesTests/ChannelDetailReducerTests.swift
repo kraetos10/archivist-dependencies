@@ -381,4 +381,154 @@ struct ChannelDetailReducerTests {
             $0.alert = .failure(String.localised("video.deleteFailed", table: .videos))
         }
     }
+
+    // MARK: - Filter
+
+    /// The server does the filtering, so a channel whose newest videos are
+    /// all watched still finds the unwatched ones further back.
+    @Test func filterChangeRefetchesFromTheServer() async {
+        var initialState = makeState()
+        initialState.videos = [TestFixtures.video1]
+        initialState.hasLoadedVideos = true
+        initialState.currentPage = 2
+        initialState.lastPage = 3
+
+        let watchValues = LockIsolated<[String?]>([])
+        let watchedPage = PaginatedResponse<VideoResponse>(
+            data: [TestFixtures.watchedVideo],
+            paginate: TestFixtures.paginatedVideos.paginate
+        )
+        let store = TestStore(initialState: initialState) {
+            ChannelDetailReducer()
+        } withDependencies: {
+            $0.videoService.getVideos = { _, _, _, _, _, watch, _, _ in
+                watchValues.withValue { $0.append(watch) }
+                return watchedPage
+            }
+        }
+
+        await store.send(.view(.videoFilterChanged(.watched))) {
+            $0.videoFilter = .watched
+            $0.videos = []
+            $0.currentPage = 1
+            $0.lastPage = 1
+            $0.hasLoadedVideos = false
+            $0.isLoadingVideos = true
+        }
+        await store.receive(\.videosResult.success) {
+            $0.videos = [TestFixtures.watchedVideo]
+            $0.isLoadingVideos = false
+            $0.hasLoadedVideos = true
+        }
+        #expect(watchValues.value == ["watched"])
+    }
+
+    @Test func filterSendsTheServersWatchValue() {
+        #expect(ChannelVideoFilter.unwatched.apiValue == "unwatched")
+        #expect(ChannelVideoFilter.inProgress.apiValue == "continue")
+        #expect(ChannelVideoFilter.watched.apiValue == "watched")
+        #expect(ChannelVideoFilter.all.apiValue == nil)
+    }
+
+    /// Marking a video watched under Unwatched takes it out of the list
+    /// without waiting for a refetch.
+    @Test func videoMarkedWatchedLeavesTheUnwatchedList() {
+        var state = makeState()
+        state.videos = [TestFixtures.video1, TestFixtures.video2]
+        state.videos[id: TestFixtures.video1.id] = TestFixtures.video1.settingWatched(true)
+
+        #expect(state.filteredVideos.ids == [TestFixtures.video2.id])
+    }
+
+    // MARK: - Multi-select
+
+    @Test func tappingACardWhileSelectingPicksItInsteadOfPlaying() async {
+        var initialState = makeState()
+        initialState.videos = [TestFixtures.video1, TestFixtures.video2]
+        let store = TestStore(initialState: initialState) {
+            ChannelDetailReducer()
+        }
+
+        await store.send(.view(.selectTapped)) {
+            $0.isSelecting = true
+        }
+        await store.send(.view(.videoCardTapped(TestFixtures.video1))) {
+            $0.selectedVideoIDs = [TestFixtures.video1.videoId]
+        }
+        await store.send(.view(.videoCardTapped(TestFixtures.video1))) {
+            $0.selectedVideoIDs = []
+        }
+        await store.send(.view(.doneSelectingTapped)) {
+            $0.isSelecting = false
+        }
+    }
+
+    @Test func selectAllTogglesEveryShownVideo() async {
+        var initialState = makeState()
+        initialState.videos = [TestFixtures.video1, TestFixtures.video2]
+        initialState.isSelecting = true
+        let store = TestStore(initialState: initialState) {
+            ChannelDetailReducer()
+        }
+
+        await store.send(.view(.selectAllTapped)) {
+            $0.selectedVideoIDs = [TestFixtures.video1.videoId, TestFixtures.video2.videoId]
+        }
+        await store.send(.view(.selectAllTapped)) {
+            $0.selectedVideoIDs = []
+        }
+    }
+
+    @Test func markSelectedWatchedFlipsEachAndEndsSelection() async {
+        var initialState = makeState()
+        initialState.videoFilter = .all
+        initialState.videos = [TestFixtures.video1, TestFixtures.video2]
+        initialState.isSelecting = true
+        initialState.selectedVideoIDs = [TestFixtures.video1.videoId, TestFixtures.video2.videoId]
+        let calls = LockIsolated<Set<String>>([])
+        let store = TestStore(initialState: initialState) {
+            ChannelDetailReducer()
+        } withDependencies: {
+            $0.videoService.setWatched = { _, videoId, isWatched in
+                #expect(isWatched)
+                calls.withValue { _ = $0.insert(videoId) }
+            }
+        }
+
+        await store.send(.view(.markSelectedWatchedTapped)) {
+            $0.isSelecting = false
+            $0.selectedVideoIDs = []
+            $0.videos = [
+                TestFixtures.video1.settingWatched(true),
+                TestFixtures.video2.settingWatched(true),
+            ]
+        }
+        await store.receive(\.setWatchedResult)
+        await store.receive(\.setWatchedResult)
+        #expect(calls.value == [TestFixtures.video1.videoId, TestFixtures.video2.videoId])
+    }
+
+    @Test func deleteSelectedConfirmsThenDeletesFromTheServer() async {
+        var initialState = makeState()
+        initialState.videos = [TestFixtures.video1, TestFixtures.video2]
+        initialState.isSelecting = true
+        initialState.selectedVideoIDs = [TestFixtures.video2.videoId]
+        let store = TestStore(initialState: initialState) {
+            ChannelDetailReducer()
+        } withDependencies: {
+            $0.videoService.deleteVideo = { _, _ in }
+        }
+
+        await store.send(.view(.deleteSelectedTapped)) {
+            $0.alert = .confirmDelete(count: 1, action: .confirmDeleteSelected)
+        }
+        await store.send(.alert(.presented(.confirmDeleteSelected))) {
+            $0.alert = nil
+            $0.isSelecting = false
+            $0.selectedVideoIDs = []
+        }
+        await store.receive(\.deleteVideoResult.success) {
+            $0.videos = [TestFixtures.video1]
+        }
+    }
 }

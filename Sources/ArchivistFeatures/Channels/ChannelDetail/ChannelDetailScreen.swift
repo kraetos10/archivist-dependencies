@@ -19,18 +19,14 @@ public struct ChannelDetailScreen: View {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 ChannelDetailHeader(store: store)
 
-                Section {
-                    ChannelVideosCarousel(store: store)
-                } header: {
-                    ChannelVideosSectionHeader(store: store)
+                if store.showsPendingDownloads {
+                    ChannelPendingDownloadsList(store: store)
                 }
 
-                if store.showsPendingDownloads {
-                    Section {
-                        ChannelPendingDownloadsList(store: store)
-                    } header: {
-                        ChannelDownloadsSectionHeader(store: store)
-                    }
+                Section {
+                    ChannelVideosGrid(store: store)
+                } header: {
+                    ChannelVideosSectionHeader(store: store)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -38,9 +34,15 @@ public struct ChannelDetailScreen: View {
         .ignoresSafeArea(.container, edges: .top)
         .background(Color.Brand.primary)
         .refreshable { send(.pullToRefreshTriggered) }
+        .navigationBarBackButtonHidden(store.isSelecting)
+        .toolbar(store.isSelecting ? .hidden : .automatic, for: .tabBar)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                channelMenu
+            if store.isSelecting {
+                selectionToolbar
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    channelMenu
+                }
             }
         }
         .onAppear { send(.viewDidAppear) }
@@ -54,8 +56,72 @@ public struct ChannelDetailScreen: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private var selectionToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(
+                store.areAllVideosSelected
+                    ? String.localised("generic.deselectAll", table: .generic)
+                    : String.localised("generic.selectAll", table: .generic)
+            ) {
+                send(.selectAllTapped, animation: .default)
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            Text(store.selectionTitle)
+                .font(.headline)
+                .foregroundStyle(Color.Text.primary)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(String.localised("generic.done", table: .generic)) {
+                send(.doneSelectingTapped, animation: .default)
+            }
+            .fontWeight(.semibold)
+        }
+        ToolbarItemGroup(placement: .bottomBar) {
+            Button(
+                store.selectionMarksWatched
+                    ? String.localised("video.markAsWatched", table: .videos)
+                    : String.localised("video.markAsUnwatched", table: .videos),
+                systemImage: store.selectionMarksWatched ? "eye" : "eye.slash"
+            ) {
+                send(.markSelectedWatchedTapped, animation: .default)
+            }
+            .disabled(store.selectedVideos.isEmpty)
+
+            Spacer()
+
+            Button(
+                String.localised("video.downloadToDevice", table: .videos),
+                systemImage: "arrow.down.circle"
+            ) {
+                send(.downloadSelectedToDeviceTapped, animation: .default)
+            }
+            .disabled(store.selectedVideos.isEmpty)
+
+            Spacer()
+
+            Button(
+                String.localised("video.deleteFromServer", table: .videos),
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                send(.deleteSelectedTapped)
+            }
+            .disabled(store.selectedVideos.isEmpty)
+        }
+    }
+
     private var channelMenu: some View {
         Menu {
+            Button(
+                String.localised("generic.select", table: .generic),
+                systemImage: "checkmark.circle"
+            ) {
+                send(.selectTapped, animation: .default)
+            }
+            .disabled(store.filteredVideos.isEmpty)
+
             if let url = store.channel.youtubeURL {
                 ShareLink(item: url) {
                     Label(
@@ -64,6 +130,17 @@ public struct ChannelDetailScreen: View {
                     )
                 }
             }
+
+            Divider()
+
+            Button(
+                String.localised("video.clearFiltered.action", table: .videos),
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                send(.clearFilteredTapped)
+            }
+            .disabled(store.filteredVideos.isEmpty)
 
             Button(
                 String.localised("generic.unsubscribe", table: .generic),

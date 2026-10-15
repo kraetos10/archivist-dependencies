@@ -287,17 +287,6 @@
         }
       }
     },
-    "video.clear": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear"
-          }
-        }
-      }
-    },
     "video.viewAll": {
       "extractionState": "manual",
       "localizations": {
@@ -1368,52 +1357,6 @@
         }
       }
     },
-    "video.clearFiltered.allMessage %lld": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Delete the %lld video in this channel from the server? This cannot be undone."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Delete all %lld videos in this channel from the server? This cannot be undone."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "video.clearFiltered.unwatchedMessage %lld": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Delete the %lld unwatched video in this channel from the server? This cannot be undone."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Delete all %lld unwatched videos in this channel from the server? This cannot be undone."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "video.deleteFailed": {
       "extractionState": "manual",
       "localizations": {
@@ -1575,6 +1518,85 @@
           "stringUnit": {
             "state": "translated",
             "value": "Playback position"
+          }
+        }
+      }
+    },
+    "video.selectedCount %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Selected"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Selected"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "video.pendingDownloadsCount %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available Videos (%lld)"
+          }
+        }
+      }
+    },
+    "video.clearFiltered.message %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Delete this video from the server? This cannot be undone."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Delete these %lld videos from the server? This cannot be undone."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "video.clearFiltered.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Shown Videos…"
+          }
+        }
+      }
+    },
+    "video.filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter"
           }
         }
       }

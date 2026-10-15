@@ -24,8 +24,32 @@ extension ChannelDetailReducer {
         case .descriptionToggleTapped:
             return handleDescriptionToggleTapped(state: &state)
         case .videoFilterChanged(let filter):
-            state.videoFilter = filter
+            return handleVideoFilterChanged(filter, state: &state)
+        case .downloadToDeviceTapped, .deleteFromDeviceTapped, .markAsWatchedTapped,
+             .deleteFromServerTapped, .playNextTapped, .addToPlaylistTapped:
+            return handleVideoMenuAction(action, state: &state)
+        case .downloadSortToggled:
+            return handleDownloadSortToggled(state: &state)
+        case .videoSortOrderChanged(let sort):
+            return handleVideoSortOrderChanged(sort, state: &state)
+        case .clearFilteredTapped:
+            return handleClearFilteredTapped(state: &state)
+        case .pendingDownloadsToggled:
+            state.isPendingDownloadsExpanded.toggle()
             return .none
+        case .selectTapped, .doneSelectingTapped, .selectAllTapped,
+             .markSelectedWatchedTapped, .downloadSelectedToDeviceTapped,
+             .deleteSelectedTapped:
+            return handleSelectionAction(action, state: &state)
+        }
+    }
+
+    /// A single video's context-menu actions.
+    private func handleVideoMenuAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
+        switch action {
         case .downloadToDeviceTapped(let video):
             return handleDownloadToDeviceTapped(video, state: &state)
         case .deleteFromDeviceTapped(let video):
@@ -38,12 +62,33 @@ extension ChannelDetailReducer {
             return handlePlayNextTapped(video, state: &state)
         case .addToPlaylistTapped(let video):
             return handleAddToPlaylistTapped(video, state: &state)
-        case .downloadSortToggled:
-            return handleDownloadSortToggled(state: &state)
-        case .videoSortOrderChanged(let sort):
-            return handleVideoSortOrderChanged(sort, state: &state)
-        case .clearFilteredTapped:
-            return handleClearFilteredTapped(state: &state)
+        default:
+            return .none
+        }
+    }
+
+    private func handleSelectionAction(
+        _ action: Action.View,
+        state: inout State
+    ) -> Effect<Action> {
+        switch action {
+        case .selectTapped:
+            state.isSelecting = true
+            state.selectedVideoIDs = []
+            return .none
+        case .doneSelectingTapped:
+            endSelection(state: &state)
+            return .none
+        case .selectAllTapped:
+            return handleSelectAllTapped(state: &state)
+        case .markSelectedWatchedTapped:
+            return handleMarkSelectedWatchedTapped(state: &state)
+        case .downloadSelectedToDeviceTapped:
+            return handleDownloadSelectedToDeviceTapped(state: &state)
+        case .deleteSelectedTapped:
+            return handleDeleteSelectedTapped(state: &state)
+        default:
+            return .none
         }
     }
 
@@ -90,6 +135,14 @@ extension ChannelDetailReducer {
         _ video: VideoResponse,
         state: inout State
     ) -> Effect<Action> {
+        if state.isSelecting {
+            if state.selectedVideoIDs.contains(video.videoId) {
+                state.selectedVideoIDs.remove(video.videoId)
+            } else {
+                state.selectedVideoIDs.insert(video.videoId)
+            }
+            return .none
+        }
         let nextVideos: [VideoResponse]
         if let index = state.videos.index(id: video.id) {
             nextVideos = state.videos.elements[(index + 1)...].filter { !$0.isWatched }
@@ -203,15 +256,21 @@ extension ChannelDetailReducer {
         }
     }
 
-    /// Flips the card straight away; `setWatchedResult` rolls it back if
-    /// the server refuses.
     private func handleMarkAsWatchedTapped(
         _ video: VideoResponse,
         state: inout State
     ) -> Effect<Action> {
+        setWatched(video.videoId, isWatched: !video.isWatched, state: &state)
+    }
+
+    /// Flips the card straight away; `setWatchedResult` rolls it back if
+    /// the server refuses.
+    private func setWatched(
+        _ videoId: String,
+        isWatched newIsWatched: Bool,
+        state: inout State
+    ) -> Effect<Action> {
         let config = state.serverConfig
-        let videoId = video.videoId
-        let newIsWatched = !video.isWatched
         if let current = state.videos[id: videoId] {
             state.videos[id: videoId] = current.settingWatched(newIsWatched)
         }
@@ -232,14 +291,30 @@ extension ChannelDetailReducer {
         _ video: VideoResponse,
         state: inout State
     ) -> Effect<Action> {
+        deleteFromServer([video.videoId], state: state)
+    }
+
+    /// Each deletion reports on its own, so one failure doesn't hold back
+    /// the rest from leaving the list.
+    private func deleteFromServer(
+        _ videoIds: [String],
+        state: State
+    ) -> Effect<Action> {
         let config = state.serverConfig
-        let videoId = video.videoId
-        let videoService = self.videoService
-        return .run { send in
-            let result = await Result {
-                try await videoService.deleteVideo(config: config, id: videoId)
+        return .run { [videoService] send in
+            await withTaskGroup(of: Void.self) { group in
+                for videoId in videoIds {
+                    group.addTask {
+                        let result = await Result {
+                            try await videoService.deleteVideo(config: config, id: videoId)
+                        }
+                        await send(
+                            .deleteVideoResult(result.map { videoId }),
+                            animation: .default
+                        )
+                    }
+                }
             }
-            await send(.deleteVideoResult(result.map { videoId }), animation: .default)
         }
     }
 
@@ -271,46 +346,73 @@ extension ChannelDetailReducer {
         return fetchPendingDownloads(page: 1, state: state)
     }
 
+    /// Deletes what the list currently shows — the pages loaded so far, not
+    /// every match on the server, which is why the menu says "shown".
     private func handleClearFilteredTapped(state: inout State) -> Effect<Action> {
         let count = state.filteredVideos.count
         guard count > 0 else { return .none }
-        let message = state.videoFilter == .unwatched
-            ? String.localised("video.clearFiltered.unwatchedMessage \(count)", table: .videos)
-            : String.localised("video.clearFiltered.allMessage \(count)", table: .videos)
-        state.alert = AlertState {
-            TextState(String.localised("video.clearFiltered.title", table: .videos))
-        } actions: {
-            ButtonState(role: .cancel) {
-                TextState(String.localised("generic.cancel", table: .generic))
-            }
-            ButtonState(role: .destructive, action: .confirmClearFiltered) {
-                TextState(String.localised("generic.delete", table: .generic))
-            }
-        } message: {
-            TextState(message)
-        }
+        state.alert = .confirmDelete(count: count, action: .confirmClearFiltered)
         return .none
     }
 
     func handleConfirmClearFiltered(state: inout State) -> Effect<Action> {
-        let videoIds = state.filteredVideos.map(\.videoId)
-        let config = state.serverConfig
-        return .run { [videoService] send in
-            await withTaskGroup(of: Void.self) { group in
-                for videoId in videoIds {
-                    group.addTask {
-                        let result = await Result {
-                            try await videoService.deleteVideo(config: config, id: videoId)
-                        }
-                        await send(
-                            .deleteVideoResult(result.map { videoId }),
-                            animation: .default
-                        )
-                    }
-                }
-            }
-        }
+        deleteFromServer(state.filteredVideos.map(\.videoId), state: state)
     }
+
+    // MARK: - Selection
+
+    private func endSelection(state: inout State) {
+        state.isSelecting = false
+        state.selectedVideoIDs = []
+    }
+
+    private func handleSelectAllTapped(state: inout State) -> Effect<Action> {
+        if state.areAllVideosSelected {
+            state.selectedVideoIDs = []
+        } else {
+            state.selectedVideoIDs = Set(state.filteredVideos.map(\.videoId))
+        }
+        return .none
+    }
+
+    private func handleMarkSelectedWatchedTapped(state: inout State) -> Effect<Action> {
+        let isWatched = state.selectionMarksWatched
+        let videoIds = state.selectedVideos
+            .filter { $0.isWatched != isWatched }
+            .map(\.videoId)
+        endSelection(state: &state)
+        var effects: [Effect<Action>] = []
+        for videoId in videoIds {
+            effects.append(setWatched(videoId, isWatched: isWatched, state: &state))
+        }
+        return .merge(effects)
+    }
+
+    private func handleDownloadSelectedToDeviceTapped(state: inout State) -> Effect<Action> {
+        let downloadedIDs = state.downloadedVideoIDs
+        let videos = state.selectedVideos.filter { !downloadedIDs.contains($0.videoId) }
+        endSelection(state: &state)
+        var effects: [Effect<Action>] = []
+        for video in videos {
+            effects.append(handleDownloadToDeviceTapped(video, state: &state))
+        }
+        return .merge(effects)
+    }
+
+    private func handleDeleteSelectedTapped(state: inout State) -> Effect<Action> {
+        let count = state.selectedVideos.count
+        guard count > 0 else { return .none }
+        state.alert = .confirmDelete(count: count, action: .confirmDeleteSelected)
+        return .none
+    }
+
+    func handleConfirmDeleteSelected(state: inout State) -> Effect<Action> {
+        let videoIds = state.selectedVideos.map(\.videoId)
+        endSelection(state: &state)
+        return deleteFromServer(videoIds, state: state)
+    }
+
+    // MARK: - Sort and filter
 
     private func handleVideoSortOrderChanged(
         _ sort: VideoSortOrder,
@@ -318,13 +420,48 @@ extension ChannelDetailReducer {
     ) -> Effect<Action> {
         guard sort != state.videoSortOrder else { return .none }
         state.videoSortOrder = sort
+        return reloadVideos(state: &state)
+    }
+
+    private func handleVideoFilterChanged(
+        _ filter: ChannelVideoFilter,
+        state: inout State
+    ) -> Effect<Action> {
+        guard filter != state.videoFilter else { return .none }
+        state.videoFilter = filter
+        return reloadVideos(state: &state)
+    }
+
+    /// Starts the list over from page 1 for a new sort or filter.
+    private func reloadVideos(state: inout State) -> Effect<Action> {
         state.videos = []
         state.currentPage = 1
         state.lastPage = 1
         state.hasLoadedVideos = false
         state.isLoadingVideos = true
         state.isLoadingMoreVideos = false
-        // Cancels any page still loading for the previous sort.
+        // Cancels any page still loading for the previous sort or filter.
         return fetchVideos(page: 1, state: state)
+    }
+}
+
+extension AlertState where Action == ChannelDetailReducer.AlertAction {
+    /// Confirms deleting `count` videos from the server.
+    static func confirmDelete(
+        count: Int,
+        action: ChannelDetailReducer.AlertAction
+    ) -> Self {
+        AlertState {
+            TextState(String.localised("video.clearFiltered.title", table: .videos))
+        } actions: {
+            ButtonState(role: .cancel) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+            ButtonState(role: .destructive, action: action) {
+                TextState(String.localised("generic.delete", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.clearFiltered.message \(count)", table: .videos))
+        }
     }
 }
