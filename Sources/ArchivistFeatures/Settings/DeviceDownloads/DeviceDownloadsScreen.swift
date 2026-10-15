@@ -35,37 +35,18 @@ public struct DeviceDownloadsScreen: View {
                             data: download.cardData,
                             serverConfig: store.serverConfig
                         )
-                        .contextMenu {
-                            if let url = download.shareURL {
-                                ShareLink(item: url) {
-                                    Label(
-                                        String.localised("generic.share", table: .generic),
-                                        systemImage: "square.and.arrow.up"
-                                    )
-                                }
-                            }
-
-                            if download.isCompleted {
-                                Button {
-                                    send(.addToPlaylistTapped(download))
-                                } label: {
-                                    Label(
-                                        String.localised("video.addToPlaylist", table: .videos),
-                                        systemImage: "text.badge.plus"
-                                    )
-                                }
-                            }
-
-                            Button(role: .destructive) {
-                                send(.deleteTapped(download.id))
-                            } label: {
-                                Label(
-                                    String.localised("video.deleteDownload", table: .videos),
-                                    systemImage: "trash"
-                                )
+                        .overlay {
+                            if store.isSelecting {
+                                SelectionOverlay(isSelected: store.selectedIDs.contains(download.id))
                             }
                         }
-                        .pressable { send(.downloadTapped(download)) }
+                        .contextMenu {
+                            if !store.isSelecting {
+                                downloadMenu(download)
+                            }
+                        }
+                        .pressable { send(.downloadTapped(download), animation: .snappy) }
+                        .accessibilityAddTraits(store.selectedIDs.contains(download.id) ? .isSelected : [])
                         .transition(.asymmetric(
                             insertion: .identity,
                             removal: .move(edge: .trailing).combined(with: .opacity)
@@ -88,16 +69,15 @@ public struct DeviceDownloadsScreen: View {
         .onDisappear { send(.viewDidDisappear) }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(String.localised("video.saved", table: .videos))
+        .navigationBarBackButtonHidden(store.isSelecting)
+        .toolbar(store.isSelecting ? .hidden : .automatic, for: .tabBar)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(
-                    String.localised("video.deleteAllDownloads", table: .videos),
-                    systemImage: "trash",
-                    role: .destructive
-                ) {
-                    send(.deleteAllTapped)
+            if store.isSelecting {
+                selectionToolbar
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    savedMenu
                 }
-                .disabled(!store.canDeleteAll)
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
@@ -108,6 +88,99 @@ public struct DeviceDownloadsScreen: View {
             NavigationStack {
                 VideoDetailScreen(store: detailStore)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func downloadMenu(_ download: DeviceDownload) -> some View {
+        if let url = download.shareURL {
+            ShareLink(item: url) {
+                Label(
+                    String.localised("generic.share", table: .generic),
+                    systemImage: "square.and.arrow.up"
+                )
+            }
+        }
+
+        if download.isCompleted {
+            Button {
+                send(.addToPlaylistTapped(download))
+            } label: {
+                Label(
+                    String.localised("video.addToPlaylist", table: .videos),
+                    systemImage: "text.badge.plus"
+                )
+            }
+        }
+
+        Button(role: .destructive) {
+            send(.deleteTapped(download.id))
+        } label: {
+            Label(
+                String.localised("video.deleteDownload", table: .videos),
+                systemImage: "trash"
+            )
+        }
+    }
+
+    private var savedMenu: some View {
+        Menu {
+            Button(
+                String.localised("generic.select", table: .generic),
+                systemImage: "checkmark.circle"
+            ) {
+                send(.selectTapped, animation: .default)
+            }
+            .disabled(store.downloads.isEmpty)
+
+            Divider()
+
+            Button(
+                String.localised("video.deleteAllDownloads", table: .videos),
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                send(.deleteAllTapped)
+            }
+            .disabled(!store.canDeleteAll)
+        } label: {
+            Label(String.localised("generic.actions", table: .generic), systemImage: "ellipsis")
+                .labelStyle(.iconOnly)
+                .font(.title3.weight(.semibold))
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var selectionToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(
+                store.areAllDownloadsSelected
+                    ? String.localised("generic.deselectAll", table: .generic)
+                    : String.localised("generic.selectAll", table: .generic)
+            ) {
+                send(.selectAllTapped, animation: .default)
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            Text(store.selectionTitle)
+                .font(.headline)
+                .foregroundStyle(Color.Text.primary)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(String.localised("generic.done", table: .generic)) {
+                send(.doneSelectingTapped, animation: .default)
+            }
+            .fontWeight(.semibold)
+        }
+        ToolbarItem(placement: .bottomBar) {
+            Button(
+                String.localised("video.deleteDownloads", table: .videos),
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                send(.deleteSelectedTapped)
+            }
+            .disabled(store.selectedDownloads.isEmpty)
         }
     }
 }

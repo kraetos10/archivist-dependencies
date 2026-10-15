@@ -16,11 +16,36 @@ extension DeviceDownloadsReducer {
             // the storage poll has to stop when the tab isn't on screen.
             return .cancel(id: CancelID.storageRefresh)
         case .deleteTapped(let videoId):
-            return handleDeleteTapped(videoId)
+            return deleteDownloads([videoId])
         case .deleteAllTapped:
             state.alert = .confirmDeleteAll
             return .none
+        case .selectTapped:
+            state.isSelecting = true
+            state.selectedIDs = []
+            return .none
+        case .doneSelectingTapped:
+            endSelection(state: &state)
+            return .none
+        case .selectAllTapped:
+            state.selectedIDs = state.areAllDownloadsSelected
+                ? []
+                : Set(state.downloads.map(\.id))
+            return .none
+        case .deleteSelectedTapped:
+            let count = state.selectedDownloads.count
+            guard count > 0 else { return .none }
+            state.alert = .confirmDeleteSelected(count: count)
+            return .none
         case .downloadTapped(let download):
+            if state.isSelecting {
+                if state.selectedIDs.contains(download.id) {
+                    state.selectedIDs.remove(download.id)
+                } else {
+                    state.selectedIDs.insert(download.id)
+                }
+                return .none
+            }
             return handleDownloadTapped(download, state: &state)
         case .addToPlaylistTapped(let download):
             state.playlistPicker = PlaylistPickerReducer.State(
@@ -45,14 +70,27 @@ extension DeviceDownloadsReducer {
         .cancellable(id: CancelID.storageRefresh, cancelInFlight: true)
     }
 
-    private func handleDeleteTapped(_ videoId: String) -> Effect<Action> {
+    func endSelection(state: inout State) {
+        state.isSelecting = false
+        state.selectedIDs = []
+    }
+
+    /// Removes each download's file and row, stopping its transfer first.
+    /// One that fails keeps its row and is reported; the rest still go.
+    func deleteDownloads(_ videoIds: [String]) -> Effect<Action> {
         .run { [deviceDownloadDatabase, deviceStorage, localVideoStorage, persistentDownloadManager] send in
-            await persistentDownloadManager.cancelDownload(videoId: videoId)
-            do {
-                try localVideoStorage.deleteVideo(videoId: videoId)
-                try deviceDownloadDatabase.deleteDownload(videoId)
-            } catch {
-                await send(.operationFailed(error.localizedDescription))
+            var firstError: Error?
+            for videoId in videoIds {
+                await persistentDownloadManager.cancelDownload(videoId: videoId)
+                do {
+                    try localVideoStorage.deleteVideo(videoId: videoId)
+                    try deviceDownloadDatabase.deleteDownload(videoId)
+                } catch {
+                    firstError = firstError ?? error
+                }
+            }
+            if let firstError {
+                await send(.operationFailed(firstError.localizedDescription))
             }
             await send(.storageInfoLoaded(deviceStorage.usage()))
         }

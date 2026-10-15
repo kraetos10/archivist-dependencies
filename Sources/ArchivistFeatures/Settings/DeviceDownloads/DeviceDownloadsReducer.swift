@@ -24,9 +24,24 @@ public struct DeviceDownloadsReducer {
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
         @Shared(.autoPlayEnabled) var autoPlayEnabled
+        var isSelecting = false
+        var selectedIDs: Set<String> = []
 
         var completedDownloads: [DeviceDownload] {
             downloads.filter(\.isCompleted)
+        }
+
+        /// Only rows still listed: one deleted elsewhere drops out.
+        var selectedDownloads: [DeviceDownload] {
+            downloads.filter { selectedIDs.contains($0.id) }
+        }
+
+        var selectionTitle: String {
+            String.localised("video.selectedCount \(selectedDownloads.count)", table: .videos)
+        }
+
+        var areAllDownloadsSelected: Bool {
+            !downloads.isEmpty && downloads.allSatisfy { selectedIDs.contains($0.id) }
         }
 
         /// Counted on the folder as well as the list: files no row points
@@ -66,6 +81,7 @@ public struct DeviceDownloadsReducer {
 
     public enum AlertAction: Equatable, Sendable {
         case confirmDeleteAll
+        case confirmDeleteSelected
         case dismissed
     }
 
@@ -83,6 +99,10 @@ public struct DeviceDownloadsReducer {
             case viewDidDisappear
             case deleteTapped(String)
             case deleteAllTapped
+            case selectTapped
+            case doneSelectingTapped
+            case selectAllTapped
+            case deleteSelectedTapped
             case downloadTapped(DeviceDownload)
             case addToPlaylistTapped(DeviceDownload)
         }
@@ -112,6 +132,8 @@ public struct DeviceDownloadsReducer {
                 return handleOperationFailed(message, state: &state)
             case .alert(.presented(.confirmDeleteAll)):
                 return handleConfirmDeleteAll()
+            case .alert(.presented(.confirmDeleteSelected)):
+                return handleConfirmDeleteSelected(state: &state)
             case .alert, .videoDetail, .playlistPicker:
                 return .none
             }

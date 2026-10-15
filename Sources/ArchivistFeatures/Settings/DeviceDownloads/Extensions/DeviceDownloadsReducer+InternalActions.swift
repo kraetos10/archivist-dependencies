@@ -33,9 +33,30 @@ extension DeviceDownloadsReducer {
             await send(.storageInfoLoaded(deviceStorage.usage()))
         }
     }
+
+    func handleConfirmDeleteSelected(state: inout State) -> Effect<Action> {
+        let videoIds = state.selectedDownloads.map(\.id)
+        endSelection(state: &state)
+        return deleteDownloads(videoIds)
+    }
 }
 
 extension AlertState where Action == DeviceDownloadsReducer.AlertAction {
+    static func confirmDeleteSelected(count: Int) -> Self {
+        AlertState {
+            TextState(String.localised("video.deleteDownloads", table: .videos))
+        } actions: {
+            ButtonState(role: .cancel) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+            ButtonState(role: .destructive, action: .confirmDeleteSelected) {
+                TextState(String.localised("generic.delete", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.deleteDownloads.message \(count)", table: .videos))
+        }
+    }
+
     static var confirmDeleteAll: Self {
         AlertState {
             TextState(String.localised("video.deleteAllDownloads", table: .videos))

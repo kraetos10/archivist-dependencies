@@ -141,6 +141,85 @@ struct DeviceDownloadsReducerTests {
         #expect(deletedRows.value.isEmpty)
     }
 
+    // MARK: - Selection
+
+    /// Seeds completed rows, so the screen's `@FetchAll` lists them.
+    private func stateWithDownloads(_ ids: [String]) async throws -> DeviceDownloadsReducer.State {
+        for (index, id) in ids.enumerated() {
+            var row = failedDownload(id)
+            row.status = .completed
+            row.createdAt = Double(index)
+            try DeviceDownloadDatabase.liveValue.insertDownload(row)
+        }
+        let state = DeviceDownloadsReducer.State(serverConfig: config)
+        try await state.$downloads.load()
+        return state
+    }
+
+    @Test func tappingWhileSelectingPicksInsteadOfPlaying() async throws {
+        var state = try await stateWithDownloads(["video_1"])
+        state.isSelecting = true
+        let download = try #require(state.downloads.first)
+        let store = TestStore(initialState: state) {
+            DeviceDownloadsReducer()
+        }
+
+        await store.send(.view(.downloadTapped(download))) {
+            $0.selectedIDs = ["video_1"]
+        }
+        await store.send(.view(.downloadTapped(download))) {
+            $0.selectedIDs = []
+        }
+    }
+
+    @Test func selectAllTogglesEveryDownload() async throws {
+        var state = try await stateWithDownloads(["video_1", "video_2"])
+        state.isSelecting = true
+        let store = TestStore(initialState: state) {
+            DeviceDownloadsReducer()
+        }
+
+        await store.send(.view(.selectAllTapped)) {
+            $0.selectedIDs = ["video_1", "video_2"]
+        }
+        #expect(store.state.areAllDownloadsSelected)
+        await store.send(.view(.selectAllTapped)) {
+            $0.selectedIDs = []
+        }
+    }
+
+    @Test func deleteSelectedConfirmsThenDeletesEachAndEndsSelection() async throws {
+        var state = try await stateWithDownloads(["video_1", "video_2", "video_3"])
+        state.isSelecting = true
+        state.selectedIDs = ["video_1", "video_3"]
+        let cancelled = LockIsolated<[String]>([])
+        let deletedRows = LockIsolated<[String]>([])
+        let store = TestStore(initialState: state) {
+            DeviceDownloadsReducer()
+        } withDependencies: {
+            $0.persistentDownloadManager = RecordingDownloadManager { id in
+                cancelled.withValue { $0.append(id) }
+            }
+            $0.localVideoStorage.deleteVideo = { _ in }
+            $0.deviceDownloadDatabase.deleteDownload = { id in deletedRows.withValue { $0.append(id) } }
+            $0.deviceStorage.usage = { StorageUsage(downloadsSize: 0, available: 500) }
+        }
+
+        await store.send(.view(.deleteSelectedTapped)) {
+            $0.alert = .confirmDeleteSelected(count: 2)
+        }
+        await store.send(.alert(.presented(.confirmDeleteSelected))) {
+            $0.alert = nil
+            $0.isSelecting = false
+            $0.selectedIDs = []
+        }
+        await store.receive(\.storageInfoLoaded) {
+            $0.storage = StorageUsage(downloadsSize: 0, available: 500)
+        }
+        #expect(Set(cancelled.value) == ["video_1", "video_3"])
+        #expect(Set(deletedRows.value) == ["video_1", "video_3"])
+    }
+
     // MARK: - Delete All
 
     @Test func deleteAllAsksFirst() async {

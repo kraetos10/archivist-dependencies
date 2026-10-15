@@ -210,6 +210,40 @@
         }
       }
     },
+    "video.deleteDownloads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Downloads"
+          }
+        }
+      }
+    },
+    "video.deleteDownloads.message %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Delete this video from this device?"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Delete these %lld videos from this device?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "video.deleteFromServer": {
       "extractionState": "manual",
       "localizations": {
