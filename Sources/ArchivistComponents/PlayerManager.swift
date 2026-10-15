@@ -252,9 +252,15 @@ public final class PlayerManager: NSObject {
     /// is a programming error (it would silently kill background audio), so
     /// it is reported rather than swallowed. Activation failing is expected
     /// while another app holds the route, so that stays best-effort.
+    ///
+    /// `.spokenAudio` rather than `.moviePlayback`: Siri reading out a
+    /// notification, and navigation prompts, only *duck* other audio unless
+    /// it's in this mode — no interruption arrives, so the video talked on
+    /// underneath Siri. In this mode they interrupt it instead, and the
+    /// interruption handling pauses and resumes it like any other.
     private static func configureAudioSession() {
         withErrorReporting {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         }
         try? AVAudioSession.sharedInstance().setActive(true)
     }
