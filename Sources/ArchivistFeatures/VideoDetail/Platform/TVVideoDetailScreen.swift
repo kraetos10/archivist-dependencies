@@ -77,8 +77,8 @@ public struct TVVideoDetailScreen: View {
             )
         }
         .fullScreenCover(item: $store.expandedComment) { comment in
-            TVFullDescriptionView(
-                title: comment.fullTextTitle,
+            TVCommentThreadView(
+                comment: comment,
                 blocks: comment.fullTextBlocks
             )
         }

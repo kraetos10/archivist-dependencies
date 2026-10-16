@@ -1,5 +1,6 @@
 #if !os(tvOS)
 import ArchivistComponents
+import ArchivistNetworking
 import ComposableArchitecture
 import SwiftUI
 
@@ -15,7 +16,7 @@ extension VideoDetailScreen {
                         .foregroundStyle(Color.Text.primary)
 
                     if !store.comments.isEmpty {
-                        Text("\(store.comments.count)")
+                        Text("\(store.commentCount)")
                             .font(.subheadline)
                             .foregroundStyle(Color.Brand.secondary)
                     }
@@ -47,7 +48,7 @@ extension VideoDetailScreen {
                         Array(store.comments.enumerated()),
                         id: \.element.commentId
                     ) { index, comment in
-                        CommentCardView(comment: comment)
+                        commentThread(comment)
                         if index < store.comments.count - 1 {
                             Divider()
                                 .padding(.horizontal, 12)
@@ -64,6 +65,57 @@ extension VideoDetailScreen {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
+    }
+
+    /// A comment, then its replies behind a collapsed "N replies" toggle.
+    @ViewBuilder
+    private func commentThread(_ comment: VideoComment) -> some View {
+        CommentCardView(comment: comment)
+
+        if comment.replyCount > 0 {
+            let isExpanded = store.expandedThreadIDs.contains(comment.id)
+            Button {
+                send(.repliesToggled(commentId: comment.id), animation: .default)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+                    Text(String.localised("video.comment.replies \(comment.replyCount)", table: .videos))
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(Color.Accent.dark)
+                .padding(.leading, 54)
+                .padding(.bottom, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(
+                isExpanded
+                    ? String.localised("generic.expanded", table: .generic)
+                    : String.localised("generic.collapsed", table: .generic)
+            )
+
+            if isExpanded {
+                VStack(spacing: 0) {
+                    ForEach(comment.flattenedReplies) { reply in
+                        CommentCardView(comment: reply, isReply: true)
+                    }
+                }
+                // Indented under the parent's avatar, with a thread line
+                // down the leading edge.
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.Brand.secondary.opacity(0.3))
+                        .frame(width: 2)
+                        .accessibilityHidden(true)
+                }
+                .padding(.leading, 28)
+                .padding(.bottom, 8)
+            }
+        }
     }
 }
 #endif

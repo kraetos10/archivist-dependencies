@@ -137,6 +137,9 @@ extension VideoService: DependencyKey {
     public static var testValue: VideoService { VideoService() }
 }
 
+/// A comment, with its replies nested under it. The server builds the
+/// thread from each comment's `comment_parent` ("root" at the top), so
+/// `commentReplies` holds full comments of the same shape.
 public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
     public let commentId: String?
     public let commentText: String?
@@ -145,10 +148,47 @@ public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
     public let commentIsFavorited: Bool?
     public let commentAuthor: String?
     public let commentAuthorId: String?
+    public let commentAuthorIsUploader: Bool?
+    public let commentAuthorThumbnail: String?
+    public let commentParent: String?
+    /// Optional so a payload without it, or an older server, still decodes;
+    /// read `replies`.
+    public let commentReplies: [VideoComment]?
 
     public var relativeDate: String? {
         guard let commentTimestamp else { return nil }
         return PublishedDate.relative(Date(timeIntervalSince1970: TimeInterval(commentTimestamp)))
+    }
+
+    public var replies: [VideoComment] {
+        commentReplies ?? []
+    }
+
+    /// Every reply under this comment, depth first. YouTube threads are one
+    /// level deep, but nothing in the format stops a reply to a reply; those
+    /// flatten into the same list rather than indenting further.
+    public var flattenedReplies: [VideoComment] {
+        replies.flatMap { [$0] + $0.flattenedReplies }
+    }
+
+    public var replyCount: Int {
+        flattenedReplies.count
+    }
+
+    public var isByUploader: Bool {
+        commentAuthorIsUploader == true
+    }
+
+    /// The author's avatar, hosted by YouTube. It can have expired since
+    /// the comments were archived, so views fall back to `authorInitial`.
+    public var authorThumbnailURL: URL? {
+        commentAuthorThumbnail.flatMap(URL.init(string:))
+    }
+
+    /// First letter of the author's name, skipping the "@" of a handle.
+    public var authorInitial: String {
+        let name = (commentAuthor ?? "").drop { $0 == "@" }
+        return name.first.map { String($0).uppercased() } ?? "?"
     }
 
     public init(
@@ -158,7 +198,11 @@ public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
         commentLikeCount: Int?,
         commentIsFavorited: Bool?,
         commentAuthor: String?,
-        commentAuthorId: String?
+        commentAuthorId: String?,
+        commentAuthorIsUploader: Bool? = nil,
+        commentAuthorThumbnail: String? = nil,
+        commentParent: String? = nil,
+        commentReplies: [VideoComment]? = nil
     ) {
         self.commentId = commentId
         self.commentText = commentText
@@ -167,6 +211,10 @@ public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
         self.commentIsFavorited = commentIsFavorited
         self.commentAuthor = commentAuthor
         self.commentAuthorId = commentAuthorId
+        self.commentAuthorIsUploader = commentAuthorIsUploader
+        self.commentAuthorThumbnail = commentAuthorThumbnail
+        self.commentParent = commentParent
+        self.commentReplies = commentReplies
     }
 
     public static let placeholder = VideoComment(
@@ -183,10 +231,14 @@ public nonisolated struct VideoComment: Decodable, Sendable, Equatable {
         case commentId = "comment_id"
         case commentText = "comment_text"
         case commentTimestamp = "comment_timestamp"
-        case commentLikeCount = "comment_like_count"
+        case commentLikeCount = "comment_likecount"
         case commentIsFavorited = "comment_is_favorited"
         case commentAuthor = "comment_author"
         case commentAuthorId = "comment_author_id"
+        case commentAuthorIsUploader = "comment_author_is_uploader"
+        case commentAuthorThumbnail = "comment_author_thumbnail"
+        case commentParent = "comment_parent"
+        case commentReplies = "comment_replies"
     }
 }
 
@@ -195,6 +247,13 @@ extension VideoComment: Identifiable {
     /// comment without one.
     public var id: String {
         commentId ?? "\(commentAuthorId ?? commentAuthor ?? "")-\(commentTimestamp ?? 0)"
+    }
+}
+
+extension Array where Element == VideoComment {
+    /// Comments and every reply under them, for the section's count.
+    public var totalCommentCount: Int {
+        count + reduce(0) { $0 + $1.replyCount }
     }
 }
 

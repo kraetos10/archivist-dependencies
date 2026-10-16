@@ -2,8 +2,9 @@
 import ArchivistNetworking
 import SwiftUI
 
-/// A comment in the tvOS video detail's comments row: author, date, likes
-/// and the first lines of the text. Pressing it opens the whole comment.
+/// A comment in the tvOS video detail's comments row: author, date, likes,
+/// the first lines of the text and how many replies it has. Pressing it
+/// opens the whole thread.
 /// Fixed size, so a row of comments lines up whatever their length.
 public struct TVCommentCard: View {
     let comment: VideoComment
@@ -27,10 +28,20 @@ public struct TVCommentCard: View {
 
                 Text(comment.commentText ?? "")
                     .font(.callout)
-                    .lineLimit(3)
+                    // A line goes to the reply count when there is one.
+                    .lineLimit(comment.replyCount > 0 ? 2 : 3)
                     .multilineTextAlignment(.leading)
 
                 Spacer(minLength: 0)
+
+                if comment.replyCount > 0 {
+                    Label(
+                        String.localised("video.comment.replies \(comment.replyCount)", table: .videos),
+                        systemImage: "bubble.left.and.bubble.right"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .opacity(0.8)
+                }
             }
             .frame(
                 width: Self.width - 48,
@@ -43,10 +54,16 @@ public struct TVCommentCard: View {
 
     private var header: some View {
         HStack(spacing: 12) {
+            CommentAvatarView(comment: comment, size: 40)
+
             Text(comment.commentAuthor ?? "")
                 .font(.headline)
                 .lineLimit(1)
                 .layoutPriority(1)
+
+            if comment.isByUploader {
+                CommentCreatorBadge()
+            }
 
             if let date = comment.relativeDate {
                 Text(date)

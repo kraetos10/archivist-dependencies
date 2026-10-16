@@ -69,6 +69,8 @@ public struct VideoDetailReducer {
         /// than the stored resume position.
         var playbackStartsAtBeginning = false
         var showAllComments = false
+        /// iOS: comments whose replies are open. Threads start collapsed.
+        var expandedThreadIDs: Set<String> = []
         var watchedOverride: Bool?
         var localWatchProgress: Double?
         var autoPlayCountdown: AutoPlayCountdown?
@@ -115,6 +117,11 @@ public struct VideoDetailReducer {
         var thumbnailURL: URL? {
             serverConfig.thumbnailURL(videoId: video.videoId, path: video.vidThumbUrl)
         }
+        /// The comments header's count: comments and their replies.
+        var commentCount: Int {
+            comments.totalCommentCount
+        }
+
         /// Whether the current video is already queued in Play Next.
         var isInPlayNext: Bool {
             playNextItems.contains { $0.videoId == video.videoId }
@@ -189,6 +196,7 @@ public struct VideoDetailReducer {
             expandedComment = nil
             playbackStartsAtBeginning = false
             showAllComments = false
+            expandedThreadIDs = []
             watchedOverride = nil
             localWatchProgress = nil
             playlistPicker = nil
@@ -270,6 +278,7 @@ public struct VideoDetailReducer {
             case toggleDescription
             case commentsHeaderTapped
             case commentTapped(VideoComment)
+            case repliesToggled(commentId: String)
             case toggleWatchedTapped
             case addToPlaylistTapped
             case addToPlayNextTapped
@@ -433,9 +442,6 @@ extension VideoDetailReducer.State {
 }
 
 extension VideoComment {
-    /// Heading of the tvOS full-text view for this comment.
-    var fullTextTitle: String { commentAuthor ?? "" }
-
     /// The comment cut into focusable blocks for the tvOS full-text view.
     var fullTextBlocks: [String] { (commentText ?? "").descriptionBlocks() }
 }

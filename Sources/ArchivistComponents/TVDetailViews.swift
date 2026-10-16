@@ -145,7 +145,8 @@ public struct TVFullDescriptionView: View {
     }
 }
 
-private struct TVDescriptionBlock: View {
+/// A focusable paragraph, so the remote can scroll through long text.
+struct TVDescriptionBlock: View {
     let text: String
 
     @FocusState private var isFocused: Bool

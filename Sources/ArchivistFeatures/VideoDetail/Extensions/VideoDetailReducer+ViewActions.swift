@@ -39,6 +39,11 @@ extension VideoDetailReducer {
         case .commentTapped(let comment):
             state.expandedComment = comment
             return .none
+        case .repliesToggled(let commentId):
+            if state.expandedThreadIDs.remove(commentId) == nil {
+                state.expandedThreadIDs.insert(commentId)
+            }
+            return .none
         case .toggleWatchedTapped:
             return handleToggleWatched(state: &state)
         default:

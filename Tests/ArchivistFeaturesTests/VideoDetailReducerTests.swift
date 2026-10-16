@@ -489,6 +489,42 @@ struct VideoDetailReducerTests {
         await store.send(.autoPlayCountdownTick)
     }
 
+    // MARK: - Comment threads
+
+    @Test func repliesToggleOpensAndClosesOneThread() async {
+        let store = makeStore()
+
+        await store.send(.view(.repliesToggled(commentId: "comment_1"))) {
+            $0.expandedThreadIDs = ["comment_1"]
+        }
+        await store.send(.view(.repliesToggled(commentId: "comment_2"))) {
+            $0.expandedThreadIDs = ["comment_1", "comment_2"]
+        }
+        await store.send(.view(.repliesToggled(commentId: "comment_1"))) {
+            $0.expandedThreadIDs = ["comment_2"]
+        }
+    }
+
+    @Test func commentCountIncludesReplies() {
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        let reply = TestFixtures.comment1
+        state.comments = [
+            VideoComment(
+                commentId: "parent",
+                commentText: "Parent",
+                commentTimestamp: nil,
+                commentLikeCount: nil,
+                commentIsFavorited: nil,
+                commentAuthor: "Someone",
+                commentAuthorId: nil,
+                commentReplies: [reply, reply]
+            ),
+            TestFixtures.comment1
+        ]
+
+        #expect(state.commentCount == 4)
+    }
+
     // MARK: - Description
 
     @Test func toggleDescriptionFlipsExpansion() async {
