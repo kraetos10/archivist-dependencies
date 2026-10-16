@@ -2,6 +2,8 @@
 import ArchivistNetworking
 import Dependencies
 import Foundation
+internal import SQLiteData
+import StructuredQueries
 
 /// Loads CarPlay's lists. Each list stops at `limit` items — CarPlay can't
 /// show more than its template allows, and paging a whole library over a
@@ -13,6 +15,14 @@ public final class CarPlayDataProvider {
     @Dependency(\.channelService) private var channelService
     @Dependency(\.playlistService) private var playlistService
     @Dependency(\.videoService) private var videoService
+    @Dependency(\.defaultDatabase) private var database
+    @Dependency(\.localVideoStorage) private var localVideoStorage
+    @Dependency(\.offlineMedia) private var offlineMedia
+
+    /// How long a saved video waits on the server for its resume position
+    /// before playing from the start. In a car the server is often out of
+    /// reach, and the file itself needs no network.
+    private static let resumeLookupTimeout: Duration = .seconds(2)
 
     public init(serverConfig: ServerConfig) {
         self.serverConfig = serverConfig
@@ -97,6 +107,47 @@ public final class CarPlayDataProvider {
                 channel: nil,
                 playlist: playlistId
             )
+        }
+    }
+
+    /// Videos saved to this iPhone, newest first. A row whose file has gone
+    /// is left out: there'd be nothing to play.
+    public func fetchSavedVideos() throws -> [DeviceDownload] {
+        let rows = try database.read { db in
+            try DeviceDownload
+                .where { $0.status.eq(#bind(.completed)) }
+                .order { $0.createdAt.desc() }
+                .fetchAll(db)
+        }
+        return rows.filter { localVideoStorage.isDownloaded(videoId: $0.id) }
+    }
+
+    /// Where a saved video's file is on this iPhone.
+    public func localFileURL(for videoId: String) -> URL {
+        offlineMedia.localFileURL(videoId)
+    }
+
+    /// The saved copy's artwork, else the server's.
+    public func savedThumbnailURL(for download: DeviceDownload) -> URL? {
+        LocalVideoStorage.localThumbnailURL(for: download.id)
+            ?? buildThumbnailURL(for: download.thumbUrl)
+    }
+
+    /// The server's copy of a video, for its resume position and duration,
+    /// or nil if the server doesn't answer within `resumeLookupTimeout`.
+    public func fetchVideoIfReachable(id: String) async -> VideoResponse? {
+        let config = serverConfig
+        return await withTaskGroup(of: VideoResponse?.self) { [videoService] group in
+            group.addTask {
+                try? await videoService.getVideo(config: config, id: id)
+            }
+            group.addTask {
+                try? await Task.sleep(for: Self.resumeLookupTimeout)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 

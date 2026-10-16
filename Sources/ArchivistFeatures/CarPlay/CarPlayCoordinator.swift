@@ -13,6 +13,10 @@ public final class CarPlayCoordinator {
     @Dependency(\.videoService) private var videoService
     private var currentSort: VideoSortOrder = .published
     private weak var recentTemplate: CPListTemplate?
+    private weak var savedTemplate: CPListTemplate?
+    /// Reloads Saved each time its tab is picked, so a download that
+    /// finished since shows up. Held here: the tab bar's delegate is weak.
+    private var tabBarDelegate: TabBarDelegate?
     /// Subscription to player events for the video CarPlay is currently
     /// playing. Held so starting another video — or tearing the scene
     /// down — replaces it rather than leaking a second listener that would
@@ -51,12 +55,28 @@ public final class CarPlayCoordinator {
         )
         playlistsTemplate.tabImage = UIImage(systemName: "list.bullet.rectangle.fill")
 
-        self.recentTemplate = recentTemplate
+        let savedTemplate = CPListTemplate(
+            title: String.localised("video.saved", table: .videos),
+            sections: []
+        )
+        savedTemplate.tabImage = UIImage(systemName: "arrow.down.circle.fill")
 
-        let tabBar = CPTabBarTemplate(templates: [recentTemplate, channelsTemplate, playlistsTemplate])
+        self.recentTemplate = recentTemplate
+        self.savedTemplate = savedTemplate
+
+        let tabBar = CPTabBarTemplate(
+            templates: [recentTemplate, savedTemplate, channelsTemplate, playlistsTemplate]
+        )
+        let delegate = TabBarDelegate { [weak self] selected in
+            guard let self, selected === self.savedTemplate else { return }
+            loadSavedVideos(into: savedTemplate)
+        }
+        tabBar.delegate = delegate
+        tabBarDelegate = delegate
         interfaceController.setRootTemplate(tabBar, animated: false, completion: nil)
 
         loadRecentVideos(into: recentTemplate)
+        loadSavedVideos(into: savedTemplate)
         loadChannels(into: channelsTemplate)
         loadPlaylists(into: playlistsTemplate)
     }
@@ -85,6 +105,7 @@ public final class CarPlayCoordinator {
             task.cancel()
         }
         loadTasks = []
+        tabBarDelegate = nil
         interfaceController = nil
     }
 
@@ -117,6 +138,27 @@ public final class CarPlayCoordinator {
                 showError(in: template, message: String.localised("carPlay.loadVideosFailed", table: .generic)) { [weak self] in
                     self?.loadRecentVideos(into: template)
                 }
+            }
+        }
+    }
+
+    /// Videos saved to this iPhone: read from disk, so they list and play
+    /// with no signal.
+    private func loadSavedVideos(into template: CPListTemplate) {
+        do {
+            let downloads = try dataProvider.fetchSavedVideos().prefix(listLimit)
+            guard !downloads.isEmpty else {
+                let item = CPListItem(
+                    text: String.localised("carPlay.noSavedVideos", table: .generic),
+                    detailText: nil
+                )
+                template.updateSections([CPListSection(items: [item])])
+                return
+            }
+            template.updateSections([CPListSection(items: downloads.map { makeSavedListItem($0) })])
+        } catch {
+            showError(in: template, message: String.localised("carPlay.loadVideosFailed", table: .generic)) { [weak self] in
+                self?.loadSavedVideos(into: template)
             }
         }
     }
@@ -243,25 +285,55 @@ public final class CarPlayCoordinator {
 
     private func playVideo(_ video: VideoResponse) {
         guard let url = dataProvider.buildMediaURL(for: video) else { return }
-        let config = dataProvider.serverConfig
-        let videoId = video.videoId
-
-        // One subscription covers progress saves and the watched flag,
-        // taken before the load so nothing it emits is missed. A broadcast
-        // stream lets CarPlay and the VideoDetail feature observe at once.
-        let events = playerClient.startPlayback(PlayerClient.PlaybackRequest(
+        startPlayback(PlayerClient.PlaybackRequest(
             url: url,
             startPosition: video.resumePositionSeconds,
-            videoId: videoId,
+            videoId: video.videoId,
             expectedSize: video.mediaSize.map { Int64($0) },
             metadata: PlayerManager.NowPlayingMetadata(
                 title: video.title,
                 artist: video.channelName,
                 duration: Double(video.player?.duration ?? 0),
                 artworkURL: dataProvider.buildThumbnailURL(for: video.vidThumbUrl),
-                authHeaders: config.authHeaders
+                authHeaders: dataProvider.serverConfig.authHeaders
             )
         ))
+    }
+
+    /// Plays the file on this iPhone. The server is asked, briefly, where
+    /// the video was left off; out of reach, it plays from the start.
+    private func playSavedVideo(_ download: DeviceDownload) {
+        let url = dataProvider.localFileURL(for: download.id)
+        let artworkURL = dataProvider.savedThumbnailURL(for: download)
+        let headers = dataProvider.serverConfig.authHeaders
+        track { [weak self] in
+            guard let self else { return }
+            let video = await dataProvider.fetchVideoIfReachable(id: download.id)
+            guard !Task.isCancelled else { return }
+            startPlayback(PlayerClient.PlaybackRequest(
+                url: url,
+                startPosition: video?.resumePositionSeconds ?? 0,
+                videoId: download.id,
+                expectedSize: nil,
+                metadata: PlayerManager.NowPlayingMetadata(
+                    title: download.title,
+                    artist: download.channelName,
+                    duration: Double(video?.player?.duration ?? 0),
+                    artworkURL: artworkURL,
+                    authHeaders: headers
+                )
+            ))
+        }
+    }
+
+    private func startPlayback(_ request: PlayerClient.PlaybackRequest) {
+        let config = dataProvider.serverConfig
+        let videoId = request.videoId
+
+        // One subscription covers progress saves and the watched flag,
+        // taken before the load so nothing it emits is missed. A broadcast
+        // stream lets CarPlay and the VideoDetail feature observe at once.
+        let events = playerClient.startPlayback(request)
 
         playbackObservationTask?.cancel()
         playbackObservationTask = Task { [videoService] in
@@ -324,11 +396,31 @@ public final class CarPlayCoordinator {
         return item
     }
 
+    private func makeSavedListItem(_ download: DeviceDownload) -> CPListItem {
+        let item = CPListItem(text: download.title, detailText: download.channelName)
+        item.isExplicitContent = false
+        item.handler = { [weak self] _, completion in
+            self?.playSavedVideo(download)
+            completion()
+        }
+        loadThumbnail(for: item, url: dataProvider.savedThumbnailURL(for: download))
+        return item
+    }
+
     private func loadThumbnail(
         for item: CPListItem,
         path: String?
     ) {
-        guard let url = dataProvider.buildThumbnailURL(for: path) else { return }
+        loadThumbnail(for: item, url: dataProvider.buildThumbnailURL(for: path))
+    }
+
+    /// Server thumbnails and saved ones on disk alike: `URLSession` reads
+    /// `file:` URLs too.
+    private func loadThumbnail(
+        for item: CPListItem,
+        url: URL?
+    ) {
+        guard let url else { return }
         let headers = dataProvider.serverConfig.authHeaders
         track {
             guard let image = await Self.fetchThumbnail(url: url, headers: headers) else { return }
@@ -372,6 +464,24 @@ public final class CarPlayCoordinator {
             }
         }
         template.updateSections([CPListSection(items: [item])])
+    }
+}
+/// Forwards tab switches to the coordinator, which CarPlay can't take as a
+/// delegate itself: the protocol requires an `NSObject`.
+private final class TabBarDelegate: NSObject, CPTabBarTemplateDelegate {
+    private let onSelect: @MainActor (CPTemplate) -> Void
+
+    init(onSelect: @escaping @MainActor (CPTemplate) -> Void) {
+        self.onSelect = onSelect
+    }
+
+    func tabBarTemplate(
+        _ tabBarTemplate: CPTabBarTemplate,
+        didSelect selectedTemplate: CPTemplate
+    ) {
+        MainActor.assumeIsolated {
+            onSelect(selectedTemplate)
+        }
     }
 }
 #endif

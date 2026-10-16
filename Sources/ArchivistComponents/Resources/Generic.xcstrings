@@ -617,6 +617,17 @@
         }
       }
     },
+    "carPlay.noSavedVideos" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No videos saved to this iPhone"
+          }
+        }
+      }
+    },
     "carPlay.loadChannelsFailed" : {
       "extractionState" : "manual",
       "localizations" : {
