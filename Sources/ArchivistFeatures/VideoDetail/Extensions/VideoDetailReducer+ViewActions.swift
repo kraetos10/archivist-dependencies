@@ -406,6 +406,10 @@ extension VideoDetailReducer {
         state: inout State
     ) -> Effect<Action> {
         guard !isPresented, state.isPlaying else { return .none }
+        // Menu over the up-next card: don't advance once the player's gone.
+        if state.autoPlayCountdown != nil {
+            return handleAutoPlayCountdownCancel(state: &state)
+        }
         return handleStopPlayback(state: &state)
     }
 

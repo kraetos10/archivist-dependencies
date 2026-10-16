@@ -419,6 +419,70 @@ struct VideoDetailReducerTests {
         expectNoDifference(mirrored.value, [4, 3])
     }
 
+    /// Menu over the tvOS up-next card closes the player mid-countdown:
+    /// that's Cancel, not a stop that lets the next video start anyway.
+    @Test func closingThePlayerDuringTheCountdownCancelsIt() async {
+        let stopped = LockIsolated<[Bool]>([])
+        let store = makeStore {
+            $0.isPlaying = true
+            $0.autoPlayCountdown = AutoPlayCountdown(
+                nextVideo: TestFixtures.video2,
+                consumesPlayNextQueue: false,
+                remainingSeconds: 3
+            )
+        }
+        store.dependencies.playerClient.setAutoPlayCountdown = { _ in }
+        store.dependencies.playerClient.stop = { dismiss in stopped.withValue { $0.append(dismiss) } }
+
+        await store.send(.view(.playerPresentationChanged(false))) {
+            $0.autoPlayCountdown = nil
+        }
+        await store.receive(\.autoPlayExhausted) {
+            $0.isPlaying = false
+            $0.localWatchProgress = 1.0
+            $0.watchedOverride = true
+        }
+        await store.finish()
+        expectNoDifference(stopped.value, [true])
+    }
+
+    // MARK: - Up next hint
+
+    @Test func predictedNextPrefersTheUpNextListOverSimilar() {
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        state.similarVideos = [TestFixtures.watchedVideo]
+        #expect(state.predictedNextTitle == TestFixtures.watchedVideo.title)
+
+        state.nextVideos = [TestFixtures.video2]
+        #expect(state.predictedNextTitle == TestFixtures.video2.title)
+
+        state.shouldAutoPlayNextVideo = false
+        #expect(state.predictedNextTitle == TestFixtures.watchedVideo.title)
+    }
+
+    /// A looping playlist is only settled once the video ends, so there's
+    /// nothing honest to hint — not the similar videos it won't play.
+    @Test func aLoopingPlaylistGivesNoHint() {
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        state.similarVideos = [TestFixtures.watchedVideo]
+        state.loopVideoIds = ["video_1", "video_2"]
+
+        #expect(state.predictedNextTitle == nil)
+    }
+
+    @Test func noHintWithAutoplayOffOrWhileNotPlaying() {
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        state.nextVideos = [TestFixtures.video2]
+        #expect(state.upNextHintTitle == nil)
+
+        state.isPlaying = true
+        #expect(state.upNextHintTitle == TestFixtures.video2.title)
+
+        @Shared(.autoPlayEnabled) var autoPlayEnabled
+        $autoPlayEnabled.withLock { $0 = false }
+        #expect(state.upNextHintTitle == nil)
+    }
+
     @Test func countdownTickWithoutACountdownIsANoOp() async {
         let store = makeStore()
 

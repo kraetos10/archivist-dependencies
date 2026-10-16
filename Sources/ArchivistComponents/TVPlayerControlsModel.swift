@@ -17,6 +17,18 @@ final class TVPlayerControlsModel {
         case fastForward
     }
 
+    enum SkipDirection {
+        case backward
+        case forward
+    }
+
+    /// A left/right tap that just landed, flashed on screen so the skip
+    /// visibly did something. `id` changes per tap, so repeats re-flash.
+    struct SkipFeedback: Equatable {
+        let direction: SkipDirection
+        let id: Int
+    }
+
     /// How much of the video one full-width swipe across the touch surface
     /// covers. Needs tuning on a real Siri Remote.
     private static let scrubSpan: Double = 1.0
@@ -27,6 +39,10 @@ final class TVPlayerControlsModel {
     private static let endGuard: Double = 2
     /// Interval between backward jumps while Left is held.
     private static let rewindTick: Duration = .milliseconds(500)
+    /// How close to the end the up-next hint appears.
+    private static let upNextHintLead: Double = 20
+    /// Seconds one left/right tap skips.
+    static let skipInterval: Double = 10
 
     private let playerManager: PlayerManager
 
@@ -35,6 +51,7 @@ final class TVPlayerControlsModel {
     /// Where the knob sits while scrubbing or rewinding; nil otherwise.
     private(set) var scrubTime: Double?
     private(set) var isScrubbing = false
+    private(set) var skipFeedback: SkipFeedback?
 
     /// The speed picker is open. The controls stay up meanwhile, and the
     /// auto-hide restarts once it closes.
@@ -52,6 +69,7 @@ final class TVPlayerControlsModel {
     @ObservationIgnored private var hideTask: Task<Void, Never>?
     @ObservationIgnored private var rewindTask: Task<Void, Never>?
     @ObservationIgnored private var scrubOrigin: Double = 0
+    @ObservationIgnored private var skipFeedbackTask: Task<Void, Never>?
 
     init(playerManager: PlayerManager = .shared) {
         self.playerManager = playerManager
@@ -69,6 +87,32 @@ final class TVPlayerControlsModel {
 
     var scrubTimeDisplay: String? {
         scrubTime.map(Self.formatTime)
+    }
+
+    /// Time left, counted from the knob, as Apple's player shows it.
+    var remainingTimeDisplay: String {
+        let total = playerManager.effectiveDuration
+        let position = scrubTime ?? playerManager.currentTime
+        guard total > 0, position.isFinite else { return "" }
+        return "-" + Self.formatTime(total - position)
+    }
+
+    /// Scrubbing, rewinding or fast-forwarding: the bar thickens and shows
+    /// its knob only then, or while paused.
+    var showsKnob: Bool {
+        isScrubbing || seekMode != nil || !playerManager.isPlaying
+    }
+
+    /// The next video's title in the last stretch of this one.
+    var upNextHintTitle: String? {
+        guard let title = playerManager.upNextTitle else { return nil }
+        let total = playerManager.effectiveDuration
+        let remaining = total - playerManager.currentTime
+        guard total > Self.upNextHintLead * 2,
+              remaining > 0,
+              remaining <= Self.upNextHintLead
+        else { return nil }
+        return title
     }
 
     var statusIconName: String {
@@ -106,10 +150,12 @@ final class TVPlayerControlsModel {
     func handleTap(_ type: UIPress.PressType) -> TapResult {
         switch type {
         case .leftArrow:
-            playerManager.skipBackward(10)
+            playerManager.skipBackward(Self.skipInterval)
+            flashSkip(.backward)
             poke()
         case .rightArrow:
-            playerManager.skipForward(10)
+            playerManager.skipForward(Self.skipInterval)
+            flashSkip(.forward)
             poke()
         case .downArrow:
             showControls()
@@ -299,6 +345,7 @@ final class TVPlayerControlsModel {
     func teardown() {
         hideTask?.cancel()
         rewindTask?.cancel()
+        skipFeedbackTask?.cancel()
         // Restore the rate in case the view is dismissed mid-hold,
         // otherwise the next playback session inherits 4× speed.
         playerManager.restorePlaybackSpeed()
@@ -335,6 +382,21 @@ final class TVPlayerControlsModel {
         hideTask?.cancel()
         withAnimation(.easeInOut(duration: 0.2)) {
             controlsVisible = false
+        }
+    }
+
+    private func flashSkip(_ direction: SkipDirection) {
+        let id = (skipFeedback?.id ?? 0) + 1
+        withAnimation(.easeOut(duration: 0.15)) {
+            skipFeedback = SkipFeedback(direction: direction, id: id)
+        }
+        skipFeedbackTask?.cancel()
+        skipFeedbackTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard let self, !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.25)) {
+                self.skipFeedback = nil
+            }
         }
     }
 

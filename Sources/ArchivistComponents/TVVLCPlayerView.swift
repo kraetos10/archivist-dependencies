@@ -8,8 +8,10 @@ public struct TVVLCPlayerView: View {
     private let playerManager = PlayerManager.shared
 
     @State private var model = TVPlayerControlsModel()
+    @AppStorage(ChildMode.enabledKey) private var childModeEnabled = false
 
     private static let barHeight: CGFloat = 10
+    private static let thinBarHeight: CGFloat = 6
     private static let knobSize: CGFloat = 24
 
     public init() {}
@@ -23,36 +25,24 @@ public struct TVVLCPlayerView: View {
                 // events captured below never reach our handler.
                 .allowsHitTesting(false)
 
-            if playerManager.isBuffering {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(.white)
+            // Child mode gets no card to pick from, as on iOS; the
+            // countdown still advances on its own.
+            if !childModeEnabled, let countdown = playerManager.autoPlayCountdown {
+                // The video has ended, so the card replaces the controls,
+                // and the press capture below steps aside so focus can
+                // reach its buttons. Menu closes the player, which the
+                // reducer takes as Cancel.
+                TVAutoPlayCountdownOverlay(
+                    info: countdown,
+                    onPlayNow: { playerManager.emit(.autoPlayPlayNowTapped) },
+                    onCancel: { playerManager.emit(.autoPlayCancelTapped) }
+                )
+                .transition(.opacity)
+            } else {
+                playbackChrome
             }
-
-            if model.controlsVisible {
-                controlsOverlay
-                    .transition(.opacity)
-            }
-
-            // Press-event capture: `.onMoveCommand` only fires once per
-            // press cycle so it can't distinguish a quick tap from a
-            // hold. Routing the arrows through UIPress lets us treat a
-            // sub-300ms left/right press as a discrete skip and a longer
-            // hold as rewind / fast-forward. The same view carries the
-            // touch-surface pan used for scrubbing.
-            TVPlayerPressView(
-                onTap: { type in
-                    if model.handleTap(type) == .dismiss {
-                        dismiss()
-                    }
-                },
-                onHoldBegan: { type in model.handleHoldBegan(type) },
-                onHoldEnded: { type in model.handleHoldEnded(type) },
-                onScrubBegan: { model.scrubBegan() },
-                onScrubChanged: { fraction in model.scrubChanged(fraction: fraction) },
-                onScrubEnded: { cancelled in model.scrubEnded(cancelled: cancelled) }
-            )
         }
+        .animation(.easeInOut(duration: 0.3), value: playerManager.autoPlayCountdown == nil)
         .confirmationDialog(
             String.localised("video.playbackSpeed", table: .videos),
             isPresented: $model.isSpeedPickerPresented,
@@ -70,11 +60,88 @@ public struct TVVLCPlayerView: View {
         .onDisappear { model.teardown() }
     }
 
+    /// Buffering spinner, controls and remote capture while a video plays.
     @ViewBuilder
+    private var playbackChrome: some View {
+        if playerManager.isBuffering {
+            ProgressView()
+                .controlSize(.large)
+                .tint(.white)
+        }
+
+        if model.controlsVisible {
+            controlsOverlay
+                .transition(.opacity)
+        }
+
+        skipFeedbackView
+
+        upNextHint
+            .animation(.easeInOut(duration: 0.3), value: model.upNextHintTitle)
+
+        // Press-event capture: `.onMoveCommand` only fires once per
+        // press cycle so it can't distinguish a quick tap from a
+        // hold. Routing the arrows through UIPress lets us treat a
+        // sub-300ms left/right press as a discrete skip and a longer
+        // hold as rewind / fast-forward. The same view carries the
+        // touch-surface pan used for scrubbing.
+        TVPlayerPressView(
+            onTap: { type in
+                if model.handleTap(type) == .dismiss {
+                    dismiss()
+                }
+            },
+            onHoldBegan: { type in model.handleHoldBegan(type) },
+            onHoldEnded: { type in model.handleHoldEnded(type) },
+            onScrubBegan: { model.scrubBegan() },
+            onScrubChanged: { fraction in model.scrubChanged(fraction: fraction) },
+            onScrubEnded: { cancelled in model.scrubEnded(cancelled: cancelled) }
+        )
+    }
+
+    /// Apple TV app layout: no panels, just dark gradients at the top and
+    /// bottom edges, the title large at top-left and the transport along
+    /// the bottom.
     private var controlsOverlay: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let metadata = playerManager.currentMetadata {
-                HStack(spacing: 12) {
+        ZStack {
+            edgeGradients
+
+            VStack(alignment: .leading, spacing: 0) {
+                titleBlock
+                Spacer()
+                transportBlock
+            }
+            .padding(.horizontal, 80)
+            .padding(.vertical, 60)
+        }
+    }
+
+    private var edgeGradients: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [.black.opacity(0.75), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 360)
+            Spacer()
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.85)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 420)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var titleBlock: some View {
+        if let metadata = playerManager.currentMetadata {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 14) {
                     if let thumb = metadata.channelThumbURL {
                         AsyncImage(url: thumb) { phase in
                             switch phase {
@@ -84,62 +151,51 @@ public struct TVVLCPlayerView: View {
                                 Circle().fill(.white.opacity(0.2))
                             }
                         }
-                        .frame(width: 36, height: 36)
+                        .frame(width: 48, height: 48)
                         .clipShape(Circle())
                         // Decorative: the channel name beside it says who it is.
                         .accessibilityHidden(true)
                     }
                     Text(metadata.artist)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Text("·")
-                        .font(.title3)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .accessibilityHidden(true)
-                    Text(metadata.title)
-                        .font(.title3)
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-
-            Spacer()
-
-            VStack(spacing: 16) {
-                progressBar
-
-                HStack(spacing: 16) {
-                    Image(systemName: model.statusIconName)
                         .font(.headline)
-                        .foregroundStyle(.white.opacity(0.9))
-                        .frame(minWidth: 40)
-                        .accessibilityLabel(model.statusAccessibilityLabel)
-
-                    Text(playerManager.currentTimeDisplay)
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.8))
-
-                    Spacer()
-
-                    speedHint
-
-                    Text(playerManager.durationDisplay)
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
                 }
+                Text(metadata.title)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 14)
-            .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: 1200, alignment: .leading)
+            .shadow(color: .black.opacity(0.4), radius: 8)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.horizontal, 80)
-        .padding(.vertical, 60)
+    }
+
+    private var transportBlock: some View {
+        VStack(spacing: 18) {
+            progressBar
+
+            HStack(spacing: 16) {
+                Image(systemName: model.statusIconName)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 40)
+                    .accessibilityLabel(model.statusAccessibilityLabel)
+
+                Text(playerManager.currentTimeDisplay)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.85))
+
+                Spacer()
+
+                speedHint
+
+                Text(model.remainingTimeDisplay)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+        }
     }
 
     /// Down on the remote opens the speed picker; this says so.
@@ -163,25 +219,30 @@ public struct TVVLCPlayerView: View {
     }
 
     /// Custom progress bar — the SwiftUI default `ProgressView` has a
-    /// barely-visible track on a dark background. The knob tracks the
-    /// playhead, or the scrub target while scrubbing, with the target time
-    /// floating above it.
+    /// barely-visible track on a dark background. Thin while playing; it
+    /// thickens and grows a knob while scrubbing, seeking or paused, with
+    /// the target time floating above the knob while scrubbing.
     private var progressBar: some View {
-        GeometryReader { geometry in
+        let showsKnob = model.showsKnob
+        let barHeight = showsKnob ? Self.barHeight : Self.thinBarHeight
+        return GeometryReader { geometry in
             let width = geometry.size.width
             let knobX = width * model.knobProgress
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(Color.white.opacity(0.3))
-                    .frame(height: Self.barHeight)
+                    .frame(height: barHeight)
                 Capsule()
                     .fill(Color.white)
-                    .frame(width: width * model.playbackProgress, height: Self.barHeight)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: Self.knobSize, height: Self.knobSize)
-                    .shadow(color: .black.opacity(0.4), radius: 4)
-                    .offset(x: knobX - Self.knobSize / 2)
+                    .frame(width: width * model.playbackProgress, height: barHeight)
+                if showsKnob {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: Self.knobSize, height: Self.knobSize)
+                        .shadow(color: .black.opacity(0.4), radius: 4)
+                        .offset(x: knobX - Self.knobSize / 2)
+                        .transition(.scale.combined(with: .opacity))
+                }
                 if let scrubLabel = model.scrubTimeDisplay {
                     Text(scrubLabel)
                         .font(.callout.monospacedDigit().weight(.semibold))
@@ -196,9 +257,56 @@ public struct TVVLCPlayerView: View {
             .frame(maxHeight: .infinity)
         }
         .frame(height: Self.knobSize)
+        .animation(.easeOut(duration: 0.2), value: showsKnob)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String.localised("video.watchProgress", table: .videos))
         .accessibilityValue(model.progressAccessibilityValue)
+    }
+
+    /// A ten-second skip, flashed beside the video on the side it went.
+    @ViewBuilder
+    private var skipFeedbackView: some View {
+        if let feedback = model.skipFeedback {
+            let isForward = feedback.direction == .forward
+            Image(systemName: isForward ? "goforward.10" : "gobackward.10")
+                .font(.system(size: 64, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 160, height: 160)
+                .background(.ultraThinMaterial, in: Circle())
+                .id(feedback.id)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                .frame(maxWidth: .infinity, alignment: isForward ? .trailing : .leading)
+                .padding(.horizontal, 160)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// "Up next" in the last stretch of the video, so the countdown that
+    /// follows isn't a surprise. Sits above the transport, shown whether
+    /// or not the controls are.
+    @ViewBuilder
+    private var upNextHint: some View {
+        if let title = model.upNextHintTitle {
+            HStack(spacing: 12) {
+                Text(String.localised("video.upNext", table: .videos))
+                    .font(.callout.weight(.bold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial, in: Capsule())
+            .frame(maxWidth: 900, alignment: .trailing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .padding(.horizontal, 80)
+            .padding(.bottom, 180)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 #endif

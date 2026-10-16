@@ -126,6 +126,8 @@ public struct PlayerClient: Sendable {
     /// Mirror of the VideoDetail auto-play countdown for the fullscreen VC.
     public var setAutoPlayCountdown: @MainActor @Sendable (_ info: AutoPlayCountdownInfo?) -> Void
     public var setCanGoPrevious: @MainActor @Sendable (_ canGoPrevious: Bool) -> Void
+    /// Mirror of the likely next video's title for the tvOS player's hint.
+    public var setUpNextTitle: @MainActor @Sendable (_ title: String?) -> Void
 
     // MARK: Speed
 
@@ -166,6 +168,7 @@ public struct PlayerClient: Sendable {
         setActivePlayerSurfaceRole: @escaping @MainActor @Sendable (_ role: PlayerSurfaceRole) -> Void,
         setAutoPlayCountdown: @escaping @MainActor @Sendable (_ info: AutoPlayCountdownInfo?) -> Void,
         setCanGoPrevious: @escaping @MainActor @Sendable (_ canGoPrevious: Bool) -> Void,
+        setUpNextTitle: @escaping @MainActor @Sendable (_ title: String?) -> Void,
         playbackSpeed: @escaping @MainActor @Sendable () -> Float,
         setPlaybackSpeed: @escaping @MainActor @Sendable (_ speed: Float) -> Void,
         setPlaybackRate: @escaping @MainActor @Sendable (_ rate: Float) -> Void,
@@ -195,6 +198,7 @@ public struct PlayerClient: Sendable {
         self.setActivePlayerSurfaceRole = setActivePlayerSurfaceRole
         self.setAutoPlayCountdown = setAutoPlayCountdown
         self.setCanGoPrevious = setCanGoPrevious
+        self.setUpNextTitle = setUpNextTitle
         self.playbackSpeed = playbackSpeed
         self.setPlaybackSpeed = setPlaybackSpeed
         self.setPlaybackRate = setPlaybackRate
@@ -288,6 +292,7 @@ extension PlayerClient: DependencyKey {
             setActivePlayerSurfaceRole: { PlayerManager.shared.activePlayerSurfaceRole = $0 },
             setAutoPlayCountdown: { PlayerManager.shared.autoPlayCountdown = $0 },
             setCanGoPrevious: { PlayerManager.shared.canGoPrevious = $0 },
+            setUpNextTitle: { PlayerManager.shared.upNextTitle = $0 },
             playbackSpeed: { PlayerManager.shared.playbackSpeed },
             setPlaybackSpeed: { PlayerManager.shared.setPlaybackSpeed($0) },
             setPlaybackRate: { PlayerManager.shared.setPlaybackRate($0) },
@@ -348,6 +353,7 @@ extension PlayerClient: DependencyKey {
             setActivePlayerSurfaceRole: { _ in unimplementedCall("setActivePlayerSurfaceRole", placeholder: ()) },
             setAutoPlayCountdown: { _ in unimplementedCall("setAutoPlayCountdown", placeholder: ()) },
             setCanGoPrevious: { _ in unimplementedCall("setCanGoPrevious", placeholder: ()) },
+            setUpNextTitle: { _ in unimplementedCall("setUpNextTitle", placeholder: ()) },
             playbackSpeed: { unimplementedCall("playbackSpeed", placeholder: 1) },
             setPlaybackSpeed: { _ in unimplementedCall("setPlaybackSpeed", placeholder: ()) },
             setPlaybackRate: { _ in unimplementedCall("setPlaybackRate", placeholder: ()) },
@@ -386,6 +392,7 @@ extension PlayerClient: DependencyKey {
             setActivePlayerSurfaceRole: { _ in },
             setAutoPlayCountdown: { _ in },
             setCanGoPrevious: { _ in },
+            setUpNextTitle: { _ in },
             playbackSpeed: { 1 },
             setPlaybackSpeed: { _ in },
             setPlaybackRate: { _ in },

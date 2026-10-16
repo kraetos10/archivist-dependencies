@@ -119,6 +119,29 @@ public struct VideoDetailReducer {
         var isInPlayNext: Bool {
             playNextItems.contains { $0.videoId == video.videoId }
         }
+        /// What auto-advance will most likely play once this video ends,
+        /// for the tvOS player's hint. Follows the order
+        /// `handleVideoPlaybackDidEnd` resolves in, but only as far as is
+        /// known ahead of time: a looping playlist and the server's similar
+        /// lookup are only settled at the end, so they give no hint.
+        var predictedNextTitle: String? {
+            @Shared(.autoPlayEnabled) var autoPlayEnabled
+            guard autoPlayEnabled else { return nil }
+            if let queued = playNextItems.first {
+                return queued.title
+            }
+            if shouldAutoPlayNextVideo, let next = nextVideos.first {
+                return next.title
+            }
+            guard loopVideoIds.isEmpty else { return nil }
+            return similarVideos.first?.title
+        }
+
+        /// The hint mirrored into the player: only while it's up.
+        var upNextHintTitle: String? {
+            isPlaying ? predictedNextTitle : nil
+        }
+
         /// The "up next" card, in the shape both the inline overlay and the
         /// fullscreen player (via `PlayerClient.setAutoPlayCountdown`) take.
         var autoPlayCountdownInfo: AutoPlayCountdownInfo? {
@@ -269,6 +292,7 @@ public struct VideoDetailReducer {
         case autoPlayCountdown
         /// Mirrors the countdown into the fullscreen player.
         case countdownMirror
+        case upNextMirror
         /// Resolving what plays next once a video ends.
         case autoPlayResolve
         /// Per-video loads. Each restarts with `cancelInFlight` whenever the
@@ -335,6 +359,21 @@ public struct VideoDetailReducer {
                     await playerClient.setAutoPlayCountdown(info)
                 }
                 .cancellable(id: CancelID.countdownMirror, cancelInFlight: true)
+            }
+        }
+        .onChange(of: \.upNextHintTitle) { _, _ in
+            // Only the tvOS player draws the hint. Keyed on `isPlaying` too,
+            // so pressing Play publishes a guess that was settled before.
+            Reduce { state, _ in
+                #if os(tvOS)
+                let title = state.upNextHintTitle
+                return .run { [playerClient] _ in
+                    await playerClient.setUpNextTitle(title)
+                }
+                .cancellable(id: CancelID.upNextMirror, cancelInFlight: true)
+                #else
+                return .none
+                #endif
             }
         }
     }

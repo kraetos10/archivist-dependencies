@@ -222,21 +222,15 @@ extension VideoDetailReducer {
         consumesPlayNextQueue: Bool,
         state: inout State
     ) -> Effect<Action> {
-        #if os(tvOS)
-        // tvOS plays full-screen via `.fullScreenCover` — there's no
-        // surface to host the countdown overlay without flashing the
-        // detail screen between videos. Skip the wait and advance.
-        return .run { [playNextDatabase] send in
-            if consumesPlayNextQueue {
-                _ = try? await playNextDatabase.popNext()
-            }
-            await send(.autoPlayVideo(video))
-        }
-        #else
+        // tvOS leaves `isPlaying` alone: its player is a full-screen cover
+        // bound to it, so the card is drawn inside the player and the next
+        // video plays there without flashing the detail screen in between.
+        #if !os(tvOS)
         // Drop back to the thumbnail while the countdown overlay is up —
         // the video already finished so the VLC surface would otherwise
         // show a stalled black frame behind the overlay.
         state.isPlaying = false
+        #endif
         state.autoPlayCountdown = AutoPlayCountdown(
             nextVideo: video,
             consumesPlayNextQueue: consumesPlayNextQueue,
@@ -280,7 +274,6 @@ extension VideoDetailReducer {
             }
             .cancellable(id: CancelID.autoPlayCountdown, cancelInFlight: true)
         )
-        #endif
     }
 
     private func handleAutoPlayCountdownTick(state: inout State) -> Effect<Action> {

@@ -214,6 +214,12 @@ public final class PlayerManager: NSObject {
     /// reducer's store.
     public var autoPlayCountdown: AutoPlayCountdownInfo?
 
+    /// Title of the video auto-advance will most likely play next, mirrored
+    /// from the `VideoDetail` reducer for the tvOS player's end-of-video
+    /// hint. A guess made before the video ends; the countdown has the
+    /// final say.
+    public var upNextTitle: String?
+
     /// Watches the network path so the Wi-Fi-only prebuffer gate can read
     /// the current interface without a blocking reachability lookup. Only
     /// started on platforms whose defaults actually consult it.
