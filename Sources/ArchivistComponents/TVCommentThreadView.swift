@@ -3,19 +3,26 @@ import ArchivistNetworking
 import SwiftUI
 
 /// A comment opened full screen on Apple TV: the comment in focusable
-/// paragraphs, then each of its replies as a focusable row, so the remote
-/// can scroll the whole thread.
+/// paragraphs, then its replies behind an "N replies" button, as on the
+/// phone. Each reply is a focusable row, so the remote can scroll the
+/// whole thread.
 public struct TVCommentThreadView: View {
     let comment: VideoComment
     /// The comment's text cut into paragraphs by the caller.
     let blocks: [String]
+    let isRepliesExpanded: Bool
+    let onToggleReplies: () -> Void
 
     public init(
         comment: VideoComment,
-        blocks: [String]
+        blocks: [String],
+        isRepliesExpanded: Bool,
+        onToggleReplies: @escaping () -> Void
     ) {
         self.comment = comment
         self.blocks = blocks
+        self.isRepliesExpanded = isRepliesExpanded
+        self.onToggleReplies = onToggleReplies
     }
 
     public var body: some View {
@@ -31,15 +38,26 @@ public struct TVCommentThreadView: View {
                 }
 
                 if comment.replyCount > 0 {
-                    Text(String.localised("video.comment.replies \(comment.replyCount)", table: .videos))
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 32)
-                        .padding(.bottom, 8)
+                    repliesButton
+                        .padding(.top, 24)
 
-                    ForEach(comment.flattenedReplies) { reply in
-                        TVReplyRow(reply: reply)
+                    if isRepliesExpanded {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(comment.flattenedReplies) { reply in
+                                TVReplyRow(reply: reply)
+                            }
+                        }
+                        // Indented under the comment, with a thread line
+                        // down the leading edge.
+                        .padding(.leading, 32)
+                        .overlay(alignment: .leading) {
+                            Rectangle()
+                                .fill(Color.Brand.secondary.opacity(0.4))
+                                .frame(width: 3)
+                                .padding(.leading, 56)
+                                .accessibilityHidden(true)
+                        }
+                        .transition(.opacity)
                     }
                 }
             }
@@ -49,6 +67,24 @@ public struct TVCommentThreadView: View {
         }
         .scrollIndicators(.hidden)
         .background(Color.Brand.primary.ignoresSafeArea())
+    }
+
+    private var repliesButton: some View {
+        Button(action: onToggleReplies) {
+            HStack(spacing: 12) {
+                Image(systemName: "chevron.right")
+                    .rotationEffect(.degrees(isRepliesExpanded ? 90 : 0))
+                    .accessibilityHidden(true)
+                Text(String.localised("video.comment.replies \(comment.replyCount)", table: .videos))
+            }
+            .font(.headline)
+        }
+        .padding(.horizontal, 24)
+        .accessibilityValue(
+            isRepliesExpanded
+                ? String.localised("generic.expanded", table: .generic)
+                : String.localised("generic.collapsed", table: .generic)
+        )
     }
 }
 
@@ -113,7 +149,7 @@ private struct TVReplyRow: View {
             Color.Surface.highlight.opacity(isFocused ? 1 : 0),
             in: RoundedRectangle(cornerRadius: TVLayout.cornerRadius)
         )
-        .padding(.leading, 64)
+        .padding(.leading, 48)
         .focusable()
         .focused($isFocused)
         .animation(.easeInOut(duration: 0.15), value: isFocused)

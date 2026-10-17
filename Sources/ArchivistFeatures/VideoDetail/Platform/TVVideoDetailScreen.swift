@@ -79,7 +79,11 @@ public struct TVVideoDetailScreen: View {
         .fullScreenCover(item: $store.expandedComment) { comment in
             TVCommentThreadView(
                 comment: comment,
-                blocks: comment.fullTextBlocks
+                blocks: comment.fullTextBlocks,
+                isRepliesExpanded: store.expandedThreadIDs.contains(comment.id),
+                onToggleReplies: {
+                    send(.repliesToggled(commentId: comment.id), animation: .default)
+                }
             )
         }
         .onAppear { send(.viewDidAppear) }
@@ -329,7 +333,10 @@ public struct TVVideoDetailScreen: View {
     @ViewBuilder
     private var commentsSection: some View {
         if store.isLoadingComments || !store.comments.isEmpty {
-            section(String.localised("generic.comments", table: .generic)) {
+            section(
+                String.localised("generic.comments", table: .generic),
+                count: store.comments.isEmpty ? nil : store.commentCount
+            ) {
                 cardRow {
                     if store.isLoadingComments {
                         ForEach(store.commentPlaceholders) { comment in
@@ -352,12 +359,20 @@ public struct TVVideoDetailScreen: View {
 
     private func section<Content: View>(
         _ title: String,
+        count: Int? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: TVLayout.sectionHeaderSpacing) {
-            Text(title)
-                .font(.title3)
-                .fontWeight(.semibold)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                if let count {
+                    Text("\(count)")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+            }
             content()
         }
     }
