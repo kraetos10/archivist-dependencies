@@ -63,4 +63,7 @@ public enum PlayerEvent: Sendable, Equatable {
 
     /// User tapped "cancel" on the auto-play countdown card.
     case autoPlayCancelTapped
+
+    /// User picked a video from the tvOS player's Up Next ribbon.
+    case upNextItemSelected(videoId: String)
 }

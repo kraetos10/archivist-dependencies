@@ -85,6 +85,8 @@ extension VideoDetailReducer {
             return handleVideoPlaybackDidEnd(state: &state)
         case .previousVideoRequested:
             return handlePreviousVideoRequested(state: &state)
+        case .upNextRibbonItemSelected(let videoId):
+            return handleUpNextRibbonItemSelected(videoId, state: &state)
         case .childPlayPauseTapped:
             return .run { [playerClient] _ in
                 await playerClient.togglePlayPause()
@@ -945,6 +947,31 @@ extension VideoDetailReducer {
             state.nextVideos.removeSubrange(...index)
         }
         return switchToVideo(video, state: &state)
+    }
+
+    /// A pick from the tvOS player's Up Next ribbon. Plays in place, so the
+    /// player stays up, and trims the list it came from as the matching
+    /// tap on the detail screen would.
+    private func handleUpNextRibbonItemSelected(
+        _ videoId: String,
+        state: inout State
+    ) -> Effect<Action> {
+        if let item = state.playNextItems.first(where: { $0.videoId == videoId }) {
+            return handlePlayNextItemTapped(item, state: &state)
+        }
+        let video: VideoResponse
+        if let index = state.nextVideos.firstIndex(where: { $0.videoId == videoId }) {
+            video = state.nextVideos[index]
+            state.nextVideos.removeSubrange(..<index)
+        } else if let similar = state.similarVideos.first(where: { $0.videoId == videoId }) {
+            video = similar
+            state.nextVideos = []
+        } else {
+            return .none
+        }
+        // No separate progress save: the outgoing video's `.paused` from
+        // the swap saves where it got to (see `handleAutoPlayVideo`).
+        return handleAutoPlayVideo(video, state: &state)
     }
 
     private func handlePreviousVideoRequested(state: inout State) -> Effect<Action> {

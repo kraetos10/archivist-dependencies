@@ -149,6 +149,38 @@ public struct VideoDetailReducer {
             isPlaying ? predictedNextTitle : nil
         }
 
+        /// The tvOS player's Up Next ribbon: the Play Next queue, the rest
+        /// of the list this video was opened from, then similar videos —
+        /// whatever could sensibly come next, whether or not autoplay is
+        /// on. Only while the player is up.
+        var upNextRibbonItems: [UpNextItem] {
+            guard isPlaying else { return [] }
+            var seen: Set<String> = [video.videoId]
+            var items: [UpNextItem] = []
+            for queued in playNextItems where seen.insert(queued.videoId).inserted {
+                items.append(UpNextItem(
+                    id: queued.videoId,
+                    title: queued.title,
+                    channelName: queued.channelName,
+                    thumbnailURL: queued.thumbUrl.flatMap { serverConfig.fullURL(for: $0) },
+                    duration: queued.duration
+                ))
+            }
+            for candidate in nextVideos + similarVideos
+            where seen.insert(candidate.videoId).inserted {
+                items.append(UpNextItem(
+                    id: candidate.videoId,
+                    title: candidate.title,
+                    channelName: candidate.channelName,
+                    thumbnailURL: candidate.vidThumbUrl.flatMap { serverConfig.fullURL(for: $0) },
+                    duration: candidate.durationStr
+                ))
+            }
+            return Array(items.prefix(Self.upNextRibbonLimit))
+        }
+
+        static let upNextRibbonLimit = 12
+
         /// The "up next" card, in the shape both the inline overlay and the
         /// fullscreen player (via `PlayerClient.setAutoPlayCountdown`) take.
         var autoPlayCountdownInfo: AutoPlayCountdownInfo? {
@@ -279,6 +311,7 @@ public struct VideoDetailReducer {
             case commentsHeaderTapped
             case commentTapped(VideoComment)
             case repliesToggled(commentId: String)
+            case upNextRibbonItemSelected(videoId: String)
             case toggleWatchedTapped
             case addToPlaylistTapped
             case addToPlayNextTapped
@@ -302,6 +335,7 @@ public struct VideoDetailReducer {
         /// Mirrors the countdown into the fullscreen player.
         case countdownMirror
         case upNextMirror
+        case upNextRibbonMirror
         /// Resolving what plays next once a video ends.
         case autoPlayResolve
         /// Per-video loads. Each restarts with `cancelInFlight` whenever the
@@ -380,6 +414,20 @@ public struct VideoDetailReducer {
                     await playerClient.setUpNextTitle(title)
                 }
                 .cancellable(id: CancelID.upNextMirror, cancelInFlight: true)
+                #else
+                return .none
+                #endif
+            }
+        }
+        .onChange(of: \.upNextRibbonItems) { _, _ in
+            // Only the tvOS player draws the ribbon.
+            Reduce { state, _ in
+                #if os(tvOS)
+                let items = state.upNextRibbonItems
+                return .run { [playerClient] _ in
+                    await playerClient.setUpNextItems(items)
+                }
+                .cancellable(id: CancelID.upNextRibbonMirror, cancelInFlight: true)
                 #else
                 return .none
                 #endif

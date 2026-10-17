@@ -460,6 +460,44 @@ struct VideoDetailReducerTests {
         #expect(state.predictedNextTitle == TestFixtures.watchedVideo.title)
     }
 
+    // MARK: - Up Next ribbon
+
+    /// The ribbon lists what could come next in the order it would: the
+    /// list the video was opened from, then similar videos — without the
+    /// video on screen or anything twice.
+    @Test func upNextRibbonOrdersAndDeduplicates() {
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        state.isPlaying = true
+        state.nextVideos = [TestFixtures.video2]
+        state.similarVideos = [TestFixtures.video1, TestFixtures.watchedVideo, TestFixtures.video2]
+
+        expectNoDifference(
+            state.upNextRibbonItems.map(\.id),
+            [TestFixtures.video2.videoId, TestFixtures.watchedVideo.videoId]
+        )
+    }
+
+    /// Navigation, not autoplay: the ribbon fills whether or not autoplay
+    /// is on, but only while the player is up.
+    @Test func upNextRibbonOnlyWhilePlaying() {
+        @Shared(.autoPlayEnabled) var autoPlayEnabled
+        $autoPlayEnabled.withLock { $0 = false }
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        state.similarVideos = [TestFixtures.video2]
+        #expect(state.upNextRibbonItems.isEmpty)
+
+        state.isPlaying = true
+        expectNoDifference(state.upNextRibbonItems.map(\.id), [TestFixtures.video2.videoId])
+    }
+
+    /// A pick that has since left the lists (they changed under the
+    /// player) does nothing rather than guessing.
+    @Test func upNextRibbonPickNoLongerListedIsIgnored() async {
+        let store = makeStore { $0.isPlaying = true }
+
+        await store.send(.view(.upNextRibbonItemSelected(videoId: "gone")))
+    }
+
     /// A looping playlist is only settled once the video ends, so there's
     /// nothing honest to hint — not the similar videos it won't play.
     @Test func aLoopingPlaylistGivesNoHint() {

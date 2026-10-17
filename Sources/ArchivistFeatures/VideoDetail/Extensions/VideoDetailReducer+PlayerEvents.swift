@@ -81,6 +81,9 @@ extension VideoDetailReducer {
                 // so there is nothing to do here.
                 continue
 
+            case .upNextItemSelected(let selectedId):
+                await send(.view(.upNextRibbonItemSelected(videoId: selectedId)))
+
             case .autoPlayPlayNowTapped, .autoPlayCancelTapped:
                 // Owned by the countdown effect, which subscribes
                 // separately for the lifetime of a single countdown.

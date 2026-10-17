@@ -52,6 +52,9 @@ final class TVPlayerControlsModel {
     private(set) var scrubTime: Double?
     private(set) var isScrubbing = false
     private(set) var skipFeedback: SkipFeedback?
+    /// Focus is in the Up Next ribbon. The press capture steps aside
+    /// meanwhile, so the focus engine can move between its cards.
+    private(set) var isBrowsingUpNext = false
 
     /// The speed picker is open. The controls stay up meanwhile, and the
     /// auto-hide restarts once it closes.
@@ -103,9 +106,20 @@ final class TVPlayerControlsModel {
         isScrubbing || seekMode != nil || !playerManager.isPlaying
     }
 
-    /// The next video's title in the last stretch of this one.
+    var upNextItems: [UpNextItem] {
+        playerManager.upNextItems
+    }
+
+    /// The ribbon rides along with the controls whenever there's anything
+    /// to put in it.
+    var showsUpNextRibbon: Bool {
+        controlsVisible && !upNextItems.isEmpty
+    }
+
+    /// The next video's title in the last stretch of this one. Not while
+    /// the ribbon is up, which already shows it.
     var upNextHintTitle: String? {
-        guard let title = playerManager.upNextTitle else { return nil }
+        guard !showsUpNextRibbon, let title = playerManager.upNextTitle else { return nil }
         let total = playerManager.effectiveDuration
         let remaining = total - playerManager.currentTime
         guard total > Self.upNextHintLead * 2,
@@ -158,6 +172,13 @@ final class TVPlayerControlsModel {
             flashSkip(.forward)
             poke()
         case .downArrow:
+            if upNextItems.isEmpty {
+                showControls()
+                isSpeedPickerPresented = true
+            } else {
+                enterUpNext()
+            }
+        case .upArrow:
             showControls()
             isSpeedPickerPresented = true
         case .select where hasScrubbedAway:
@@ -317,6 +338,35 @@ final class TVPlayerControlsModel {
         }
     }
 
+    // MARK: Up Next
+
+    private func enterUpNext() {
+        guard !isScrubbing, seekMode == nil else { return }
+        showControls()
+        hideTask?.cancel()
+        isBrowsingUpNext = true
+    }
+
+    /// Back to the video: Up, Menu, a pick, or the ribbon emptying.
+    func exitUpNext() {
+        guard isBrowsingUpNext else { return }
+        isBrowsingUpNext = false
+        scheduleHide()
+    }
+
+    func selectUpNext(_ item: UpNextItem) {
+        exitUpNext()
+        playerManager.emit(.upNextItemSelected(videoId: item.id))
+    }
+
+    /// The list changed under the ribbon; with nothing left to browse,
+    /// hand the remote back to the video.
+    func upNextItemsChanged() {
+        if upNextItems.isEmpty {
+            exitUpNext()
+        }
+    }
+
     // MARK: Speed
 
     func selectSpeed(_ speed: Float) {
@@ -359,6 +409,7 @@ final class TVPlayerControlsModel {
             || isScrubbing
             || seekMode != nil
             || isSpeedPickerPresented
+            || isBrowsingUpNext
     }
 
     private func scheduleHide() {

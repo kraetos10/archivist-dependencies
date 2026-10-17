@@ -57,6 +57,7 @@ public struct TVVLCPlayerView: View {
         .onAppear { model.poke() }
         .onChange(of: playerManager.isPlaying) { model.playbackStateChanged() }
         .onChange(of: playerManager.isBuffering) { model.playbackStateChanged() }
+        .onChange(of: playerManager.upNextItems) { model.upNextItemsChanged() }
         .onDisappear { model.teardown() }
     }
 
@@ -84,7 +85,14 @@ public struct TVVLCPlayerView: View {
         // hold. Routing the arrows through UIPress lets us treat a
         // sub-300ms left/right press as a discrete skip and a longer
         // hold as rewind / fast-forward. The same view carries the
-        // touch-surface pan used for scrubbing.
+        // touch-surface pan used for scrubbing. It steps aside while the
+        // Up Next ribbon is browsed, so focus can move between its cards.
+        if !model.isBrowsingUpNext {
+            pressCapture
+        }
+    }
+
+    private var pressCapture: some View {
         TVPlayerPressView(
             onTap: { type in
                 if model.handleTap(type) == .dismiss {
@@ -110,6 +118,16 @@ public struct TVVLCPlayerView: View {
                 titleBlock
                 Spacer()
                 transportBlock
+                if model.showsUpNextRibbon {
+                    TVUpNextRibbon(
+                        items: model.upNextItems,
+                        isBrowsing: model.isBrowsingUpNext,
+                        onSelect: { item in model.selectUpNext(item) },
+                        onExit: { model.exitUpNext() }
+                    )
+                    .onPlayPauseCommand { playerManager.togglePlayPause() }
+                    .padding(.top, 32)
+                }
             }
             .padding(.horizontal, 80)
             .padding(.vertical, 60)
@@ -130,7 +148,7 @@ public struct TVVLCPlayerView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 420)
+            .frame(height: model.showsUpNextRibbon ? 760 : 420)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -198,10 +216,10 @@ public struct TVVLCPlayerView: View {
         }
     }
 
-    /// Down on the remote opens the speed picker; this says so.
+    /// Up on the remote opens the speed picker; this says so.
     private var speedHint: some View {
         HStack(spacing: 8) {
-            Image(systemName: "chevron.down")
+            Image(systemName: "chevron.up")
                 .accessibilityHidden(true)
             Text(String.localised("video.speed", table: .videos))
             Text(playerManager.playbackSpeedLabel)

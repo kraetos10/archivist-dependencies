@@ -48,6 +48,30 @@ public struct AutoPlayCountdownInfo: Sendable, Equatable {
     }
 }
 
+/// A video in the tvOS player's Up Next ribbon, mirrored from the
+/// `VideoDetail` reducer. `id` is the video ID.
+public struct UpNextItem: Identifiable, Sendable, Equatable {
+    public var id: String
+    public var title: String
+    public var channelName: String
+    public var thumbnailURL: URL?
+    public var duration: String?
+
+    public init(
+        id: String,
+        title: String,
+        channelName: String,
+        thumbnailURL: URL?,
+        duration: String?
+    ) {
+        self.id = id
+        self.title = title
+        self.channelName = channelName
+        self.thumbnailURL = thumbnailURL
+        self.duration = duration
+    }
+}
+
 #if !os(watchOS)
 @Observable
 @MainActor
@@ -219,6 +243,11 @@ public final class PlayerManager: NSObject {
     /// hint. A guess made before the video ends; the countdown has the
     /// final say.
     public var upNextTitle: String?
+
+    /// What could play after this video — the Play Next queue, the rest of
+    /// the list it was opened from, then similar videos — for the tvOS
+    /// player's Up Next ribbon. Empty while nothing is playing.
+    public var upNextItems: [UpNextItem] = []
 
     /// Watches the network path so the Wi-Fi-only prebuffer gate can read
     /// the current interface without a blocking reachability lookup. Only
