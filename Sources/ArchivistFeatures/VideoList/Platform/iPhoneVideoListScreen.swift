@@ -101,9 +101,9 @@ public struct iPhoneVideoListScreen: View {
                         )
                     }
                     // The queue sits under the rows you'd watch from first.
-                    if filter == .unwatched, !store.queueStripDownloads.isEmpty {
+                    if filter == .unwatched, !store.queueStripItems.isEmpty {
                         HomeQueueSection(
-                            downloads: store.queueStripDownloads,
+                            items: store.queueStripItems,
                             serverConfig: store.serverConfig,
                             cardWidth: 320,
                             onDownloadTapped: { send(.queuedDownloadTapped($0)) },

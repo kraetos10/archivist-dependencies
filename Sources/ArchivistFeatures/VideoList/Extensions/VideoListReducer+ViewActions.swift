@@ -108,21 +108,21 @@ extension VideoListReducer {
         .cancellable(id: CancelID.fetchQueue, cancelInFlight: true)
     }
 
-    /// A tap on a Queue strip card downloads it: the card goes at once, the
-    /// video is bumped to the front of the server queue, and the strip
-    /// reloads either way.
+    /// A tap on a Queue strip card downloads it: the video is bumped to the
+    /// front of the server queue, and its card spins until the server
+    /// stops listing it. Tapping a spinning card again does nothing.
     private func handleQueuedDownloadTapped(
         _ download: DownloadResponse,
         state: inout State
     ) -> Effect<Action> {
         let config = state.serverConfig
         let videoId = download.youtubeId
-        state.queuedDownloads.remove(id: videoId)
+        guard state.startedQueueDownloadIDs.insert(videoId).inserted else { return .none }
         return .run { [downloadService] send in
             let result = await Result {
                 try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
             }
-            await send(.queueBumpResult(result))
+            await send(.queueBumpResult(videoId: videoId, result))
         }
     }
 

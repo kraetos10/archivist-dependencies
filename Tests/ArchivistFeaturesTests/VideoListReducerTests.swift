@@ -390,15 +390,16 @@ struct VideoListReducerTests {
     @Test func childModeHidesTheQueueStrip() {
         var state = VideoListReducer.State(serverConfig: config)
         state.queuedDownloads = [TestFixtures.download1]
-        #expect(state.queueStripDownloads == [TestFixtures.download1])
+        #expect(state.queueStripItems.map(\.id) == ["dl_video_1"])
 
         state.$childModeEnabled.withLock { $0 = true }
-        #expect(state.queueStripDownloads.isEmpty)
+        #expect(state.queueStripItems.isEmpty)
         state.$childModeEnabled.withLock { $0 = false }
     }
 
-    /// A tap downloads straight away: the card goes at once, the video is
-    /// bumped to the front of the server queue, and the strip reloads.
+    /// A tap downloads straight away: the card spins at once, and keeps
+    /// spinning while the server still lists the video as queued (a bumped
+    /// video is only dropped from the queue once it has downloaded).
     @Test func tappingAQueuedCardDownloadsIt() async {
         let bumped = LockIsolated<[String]>([])
         var state = VideoListReducer.State(serverConfig: config)
@@ -411,16 +412,74 @@ struct VideoListReducerTests {
                 bumped.withValue { $0.append(id) }
             }
             $0.downloadService.getDownloads = { _, _, _, _, _, _ in
-                Self.downloadsPage([TestFixtures.download2], page: 1, lastPage: 1)
+                Self.downloadsPage([TestFixtures.download1, TestFixtures.download2], page: 1, lastPage: 1)
             }
         }
 
         await store.send(.view(.queuedDownloadTapped(TestFixtures.download1))) {
-            $0.queuedDownloads = [TestFixtures.download2]
+            $0.startedQueueDownloadIDs = ["dl_video_1"]
         }
+        expectNoDifference(
+            store.state.queueStripItems,
+            [
+                QueueStripItem(download: TestFixtures.download1, isDownloadStarted: true),
+                QueueStripItem(download: TestFixtures.download2, isDownloadStarted: false)
+            ]
+        )
         await store.receive(\.queueBumpResult)
-        await store.receive(\.queuedDownloadsResult)
+        await store.receive(\.queuedDownloadsResult) {
+            $0.queuedDownloads = [TestFixtures.download2, TestFixtures.download1]
+        }
+        // Still queued on the server, still spinning.
+        #expect(store.state.queueStripItems.first { $0.id == "dl_video_1" }?.isDownloadStarted == true)
+        // A second tap on a spinning card does nothing.
+        await store.send(.view(.queuedDownloadTapped(TestFixtures.download1)))
         expectNoDifference(bumped.value, ["dl_video_1"])
+    }
+
+    /// Once the server stops listing a started video, it's forgotten.
+    @Test func aDownloadedVideoIsForgotten() async {
+        var state = VideoListReducer.State(serverConfig: config)
+        state.queuedDownloads = [TestFixtures.download1, TestFixtures.download2]
+        state.startedQueueDownloadIDs = ["dl_video_1"]
+        let store = TestStore(initialState: state) {
+            VideoListReducer()
+        } withDependencies: {
+            $0.downloadService.getDownloads = { _, _, _, _, _, _ in
+                Self.downloadsPage([TestFixtures.download2], page: 1, lastPage: 1)
+            }
+        }
+
+        await store.send(.refreshQueue)
+        await store.receive(\.queuedDownloadsResult) {
+            $0.queuedDownloads = [TestFixtures.download2]
+            $0.startedQueueDownloadIDs = []
+        }
+    }
+
+    /// A bump the server refuses stops the spinner and says why.
+    @Test func aRefusedDownloadComesBack() async {
+        let failure = URLError(.badServerResponse)
+        var state = VideoListReducer.State(serverConfig: config)
+        state.queuedDownloads = [TestFixtures.download1]
+        let store = TestStore(initialState: state) {
+            VideoListReducer()
+        } withDependencies: {
+            $0.downloadService.updateDownload = { _, _, _ in throw failure }
+            $0.downloadService.getDownloads = { _, _, _, _, _, _ in
+                Self.downloadsPage([TestFixtures.download1], page: 1, lastPage: 1)
+            }
+        }
+
+        await store.send(.view(.queuedDownloadTapped(TestFixtures.download1))) {
+            $0.startedQueueDownloadIDs = ["dl_video_1"]
+        }
+        await store.receive(\.queueBumpResult) {
+            $0.startedQueueDownloadIDs = []
+            $0.destination = .alert(errorAlert(failure))
+        }
+        await store.receive(\.queuedDownloadsResult)
+        #expect(store.state.queueStripItems.map(\.isDownloadStarted) == [false])
     }
 
     @Test func queueViewAllOpensTheQueueScreen() async {

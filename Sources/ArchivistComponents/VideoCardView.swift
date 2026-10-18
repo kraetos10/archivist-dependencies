@@ -14,6 +14,9 @@ public struct CardData {
     public let isPartiallyWatched: Bool
     public let watchProgress: Double
     public let isPending: Bool
+    /// A pending video the server has been asked to download now; its
+    /// badge spins instead of showing the download arrow.
+    public var isDownloadStarted = false
     public var isDownloaded: Bool
     public let fileSize: String?
 
@@ -121,9 +124,12 @@ public struct VideoCardView: View {
 
     public init(
         download: DownloadResponse,
-        serverConfig: ServerConfig
+        serverConfig: ServerConfig,
+        isDownloadStarted: Bool = false
     ) {
-        self.data = download.cardData
+        var data = download.cardData
+        data.isDownloadStarted = isDownloadStarted
+        self.data = data
         self.serverConfig = serverConfig
     }
 
@@ -240,7 +246,7 @@ public struct VideoCardView: View {
         }
         .overlay {
             if data.isPending {
-                PendingDownloadBadge(size: 44)
+                PendingDownloadBadge(size: 44, isDownloadStarted: data.isDownloadStarted)
             }
         }
         .aspectRatio(16 / 9, contentMode: .fit)
@@ -312,23 +318,39 @@ public struct VideoCardView: View {
 }
 #endif
 
-/// The download badge centred on a queued video's artwork. Decorative:
-/// the card's "Pending" label says the same.
+/// The download badge centred on a queued video's artwork: an arrow, or
+/// a spinner once the download has been started. The spinner can't show
+/// progress — the server reports that for its whole task, not per video.
 public struct PendingDownloadBadge: View {
     let size: CGFloat
+    let isDownloadStarted: Bool
 
-    public init(size: CGFloat) {
+    public init(
+        size: CGFloat,
+        isDownloadStarted: Bool = false
+    ) {
         self.size = size
+        self.isDownloadStarted = isDownloadStarted
     }
 
     public var body: some View {
         Image(systemName: "arrow.down")
             .scaledSystemFont(size: size * 0.42, relativeTo: .title, weight: .bold)
+            // The arrow keeps sizing the badge; the spinner takes its place.
+            .opacity(isDownloadStarted ? 0 : 1)
+            .overlay {
+                if isDownloadStarted {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
             .foregroundStyle(.white)
             .padding(size * 0.29)
             .background(.black.opacity(0.6), in: Circle())
             .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 2))
-            .accessibilityHidden(true)
+            .accessibilityElement()
+            .accessibilityLabel(String.localised("video.downloading", table: .videos))
+            .accessibilityHidden(!isDownloadStarted)
     }
 }
 

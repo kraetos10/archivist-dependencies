@@ -22,6 +22,15 @@ public struct HomeSectionVideos: Equatable, Sendable, Identifiable {
     public var id: WatchFilter { filter }
 }
 
+/// A card in the home Queue strip.
+public struct QueueStripItem: Identifiable, Equatable, Sendable {
+    public let download: DownloadResponse
+    /// Tapped already: the server is downloading it, or about to.
+    public let isDownloadStarted: Bool
+
+    public var id: String { download.youtubeId }
+}
+
 public enum VideoListItem: Identifiable, Sendable, Equatable {
     case video(VideoResponse)
     case download(DownloadResponse)
@@ -87,13 +96,22 @@ public struct VideoListReducer {
         var queuedDownloads: IdentifiedArrayOf<DownloadResponse> = []
         /// The Queue screen's sort, so the strip lists in the same order.
         @Shared(.downloadsSortOrder) var queueSortOrder
+        /// Videos tapped in the strip. A bumped video stays in the server's
+        /// queue until it has downloaded, so these are remembered — and
+        /// their cards spin — for as long as the server still lists them.
+        var startedQueueDownloadIDs: Set<String> = []
 
         /// The Queue strip, capped like the other home rows. Hidden in
         /// child mode: nothing in it can be watched, and downloading is a
         /// grown-up's call.
-        var queueStripDownloads: [DownloadResponse] {
+        var queueStripItems: [QueueStripItem] {
             guard !childModeEnabled else { return [] }
-            return Array(queuedDownloads.prefix(Self.queueStripItemCap))
+            return queuedDownloads.prefix(Self.queueStripItemCap).map { download in
+                QueueStripItem(
+                    download: download,
+                    isDownloadStarted: startedQueueDownloadIDs.contains(download.youtubeId)
+                )
+            }
         }
         /// Sorted+capped slice for each home carousel. Recomputed only by
         /// `recomputeHomeSections()` on data-changing actions; reading it
@@ -282,7 +300,7 @@ public struct VideoListReducer {
         case searchResult(Result<[VideoResponse], Error>)
         case downloadedVideosLoaded([VideoResponse])
         case queuedDownloadsResult(Result<[DownloadResponse], Error>)
-        case queueBumpResult(Result<Void, Error>)
+        case queueBumpResult(videoId: String, Result<Void, Error>)
         /// Entry point for parents: a download finished on the server or the
         /// Queue screen's sort changed, so the Queue strip is out of date.
         /// Reloads the strip only — a page-one video reload would reset a

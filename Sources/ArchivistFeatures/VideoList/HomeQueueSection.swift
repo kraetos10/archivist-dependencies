@@ -8,9 +8,10 @@ import SwiftUI
 /// queue, in the Queue screen's order. Laid out like the other home
 /// carousels, but marked as not available yet — a dashed outline, a line
 /// saying so, and a download badge on each card. Tapping a card downloads
-/// it now; View All opens the Queue screen.
+/// it now, and its badge spins until it's done; View All opens the Queue
+/// screen.
 struct HomeQueueSection: View {
-    let downloads: [DownloadResponse]
+    let items: [QueueStripItem]
     let serverConfig: ServerConfig
     let cardWidth: CGFloat
     var onDownloadTapped: (DownloadResponse) -> Void
@@ -47,14 +48,19 @@ struct HomeQueueSection: View {
 
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .center, spacing: 12) {
-                    ForEach(downloads) { download in
+                    ForEach(items) { item in
                         VideoCardView(
-                            download: download,
-                            serverConfig: serverConfig
+                            download: item.download,
+                            serverConfig: serverConfig,
+                            isDownloadStarted: item.isDownloadStarted
                         )
                         .frame(width: cardWidth)
-                        .pressable { onDownloadTapped(download) }
-                        .accessibilityHint(String.localised("video.downloadNow", table: .videos))
+                        .pressable { onDownloadTapped(item.download) }
+                        .accessibilityHint(
+                            item.isDownloadStarted
+                                ? ""
+                                : String.localised("video.downloadNow", table: .videos)
+                        )
                     }
 
                     viewAllCard

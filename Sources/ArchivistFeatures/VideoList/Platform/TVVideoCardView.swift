@@ -21,9 +21,12 @@ public struct TVVideoCardView: View {
     public init(
         download: DownloadResponse,
         serverConfig: ServerConfig,
+        isDownloadStarted: Bool = false,
         onTap: (() -> Void)? = nil
     ) {
-        self.data = download.cardData
+        var data = download.cardData
+        data.isDownloadStarted = isDownloadStarted
+        self.data = data
         self.serverConfig = serverConfig
         self.onTap = onTap
     }
@@ -91,7 +94,7 @@ public struct TVVideoCardView: View {
         }
         .overlay {
             if data.isPending {
-                PendingDownloadBadge(size: 72)
+                PendingDownloadBadge(size: 72, isDownloadStarted: data.isDownloadStarted)
             }
         }
         .aspectRatio(16 / 9, contentMode: .fit)

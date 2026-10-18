@@ -43,11 +43,16 @@ extension VideoListReducer {
                 queued.updateOrAppend(download)
             }
             state.queuedDownloads = queued
+            // Once the server stops listing a started video it has
+            // downloaded, so its spinner has nothing left to show.
+            state.startedQueueDownloadIDs.formIntersection(queued.ids)
             return .none
         case .queuedDownloadsResult(.failure):
             return .none
-        case .queueBumpResult(let result):
+        case .queueBumpResult(let videoId, let result):
+            // The server didn't take it, so the card stops spinning.
             if case .failure(let error) = result {
+                state.startedQueueDownloadIDs.remove(videoId)
                 _ = showError(error, state: &state)
             }
             return fetchQueue(state: state)

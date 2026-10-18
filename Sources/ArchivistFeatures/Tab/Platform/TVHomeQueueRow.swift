@@ -6,9 +6,10 @@ import SwiftUI
 /// The tvOS home screen's Queue row: videos waiting in the server's
 /// download queue. The same cards as the video rows, greyed out with a
 /// download badge and a line under the title saying they can't be watched
-/// yet. Selecting one downloads it now; View All opens the Queue screen.
+/// yet. Selecting one downloads it now, and its badge spins until it's
+/// done; View All opens the Queue screen.
 struct TVHomeQueueRow: View {
-    let downloads: [DownloadResponse]
+    let items: [QueueStripItem]
     let serverConfig: ServerConfig
     let focus: FocusState<TVHomeFocus?>.Binding
     let onDownloadTapped: (DownloadResponse) -> Void
@@ -22,18 +23,19 @@ struct TVHomeQueueRow: View {
         ) {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: TVLayout.cardSpacing) {
-                    ForEach(downloads) { download in
+                    ForEach(items) { item in
                         TVVideoCardView(
-                            download: download,
-                            serverConfig: serverConfig
+                            download: item.download,
+                            serverConfig: serverConfig,
+                            isDownloadStarted: item.isDownloadStarted
                         ) {
-                            onDownloadTapped(download)
+                            onDownloadTapped(item.download)
                         }
                         .frame(width: TVLayout.cardWidth)
-                        .focused(focus, equals: .card(.queue, id: download.youtubeId))
+                        .focused(focus, equals: .card(.queue, id: item.id))
                     }
 
-                    if !downloads.isEmpty {
+                    if !items.isEmpty {
                         TVHomeViewAllCard(action: onViewAll)
                             .focused(focus, equals: .viewAll(.queue))
                     }

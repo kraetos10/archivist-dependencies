@@ -234,7 +234,7 @@ public struct TVHomeScreen: View {
     private var queueRow: some View {
         if !store.tvHomeQueue.isEmpty {
             TVHomeQueueRow(
-                downloads: store.tvHomeQueue,
+                items: store.tvHomeQueue,
                 serverConfig: store.videoList.serverConfig,
                 focus: $focusedCard,
                 onDownloadTapped: { download in
@@ -372,8 +372,8 @@ extension TabReducer.State {
     }
 
     /// The front of the server's download queue.
-    var tvHomeQueue: [DownloadResponse] {
-        videoList.queueStripDownloads
+    var tvHomeQueue: [QueueStripItem] {
+        videoList.queueStripItems
     }
 
     var tvHomeAllVideos: [VideoResponse] {
@@ -406,7 +406,7 @@ extension TabReducer.State {
             rows.append(TVHomeRowCards(row: .continueWatching, ids: tvHomeContinueWatching.map(\.videoId)))
             rows.append(TVHomeRowCards(row: .unwatched, ids: tvHomeUnwatched.map(\.videoId)))
         }
-        rows.append(TVHomeRowCards(row: .queue, ids: tvHomeQueue.map(\.youtubeId)))
+        rows.append(TVHomeRowCards(row: .queue, ids: tvHomeQueue.map(\.id)))
         rows.append(TVHomeRowCards(row: .channels, ids: tvHomeChannels.map(\.channelId)))
         rows.append(TVHomeRowCards(row: .allVideos, ids: tvHomeAllVideos.map(\.videoId)))
         rows.append(TVHomeRowCards(row: .playlists, ids: tvHomePlaylists.map(\.playlistId)))
