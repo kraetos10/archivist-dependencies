@@ -15,6 +15,8 @@ import Testing
         // The list observes completed device downloads.
         try $0.bootstrapInMemoryDatabase()
         $0.topShelf = TopShelfClient { _, _ in }
+        // Every refresh also reloads the home Queue strip.
+        $0.downloadService.getDownloads = { _, _, _, _, _, _ in TestFixtures.emptyDownloads }
     }
 )
 struct VideoListReducerTests {
@@ -53,6 +55,7 @@ struct VideoListReducerTests {
             $0.isLoading = false
             $0.recomputeHomeSections()
         }
+        await store.receive(\.queuedDownloadsResult)
     }
 
     @Test func laterPagesAppend() async {
@@ -115,6 +118,7 @@ struct VideoListReducerTests {
             $0.isLoading = false
             $0.recomputeHomeSections()
         }
+        await store.receive(\.queuedDownloadsResult)
         staleGate.open()
     }
 
@@ -134,6 +138,7 @@ struct VideoListReducerTests {
             $0.hasLoaded = true
             $0.destination = .alert(errorAlert(failure))
         }
+        await store.receive(\.queuedDownloadsResult)
     }
 
     // MARK: - Context-menu writes
@@ -260,6 +265,7 @@ struct VideoListReducerTests {
             $0.hasLoaded = true
             $0.recomputeHomeSections()
         }
+        await store.receive(\.queuedDownloadsResult)
     }
 
     #if os(iOS)
@@ -282,6 +288,108 @@ struct VideoListReducerTests {
         }
         await store.receive(\.videoRefreshed) {
             $0.recomputeHomeSections()
+        }
+    }
+    #endif
+
+    // MARK: - Queue strip
+
+    /// A refresh loads the front of the server's download queue into the
+    /// home strip.
+    @Test func refreshLoadsTheQueueStrip() async {
+        var state = VideoListReducer.State(serverConfig: config)
+        state.hasLoaded = true
+        let store = TestStore(initialState: state) {
+            VideoListReducer()
+        } withDependencies: {
+            $0.videoService.getVideos = { _, _, _, _, _, _, _, _ in TestFixtures.paginatedVideos }
+            $0.downloadService.getDownloads = { _, page, filter, _, _, _ in
+                #expect(page == 1)
+                #expect(filter == "pending")
+                return TestFixtures.paginatedDownloads
+            }
+        }
+
+        await store.send(.view(.pullToRefreshTriggered)) {
+            $0.isLoading = true
+        }
+        await store.receive(\.videosResult.success) {
+            $0.videos = [TestFixtures.video1, TestFixtures.video2]
+            $0.isLoading = false
+            $0.recomputeHomeSections()
+        }
+        await store.receive(\.queuedDownloadsResult.success) {
+            $0.queuedDownloads = [TestFixtures.download1, TestFixtures.download2]
+        }
+        #expect(store.state.queueStripDownloads == [TestFixtures.download1, TestFixtures.download2])
+    }
+
+    /// Nothing in the strip can be watched, and downloading is a grown-up's
+    /// call: child mode hides it.
+    @Test func childModeHidesTheQueueStrip() {
+        var state = VideoListReducer.State(serverConfig: config)
+        state.queuedDownloads = [TestFixtures.download1]
+        #expect(state.queueStripDownloads == [TestFixtures.download1])
+
+        state.$childModeEnabled.withLock { $0 = true }
+        #expect(state.queueStripDownloads.isEmpty)
+        state.$childModeEnabled.withLock { $0 = false }
+    }
+
+    /// A download picked from the strip leaves it; the detail closes itself.
+    @Test func queueingFromTheDetailDropsTheCard() async {
+        var state = VideoListReducer.State(serverConfig: config)
+        state.queuedDownloads = [TestFixtures.download1, TestFixtures.download2]
+        state.destination = .downloadDetail(
+            DownloadDetailReducer.State(serverConfig: config, download: TestFixtures.download1)
+        )
+        let store = TestStore(initialState: state) {
+            VideoListReducer()
+        }
+
+        await store.send(.destination(.presented(.downloadDetail(.delegate(.didQueueDownload("dl_video_1")))))) {
+            $0.queuedDownloads = [TestFixtures.download2]
+        }
+    }
+
+    /// tvOS Download Now: the card goes at once, the video is bumped to the
+    /// front of the server queue, and the strip reloads.
+    @Test func downloadNowBumpsTheVideoAndReloadsTheStrip() async {
+        let bumped = LockIsolated<[String]>([])
+        var state = VideoListReducer.State(serverConfig: config)
+        state.queuedDownloads = [TestFixtures.download1, TestFixtures.download2]
+        state.destination = .alert(AlertState { TextState(TestFixtures.download1.title ?? "") })
+        let store = TestStore(initialState: state) {
+            VideoListReducer()
+        } withDependencies: {
+            $0.downloadService.updateDownload = { _, id, status in
+                #expect(status == "priority")
+                bumped.withValue { $0.append(id) }
+            }
+            $0.downloadService.getDownloads = { _, _, _, _, _, _ in
+                PaginatedResponse(data: [TestFixtures.download2], paginate: TestFixtures.emptyDownloads.paginate)
+            }
+        }
+
+        await store.send(.destination(.presented(.alert(.confirmQueuedDownload("dl_video_1"))))) {
+            $0.destination = nil
+            $0.queuedDownloads = [TestFixtures.download2]
+        }
+        await store.receive(\.queueBumpResult)
+        await store.receive(\.queuedDownloadsResult)
+        expectNoDifference(bumped.value, ["dl_video_1"])
+    }
+
+    #if !os(tvOS)
+    @Test func tappingAQueuedCardOpensTheDownloadScreen() async {
+        let store = TestStore(initialState: VideoListReducer.State(serverConfig: config)) {
+            VideoListReducer()
+        }
+
+        await store.send(.view(.queuedDownloadTapped(TestFixtures.download1))) {
+            $0.destination = .downloadDetail(
+                DownloadDetailReducer.State(serverConfig: config, download: TestFixtures.download1)
+            )
         }
     }
     #endif

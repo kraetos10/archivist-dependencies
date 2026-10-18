@@ -35,6 +35,22 @@ extension VideoListReducer {
         case .downloadedVideosLoaded(let videos):
             state.downloadedVideos = IdentifiedArrayOf(uniqueElements: videos)
             return .none
+        case .queuedDownloadsResult(.success(let response)):
+            // The server can repeat an item across a page boundary;
+            // `uniqueElements:` would trap on it.
+            var queued: IdentifiedArrayOf<DownloadResponse> = []
+            for download in response.data {
+                queued.updateOrAppend(download)
+            }
+            state.queuedDownloads = queued
+            return .none
+        case .queuedDownloadsResult(.failure):
+            return .none
+        case .queueBumpResult(let result):
+            if case .failure(let error) = result {
+                _ = showError(error, state: &state)
+            }
+            return fetchQueue(config: state.serverConfig)
         default:
             return .none
         }

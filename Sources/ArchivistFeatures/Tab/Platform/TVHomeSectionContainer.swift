@@ -11,16 +11,25 @@ import SwiftUI
 struct TVHomeSectionContainer<Content: View>: View {
     let title: String
     let icon: String
+    /// A line under the title, for a row that needs explaining.
+    var subtitle: String?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: TVLayout.sectionHeaderSpacing) {
-            Label(title, systemImage: icon)
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Text.primary)
-                .padding(.top, 8)
-                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 4) {
+                Label(title, systemImage: icon)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Text.primary)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 8)
 
             content()
         }

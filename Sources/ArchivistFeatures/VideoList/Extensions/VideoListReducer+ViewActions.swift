@@ -31,6 +31,8 @@ extension VideoListReducer {
             return handleMarkAsWatched(video, state: &state)
         case .playNextTapped(let video):
             return handlePlayNextTapped(video, state: &state)
+        case .queuedDownloadTapped(let download):
+            return handleQueuedDownloadTapped(download, state: &state)
         case .addVideoTapped:
             state.destination = .addVideo(AddVideoReducer.State(serverConfig: state.serverConfig))
             return .none
@@ -50,11 +52,81 @@ extension VideoListReducer {
     private func handleOnAppear(state: inout State) -> Effect<Action> {
         // downloadedVideoIDs is reactive via @FetchAll — no manual refresh needed
         guard state.videos.isEmpty, !state.isLoading else { return .none }
-        return fetchPage(1, state: &state)
+        return .merge(
+            fetchPage(1, state: &state),
+            fetchQueue(config: state.serverConfig)
+        )
     }
 
     func handleRefreshTriggered(state: inout State) -> Effect<Action> {
-        fetchPage(1, state: &state)
+        .merge(
+            fetchPage(1, state: &state),
+            fetchQueue(config: state.serverConfig)
+        )
+    }
+
+    /// The first page of the server's pending queue, in the server's own
+    /// order — what it will download next. The strip is a shortcut, so a
+    /// failure leaves it as it was rather than raising an alert.
+    func fetchQueue(config: ServerConfig) -> Effect<Action> {
+        .run { [downloadService] send in
+            let result = await Result {
+                try await downloadService.getDownloads(
+                    config: config,
+                    page: 1,
+                    filter: "pending",
+                    channel: nil,
+                    query: nil,
+                    vidType: nil
+                )
+            }
+            await send(.queuedDownloadsResult(result))
+        }
+        .cancellable(id: CancelID.fetchQueue, cancelInFlight: true)
+    }
+
+    /// The same as tapping a video in the Queue screen: the download
+    /// screen on iOS, a Download Now alert on tvOS.
+    private func handleQueuedDownloadTapped(
+        _ download: DownloadResponse,
+        state: inout State
+    ) -> Effect<Action> {
+        #if os(tvOS)
+        state.destination = .alert(AlertState {
+            TextState(download.title ?? download.youtubeId)
+        } actions: {
+            ButtonState(action: .confirmQueuedDownload(download.youtubeId)) {
+                TextState(String.localised("video.downloadNow", table: .videos))
+            }
+            ButtonState(role: .cancel) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.confirmDownload", table: .videos))
+        })
+        #else
+        state.destination = .downloadDetail(DownloadDetailReducer.State(
+            serverConfig: state.serverConfig,
+            download: download
+        ))
+        #endif
+        return .none
+    }
+
+    /// tvOS "Download Now": drop the card, bump the video to the front of
+    /// the server queue, then reload the strip either way.
+    func handleConfirmQueuedDownload(
+        _ videoId: String,
+        state: inout State
+    ) -> Effect<Action> {
+        let config = state.serverConfig
+        state.queuedDownloads.remove(id: videoId)
+        return .run { [downloadService] send in
+            let result = await Result {
+                try await downloadService.updateDownload(config: config, id: videoId, status: "priority")
+            }
+            await send(.queueBumpResult(result))
+        }
     }
 
     private func handleLoadNextPage(state: inout State) -> Effect<Action> {

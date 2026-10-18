@@ -53,6 +53,7 @@ public struct TVVideoCardView: View {
                         image
                             .resizable()
                             .aspectRatio(16 / 9, contentMode: .fill)
+                            .pendingArtwork(data.isPending)
                     case .failure:
                         thumbnailPlaceholder
                     case .empty:
@@ -89,6 +90,11 @@ public struct TVVideoCardView: View {
                 }
             }
         }
+        .overlay {
+            if data.isPending {
+                PendingDownloadBadge(size: 72)
+            }
+        }
         .aspectRatio(16 / 9, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: TVLayout.cornerRadius))
     }
@@ -107,7 +113,7 @@ public struct TVVideoCardView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
-            Text(data.publishedRelative ?? " ")
+            Text(data.statusLine ?? " ")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

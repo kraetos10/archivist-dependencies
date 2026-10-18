@@ -81,6 +81,15 @@ public extension DownloadResponse {
 }
 
 public extension CardData {
+    /// The tvOS card's last line: the published date, led by "Pending"
+    /// for a video still in the download queue.
+    var statusLine: String? {
+        guard isPending else { return publishedRelative }
+        let pending = String.localised("generic.pending", table: .generic)
+        guard let publishedRelative else { return pending }
+        return "\(pending) · \(publishedRelative)"
+    }
+
     /// Cached thumbnail on disk wins over the server URL so downloaded
     /// videos still show artwork with no connection to the server. Only
     /// downloaded cards touch the filesystem — everything else goes
@@ -151,6 +160,7 @@ public struct VideoCardView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fit)
+                            .pendingArtwork(data.isPending)
                     case .failure:
                         thumbnailPlaceholder
                     case .empty:
@@ -229,6 +239,11 @@ public struct VideoCardView: View {
 
             }
         }
+        .overlay {
+            if data.isPending {
+                PendingDownloadBadge(size: 44)
+            }
+        }
         .aspectRatio(16 / 9, contentMode: .fit)
         .clipped()
     }
@@ -297,6 +312,35 @@ public struct VideoCardView: View {
     .background(Color.Brand.primary)
 }
 #endif
+
+public extension View {
+    /// Greys out and dims a card's artwork when its video is still in the
+    /// server's download queue, so it reads as not watchable yet.
+    func pendingArtwork(_ isPending: Bool) -> some View {
+        grayscale(isPending ? 1 : 0)
+            .opacity(isPending ? 0.55 : 1)
+    }
+}
+
+/// The download badge centred on a queued video's artwork. Decorative:
+/// the card's "Pending" label says the same.
+public struct PendingDownloadBadge: View {
+    let size: CGFloat
+
+    public init(size: CGFloat) {
+        self.size = size
+    }
+
+    public var body: some View {
+        Image(systemName: "arrow.down")
+            .scaledSystemFont(size: size * 0.42, relativeTo: .title, weight: .bold)
+            .foregroundStyle(.white)
+            .padding(size * 0.29)
+            .background(.black.opacity(0.6), in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 2))
+            .accessibilityHidden(true)
+    }
+}
 
 public struct PressableButtonStyle: ButtonStyle {
     public init() {}

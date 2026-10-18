@@ -7,6 +7,7 @@ import SwiftUI
 @ViewAction(for: VideoListReducer.self)
 public struct iPhoneVideoListScreen: View {
     @Bindable public var store: StoreOf<VideoListReducer>
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     public init(store: StoreOf<VideoListReducer>) {
         self.store = store
@@ -49,6 +50,7 @@ public struct iPhoneVideoListScreen: View {
 
         .onAppear { send(.viewDidAppear) }
         .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
+        .modifier(HomeQueueDetailSheet(store: store, sizeClass: horizontalSizeClass))
         .sheet(item: $store.scope(state: \.destination?.playlistPicker, action: \.destination.playlistPicker)) { pickerStore in
             PlaylistPickerScreen(store: pickerStore)
         }
@@ -96,6 +98,14 @@ public struct iPhoneVideoListScreen: View {
                             onToggleWatched: { send(.markAsWatchedTapped($0)) },
                             onDeleteFromServer: { send(.deleteFromServerTapped($0)) },
                             onViewAll: { send(.viewAllTapped(filter)) }
+                        )
+                    }
+                    // The queue sits under the rows you'd watch from first.
+                    if filter == .unwatched, !store.queueStripDownloads.isEmpty {
+                        HomeQueueSection(
+                            store: store,
+                            downloads: store.queueStripDownloads,
+                            cardWidth: 320
                         )
                     }
                 }

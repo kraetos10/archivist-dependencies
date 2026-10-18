@@ -64,6 +64,7 @@ public struct TVHomeScreen: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     videoRows
+                    queueRow
                     channelsRow
 
                     if !store.tvHomeAllVideos.isEmpty {
@@ -131,6 +132,10 @@ public struct TVHomeScreen: View {
                 TVFilteredVideoListScreen(store: listStore)
             }
         }
+        // The Queue row's Download Now, and the video list's errors.
+        .alert(
+            $store.scope(state: \.videoList.destination?.alert, action: \.videoList.destination.alert)
+        )
         .fullScreenCover(
             isPresented: $store.presentingAllChannels.sending(\.setPresentingAllChannels)
         ) {
@@ -224,6 +229,20 @@ public struct TVHomeScreen: View {
     }
 
     @ViewBuilder
+    private var queueRow: some View {
+        if !store.tvHomeQueue.isEmpty {
+            TVHomeQueueRow(
+                downloads: store.tvHomeQueue,
+                serverConfig: store.videoList.serverConfig,
+                focus: $focusedCard,
+                onDownloadTapped: { download in
+                    store.send(.videoList(.view(.queuedDownloadTapped(download))))
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
     private var channelsRow: some View {
         if !store.tvHomeChannels.isEmpty {
             TVHomeChannelsRow(
@@ -279,6 +298,7 @@ public struct TVHomeScreen: View {
 enum TVHomeRow: Hashable, Sendable {
     case continueWatching
     case unwatched
+    case queue
     case channels
     case allVideos
     case playlists
@@ -346,6 +366,11 @@ extension TabReducer.State {
         tvHomeVideos(for: .unwatched)
     }
 
+    /// The front of the server's download queue.
+    var tvHomeQueue: [DownloadResponse] {
+        videoList.queueStripDownloads
+    }
+
     var tvHomeAllVideos: [VideoResponse] {
         tvHomeVideos(for: .all)
     }
@@ -376,6 +401,7 @@ extension TabReducer.State {
             rows.append(TVHomeRowCards(row: .continueWatching, ids: tvHomeContinueWatching.map(\.videoId)))
             rows.append(TVHomeRowCards(row: .unwatched, ids: tvHomeUnwatched.map(\.videoId)))
         }
+        rows.append(TVHomeRowCards(row: .queue, ids: tvHomeQueue.map(\.youtubeId)))
         rows.append(TVHomeRowCards(row: .channels, ids: tvHomeChannels.map(\.channelId)))
         rows.append(TVHomeRowCards(row: .allVideos, ids: tvHomeAllVideos.map(\.videoId)))
         rows.append(TVHomeRowCards(row: .playlists, ids: tvHomePlaylists.map(\.playlistId)))

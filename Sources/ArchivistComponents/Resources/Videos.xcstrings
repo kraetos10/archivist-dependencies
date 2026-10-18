@@ -155,6 +155,28 @@
         }
       }
     },
+    "video.downloadQueue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download Queue"
+          }
+        }
+      }
+    },
+    "video.downloadQueue.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to download — not ready to watch yet"
+          }
+        }
+      }
+    },
     "video.downloadQueued": {
       "extractionState": "manual",
       "localizations": {

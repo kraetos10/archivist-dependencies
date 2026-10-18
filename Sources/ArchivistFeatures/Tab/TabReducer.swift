@@ -253,17 +253,26 @@ public struct TabReducer {
                     _,
                     action: .channelDetail(.downloadDetail(.presented(.delegate(.didQueueDownload))))
                  ))),
-                 .videoList(.destination(.presented(.addVideo(.addResult(.success))))):
+                 .videoList(.destination(.presented(.addVideo(.addResult(.success))))),
+                 // The home screen's Queue strip: the download screen on
+                 // iOS, the Download Now alert on tvOS.
+                 .videoList(.destination(.presented(.downloadDetail(.delegate(.didQueueDownload))))),
+                 .videoList(.destination(.presented(.alert(.confirmQueuedDownload)))):
                 return .send(.settings(.activeTask(.startPolling)))
 
             case .settings(.activeTask(.downloadCompleted)):
+                // The finished video leaves the home Queue strip.
                 #if os(tvOS)
                 return .merge(
                     .send(.channels(.refreshPendingDownloads)),
-                    .send(.search(.refreshPendingDownloads))
+                    .send(.search(.refreshPendingDownloads)),
+                    .send(.videoList(.refreshQueue))
                 )
                 #else
-                return .send(.channels(.refreshPendingDownloads))
+                return .merge(
+                    .send(.channels(.refreshPendingDownloads)),
+                    .send(.videoList(.refreshQueue))
+                )
                 #endif
 
             #if os(iOS)
