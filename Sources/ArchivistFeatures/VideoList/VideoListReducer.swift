@@ -83,8 +83,10 @@ public struct VideoListReducer {
         var downloadedVideos: IdentifiedArrayOf<VideoResponse> = []
         /// The front of the server's download queue, for the home screen's
         /// Queue strip. None of these can be watched yet — tapping one
-        /// offers to download it, as the Queue screen does.
+        /// moves it to the front of the queue.
         var queuedDownloads: IdentifiedArrayOf<DownloadResponse> = []
+        /// The Queue screen's sort, so the strip lists in the same order.
+        @Shared(.downloadsSortOrder) var queueSortOrder
 
         /// The Queue strip, capped like the other home rows. Hidden in
         /// child mode: nothing in it can be watched, and downloading is a
@@ -103,8 +105,7 @@ public struct VideoListReducer {
         var path = StackState<VideoListPath.State>()
         /// Whatever is presented over the home screen. Only one at a time:
         /// the video (iOS — tvOS pushes it onto `path`), the playlist
-        /// picker, the add-video form, a queued video's download screen
-        /// (iOS — tvOS asks with an alert) or an alert.
+        /// picker, the add-video form or an error.
         @Presents var destination: Destination.State?
 
         var isSearchActive: Bool {
@@ -255,15 +256,12 @@ public struct VideoListReducer {
 
     public enum AlertAction: Equatable, Sendable {
         case dismissed
-        /// tvOS "Download Now" on a Queue strip card.
-        case confirmQueuedDownload(String)
     }
 
     @Reducer
     public enum Destination {
         case addVideo(AddVideoReducer)
         case alert(AlertState<AlertAction>)
-        case downloadDetail(DownloadDetailReducer)
         case playlistPicker(PlaylistPickerReducer)
         case videoDetail(VideoDetailReducer)
     }
@@ -283,12 +281,12 @@ public struct VideoListReducer {
         case videoRefreshed(VideoResponse)
         case searchResult(Result<[VideoResponse], Error>)
         case downloadedVideosLoaded([VideoResponse])
-        case queuedDownloadsResult(Result<PaginatedResponse<DownloadResponse>, Error>)
+        case queuedDownloadsResult(Result<[DownloadResponse], Error>)
         case queueBumpResult(Result<Void, Error>)
-        /// Entry point for parents: a download finished on the server, so
-        /// the Queue strip is out of date. Reloads the strip only — a
-        /// page-one video reload would reset a list scrolled into later
-        /// pages.
+        /// Entry point for parents: a download finished on the server or the
+        /// Queue screen's sort changed, so the Queue strip is out of date.
+        /// Reloads the strip only — a page-one video reload would reset a
+        /// list scrolled into later pages.
         case refreshQueue
         @CasePathable
         public enum View {
@@ -306,6 +304,7 @@ public struct VideoListReducer {
             case addVideoTapped
             case viewAllTapped(WatchFilter)
             case queuedDownloadTapped(DownloadResponse)
+            case queueViewAllTapped
         }
     }
 
@@ -352,7 +351,7 @@ public struct VideoListReducer {
             case .deleteFromServer(let video):
                 return handleDeleteFromServer(video, state: &state)
             case .refreshQueue:
-                return fetchQueue(config: state.serverConfig)
+                return fetchQueue(state: state)
             case .destination(.presented(.addVideo(.addResult(.success)))):
                 state.destination = nil
                 return handleRefreshTriggered(state: &state)
@@ -365,13 +364,6 @@ public struct VideoListReducer {
             case .destination(.presented(.videoDetail(.serverDeleteResult(.success)))):
                 state.destination = nil
                 return handleRefreshTriggered(state: &state)
-            case .destination(.presented(.downloadDetail(.delegate(.didQueueDownload(let videoId))))),
-                 .destination(.presented(.downloadDetail(.delegate(.didDelete(let videoId))))):
-                // The detail closes itself; just drop the card.
-                state.queuedDownloads.remove(id: videoId)
-                return .none
-            case .destination(.presented(.alert(.confirmQueuedDownload(let videoId)))):
-                return handleConfirmQueuedDownload(videoId, state: &state)
             case .destination:
                 return .none
             default:
@@ -399,6 +391,11 @@ public struct VideoListReducer {
             // The home carousels follow each "View All" screen's sort.
             state.recomputeHomeSections()
             return .none
+        case .element(_, action: .queue(.view(.sortOrderChanged))),
+             .element(_, action: .queue(.downloadDetail(.presented(.delegate)))),
+             .element(_, action: .queue(.alert(.presented(.confirmDownload)))):
+            // The strip follows the Queue screen's order and contents.
+            return fetchQueue(state: state)
         default:
             return .none
         }

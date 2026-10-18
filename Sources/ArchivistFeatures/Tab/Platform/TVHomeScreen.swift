@@ -130,6 +130,8 @@ public struct TVHomeScreen: View {
                 TVVideoDetailScreen(store: detailStore)
             case .filteredList(let listStore):
                 TVFilteredVideoListScreen(store: listStore)
+            case .queue(let queueStore):
+                DownloadsScreen(store: queueStore)
             }
         }
         // The Queue row's Download Now, and the video list's errors.
@@ -237,6 +239,9 @@ public struct TVHomeScreen: View {
                 focus: $focusedCard,
                 onDownloadTapped: { download in
                     store.send(.videoList(.view(.queuedDownloadTapped(download))))
+                },
+                onViewAll: {
+                    store.send(.videoList(.view(.queueViewAllTapped)))
                 }
             )
         }

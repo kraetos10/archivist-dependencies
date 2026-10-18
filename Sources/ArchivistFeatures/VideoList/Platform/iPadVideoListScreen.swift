@@ -7,7 +7,6 @@ import SwiftUI
 @ViewAction(for: VideoListReducer.self)
 public struct iPadVideoListScreen: View {
     @Bindable public var store: StoreOf<VideoListReducer>
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     public init(store: StoreOf<VideoListReducer>) {
         self.store = store
@@ -48,7 +47,6 @@ public struct iPadVideoListScreen: View {
             )
             .onAppear { send(.viewDidAppear) }
             .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
-            .modifier(HomeQueueDetailSheet(store: store, sizeClass: horizontalSizeClass))
             .sheet(item: $store.scope(state: \.destination?.playlistPicker, action: \.destination.playlistPicker)) { pickerStore in
                 PlaylistPickerScreen(store: pickerStore)
             }
@@ -58,6 +56,8 @@ public struct iPadVideoListScreen: View {
                 VideoDetailScreen(store: detailStore)
             case .filteredList(let listStore):
                 FilteredVideoListScreen(store: listStore)
+            case .queue(let queueStore):
+                DownloadsScreen(store: queueStore)
             }
         }
         .fullScreenCover(item: $store.scope(state: \.destination?.videoDetail, action: \.destination.videoDetail)) { detailStore in
@@ -109,9 +109,11 @@ public struct iPadVideoListScreen: View {
                     // The queue sits under the rows you'd watch from first.
                     if filter == .unwatched, !store.queueStripDownloads.isEmpty {
                         HomeQueueSection(
-                            store: store,
                             downloads: store.queueStripDownloads,
-                            cardWidth: 340
+                            serverConfig: store.serverConfig,
+                            cardWidth: 340,
+                            onDownloadTapped: { send(.queuedDownloadTapped($0)) },
+                            onViewAll: { send(.queueViewAllTapped) }
                         )
                     }
                 }

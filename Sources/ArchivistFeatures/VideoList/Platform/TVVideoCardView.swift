@@ -53,7 +53,6 @@ public struct TVVideoCardView: View {
                         image
                             .resizable()
                             .aspectRatio(16 / 9, contentMode: .fill)
-                            .pendingArtwork(data.isPending)
                     case .failure:
                         thumbnailPlaceholder
                     case .empty:

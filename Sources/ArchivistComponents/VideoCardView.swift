@@ -160,7 +160,6 @@ public struct VideoCardView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .pendingArtwork(data.isPending)
                     case .failure:
                         thumbnailPlaceholder
                     case .empty:
@@ -312,15 +311,6 @@ public struct VideoCardView: View {
     .background(Color.Brand.primary)
 }
 #endif
-
-public extension View {
-    /// Greys out and dims a card's artwork when its video is still in the
-    /// server's download queue, so it reads as not watchable yet.
-    func pendingArtwork(_ isPending: Bool) -> some View {
-        grayscale(isPending ? 1 : 0)
-            .opacity(isPending ? 0.55 : 1)
-    }
-}
 
 /// The download badge centred on a queued video's artwork. Decorative:
 /// the card's "Pending" label says the same.
