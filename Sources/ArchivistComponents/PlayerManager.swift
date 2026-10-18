@@ -175,6 +175,9 @@ public final class PlayerManager: NSObject {
     /// In-flight resume after an interruption ends. Cancelled if another
     /// interruption begins before the session could be reactivated.
     @ObservationIgnored private var interruptionResumeTask: Task<Void, Never>?
+    /// When `.spokenAudio` was last put back over VLC's mode, to cap how
+    /// often it happens (see `reassertSpokenAudioMode`).
+    @ObservationIgnored var spokenAudioReasserts: [ContinuousClock.Instant] = []
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -293,6 +296,10 @@ public final class PlayerManager: NSObject {
     /// it's in this mode — no interruption arrives, so the video talked on
     /// underneath Siri. In this mode they interrupt it instead, and the
     /// interruption handling pauses and resumes it like any other.
+    ///
+    /// VLC resets the mode whenever its audio output starts, so this alone
+    /// doesn't last past the first video — `reassertSpokenAudioMode` puts
+    /// it back.
     private static func configureAudioSession() {
         withErrorReporting {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
@@ -444,6 +451,11 @@ public final class PlayerManager: NSObject {
             ] as? UInt
             MainActor.assumeIsolated {
                 guard let self else { return }
+                // VLC setting its own mode as its audio starts.
+                if reasonValue == AVAudioSession.RouteChangeReason.categoryChange.rawValue {
+                    self.reassertSpokenAudioMode()
+                    return
+                }
                 guard let reasonValue,
                       let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue),
                       reason == .oldDeviceUnavailable,
@@ -1096,6 +1108,13 @@ public final class PlayerManager: NSObject {
             if wasPlaying && !backend.isPlaying {
                 self.emit(.paused(videoId: self.currentVideoID, position: Int(self.currentTime)))
             }
+            #if !os(tvOS)
+            // VLC's audio output has just (re)started and reset the mode,
+            // in case no `.categoryChange` said so.
+            if !wasPlaying && backend.isPlaying {
+                self.reassertSpokenAudioMode()
+            }
+            #endif
         }
 
         backend.onPiPStateChanged = { [weak self] enabled in
