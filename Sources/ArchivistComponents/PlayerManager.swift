@@ -178,6 +178,7 @@ public final class PlayerManager: NSObject {
     /// When `.spokenAudio` was last put back over VLC's mode, to cap how
     /// often it happens (see `reassertSpokenAudioMode`).
     @ObservationIgnored var spokenAudioReasserts: [ContinuousClock.Instant] = []
+    @ObservationIgnored var silenceHintObserver: NSObjectProtocol?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -312,6 +313,7 @@ public final class PlayerManager: NSObject {
         Self.configureAudioSession()
 
         observeInterruptions()
+        observeSilenceHint()
         observeRouteChanges()
         observeForeground()
         observeBecomeActive()
@@ -327,8 +329,10 @@ public final class PlayerManager: NSObject {
             let info = notification.userInfo
             let typeValue = info?[AVAudioSessionInterruptionTypeKey] as? UInt
             let optionsValue = info?[AVAudioSessionInterruptionOptionKey] as? UInt
+            let reasonValue = info?[AVAudioSessionInterruptionReasonKey] as? UInt
             MainActor.assumeIsolated {
                 guard let self else { return }
+                self.logInterruption(type: typeValue, reason: reasonValue, options: optionsValue)
                 guard let typeValue,
                       let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
                     return
@@ -359,6 +363,7 @@ public final class PlayerManager: NSObject {
         interruptionResumeTask = nil
 
         let wasPlaying = isPlaying || backend?.isPlaying == true
+        Self.audioLog.notice("interruption began, wasPlaying=\(wasPlaying)")
         guard wasPlaying else {
             // iOS doesn't promise an `.ended` for every `.began` — another
             // app taking over audio never sends one. Clear any pause a lost
@@ -451,6 +456,7 @@ public final class PlayerManager: NSObject {
             ] as? UInt
             MainActor.assumeIsolated {
                 guard let self else { return }
+                Self.logRouteChange(reason: reasonValue)
                 // VLC setting its own mode as its audio starts.
                 if reasonValue == AVAudioSession.RouteChangeReason.categoryChange.rawValue {
                     self.reassertSpokenAudioMode()
@@ -545,6 +551,7 @@ public final class PlayerManager: NSObject {
                 // PiP: audio played straight through it, and the rebuild
                 // would *cause* a few seconds of silence rather than cure
                 // one.
+                self.logBecomeActive(returningFromPiP: returningFromPiP)
                 if self.isPlaying, !returningFromPiP {
                     self.backend?.refreshAudio()
                 }
