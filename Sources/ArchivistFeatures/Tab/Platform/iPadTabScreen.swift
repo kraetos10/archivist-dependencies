@@ -14,7 +14,10 @@ public struct iPadTabScreen: View {
     public var body: some View {
         TabView(selection: $store.selectedTab.sending(\.selectTab)) {
             Tab(String.localised("generic.home", table: .generic), systemImage: "house", value: AppTab.home) {
-                iPadVideoListScreen(store: store.scope(state: \.videoList, action: \.videoList))
+                iPadVideoListScreen(
+                    store: store.scope(state: \.videoList, action: \.videoList),
+                    hasSettingsActivity: store.settingsBadgeCount > 0
+                )
             }
 
             Tab(
@@ -48,18 +51,16 @@ public struct iPadTabScreen: View {
             // something is actually downloading.
             .badge(store.activeDeviceDownloadCount)
 
-            Tab(
-                String.localised("generic.settings", table: .generic),
-                systemImage: "gearshape",
-                value: AppTab.settings
-            ) {
-                if store.isSettingsLocked {
-                    PinLockedSettingsPlaceholder()
-                } else {
-                    SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
+            // Open-ended browsing of YouTube has no place in child mode.
+            if !store.childModeEnabled {
+                Tab(
+                    String.localised("discover.title", table: .discover),
+                    systemImage: "safari",
+                    value: AppTab.discover
+                ) {
+                    DiscoverScreen(store: store.scope(state: \.discover, action: \.discover))
                 }
             }
-            .badge(store.settingsBadgeCount)
         }
         .tabViewStyle(.sidebarAdaptable)
         #if os(iOS)
@@ -74,6 +75,9 @@ public struct iPadTabScreen: View {
         .onAppear { store.send(.appeared) }
         .sheet(item: $store.scope(state: \.settingsPin, action: \.settingsPin)) { pinStore in
             SettingsPinSheet(store: pinStore)
+        }
+        .sheet(isPresented: $store.isSettingsPresented) {
+            SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
         }
     }
 }

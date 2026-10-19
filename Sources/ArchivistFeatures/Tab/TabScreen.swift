@@ -38,7 +38,10 @@ private struct PhoneTabScreen: View {
                 systemImage: "house",
                 value: AppTab.home
             ) {
-                VideoListScreen(store: store.scope(state: \.videoList, action: \.videoList))
+                VideoListScreen(
+                    store: store.scope(state: \.videoList, action: \.videoList),
+                    hasSettingsActivity: store.settingsBadgeCount > 0
+                )
             }
 
             Tab(
@@ -72,7 +75,7 @@ private struct PhoneTabScreen: View {
             // something is actually downloading.
             .badge(store.activeDeviceDownloadCount)
 
-            settingsTab
+            discoverTab
         }
         #if os(iOS)
         .overlay {
@@ -87,22 +90,24 @@ private struct PhoneTabScreen: View {
         .sheet(item: $store.scope(state: \.settingsPin, action: \.settingsPin)) { pinStore in
             SettingsPinSheet(store: pinStore)
         }
+        .sheet(isPresented: $store.isSettingsPresented) {
+            SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
+        }
     }
 
     // `TabReducer.State.selectedTab` is optional, so the `TabView`'s
     // selection — and therefore every `Tab` value in it — is `AppTab?`.
     @TabContentBuilder<AppTab?>
-    private var settingsTab: some TabContent<AppTab?> {
-        let title = String.localised("generic.settings", table: .generic)
-        if store.isSettingsLocked {
-            Tab(title, systemImage: "gearshape", value: AppTab.settings) {
-                PinLockedSettingsPlaceholder()
+    private var discoverTab: some TabContent<AppTab?> {
+        // Open-ended browsing of YouTube has no place in child mode.
+        if !store.childModeEnabled {
+            Tab(
+                String.localised("discover.title", table: .discover),
+                systemImage: "safari",
+                value: AppTab.discover
+            ) {
+                DiscoverScreen(store: store.scope(state: \.discover, action: \.discover))
             }
-        } else {
-            Tab(title, systemImage: "gearshape", value: AppTab.settings) {
-                SettingsScreen(store: store.scope(state: \.settings, action: \.settings))
-            }
-            .badge(store.settingsBadgeCount)
         }
     }
 }

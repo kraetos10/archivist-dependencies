@@ -320,6 +320,8 @@ public struct VideoListReducer {
             case markAsWatchedTapped(VideoResponse)
             case playNextTapped(VideoResponse)
             case addVideoTapped
+            /// The gear in Home's toolbar. The tab opens the Settings sheet.
+            case settingsTapped
             case viewAllTapped(WatchFilter)
             case queuedDownloadTapped(DownloadResponse)
             case queueViewAllTapped

@@ -5,8 +5,15 @@ import SwiftUI
 
 public struct VideoListScreen: View {
     @Bindable public var store: StoreOf<VideoListReducer>
-    public init(store: StoreOf<VideoListReducer>) {
+    /// Draws a dot on the toolbar's Settings button while the server is busy.
+    public let hasSettingsActivity: Bool
+
+    public init(
+        store: StoreOf<VideoListReducer>,
+        hasSettingsActivity: Bool = false
+    ) {
         self.store = store
+        self.hasSettingsActivity = hasSettingsActivity
     }
 
     /// Device idiom, not size class. A Plus/Pro Max iPhone turns regular
@@ -20,9 +27,9 @@ public struct VideoListScreen: View {
 
     public var body: some View {
         if isIPad {
-            iPadVideoListScreen(store: store)
+            iPadVideoListScreen(store: store, hasSettingsActivity: hasSettingsActivity)
         } else {
-            iPhoneVideoListScreen(store: store)
+            iPhoneVideoListScreen(store: store, hasSettingsActivity: hasSettingsActivity)
         }
     }
 }

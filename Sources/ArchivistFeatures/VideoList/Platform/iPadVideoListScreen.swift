@@ -7,9 +7,14 @@ import SwiftUI
 @ViewAction(for: VideoListReducer.self)
 public struct iPadVideoListScreen: View {
     @Bindable public var store: StoreOf<VideoListReducer>
+    public let hasSettingsActivity: Bool
 
-    public init(store: StoreOf<VideoListReducer>) {
+    public init(
+        store: StoreOf<VideoListReducer>,
+        hasSettingsActivity: Bool = false
+    ) {
         self.store = store
+        self.hasSettingsActivity = hasSettingsActivity
     }
 
     private let searchColumns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
@@ -40,6 +45,13 @@ public struct iPadVideoListScreen: View {
             .refreshable { send(.pullToRefreshTriggered) }
             .navigationTitle(String.localised("generic.home", table: .generic))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HomeSettingsButton(hasActivity: hasSettingsActivity) {
+                        send(.settingsTapped)
+                    }
+                }
+            }
             .searchable(
                 text: $store.searchQuery,
                 placement: .navigationBarDrawer(displayMode: .automatic),

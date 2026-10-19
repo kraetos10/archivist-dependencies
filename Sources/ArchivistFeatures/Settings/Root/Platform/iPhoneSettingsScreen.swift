@@ -7,6 +7,7 @@ import SwiftUI
 @ViewAction(for: SettingsReducer.self)
 public struct iPhoneSettingsScreen: View {
     @Bindable public var store: StoreOf<SettingsReducer>
+    @Environment(\.dismiss) private var dismiss
 
     public init(store: StoreOf<SettingsReducer>) {
         self.store = store
@@ -28,6 +29,9 @@ public struct iPhoneSettingsScreen: View {
             }
         }
         .alert($store.scope(state: \.alert, action: \.alert))
+        .sheet(item: $store.scope(state: \.youTubeSetup, action: \.youTubeSetup)) { setupStore in
+            DiscoverSetupScreen(store: setupStore)
+        }
         .fullScreenCover(item: $store.scope(state: \.videoDetail, action: \.videoDetail)) { detailStore in
             NavigationStack {
                 VideoDetailScreen(store: detailStore)
@@ -82,6 +86,39 @@ public struct iPhoneSettingsScreen: View {
                 .listRowInsets(EdgeInsets())
             } header: {
                 Text(String.localised("generic.actions", table: .generic))
+            }
+
+            Section {
+                Button {
+                    send(.youTubeKeyTapped)
+                } label: {
+                    HStack {
+                        Image(systemName: "key")
+                            .foregroundStyle(Color.Accent.dark)
+                            .accessibilityHidden(true)
+                        Text(String.localised("settings.youtubeKey", table: .settings))
+                            .foregroundStyle(Color.Text.primary)
+                        Spacer()
+                        Text(
+                            store.hasYouTubeKey
+                                ? String.localised("settings.youtubeKey.set", table: .settings)
+                                : String.localised("settings.youtubeKey.notSet", table: .settings)
+                        )
+                        .foregroundStyle(Color.Brand.secondary)
+                    }
+                }
+                if store.hasYouTubeKey {
+                    Button(role: .destructive) {
+                        send(.removeYouTubeKeyTapped)
+                    } label: {
+                        Label(
+                            String.localised("settings.youtubeKey.remove", table: .settings),
+                            systemImage: "trash"
+                        )
+                    }
+                }
+            } footer: {
+                Text(String.localised("settings.youtubeKey.footer", table: .settings))
             }
 
             Section {
@@ -198,6 +235,14 @@ public struct iPhoneSettingsScreen: View {
         .background(Color.Brand.primary)
         .navigationTitle(String.localised("generic.settings", table: .generic))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Settings opens as a sheet over Home, so it needs its own way out.
+            ToolbarItem(placement: .confirmationAction) {
+                Button(String.localised("generic.done", table: .generic)) {
+                    dismiss()
+                }
+            }
+        }
         .onAppear { send(.viewDidAppear) }
     }
 }

@@ -15,4 +15,5 @@ public enum LocalisationTable: String {
     case settings = "Settings"
     case videos = "Videos"
     case login = "Login"
+    case discover = "Discover"
 }

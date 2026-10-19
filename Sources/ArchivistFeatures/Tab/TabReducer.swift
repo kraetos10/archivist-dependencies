@@ -18,6 +18,13 @@ public enum AppTab: Hashable, Sendable {
     /// tvOS has a Search tab in place of the Channels and Playlists tabs.
     case search
     #endif
+    #if !os(tvOS)
+    /// Search and browse YouTube. Hidden in child mode.
+    case discover
+    #endif
+    /// A tab on tvOS. On iPhone and iPad it's not in the tab bar: selecting
+    /// it (a Home Screen quick action does) opens the Settings sheet that
+    /// Home's toolbar button also opens.
     case settings
 }
 
@@ -34,6 +41,7 @@ public struct TabReducer {
         public var queue: DownloadsReducer.State
         #if !os(tvOS)
         public var deviceDownloads: DeviceDownloadsReducer.State
+        public var discover: DiscoverReducer.State
         #endif
         public var settings: SettingsReducer.State
         #if !os(tvOS)
@@ -46,6 +54,10 @@ public struct TabReducer {
         @Shared(.childModeEnabled) public var childModeEnabled
         public var settingsUnlocked: Bool = false
         @Presents var settingsPin: PinEntryReducer.State?
+        #if !os(tvOS)
+        /// The Settings sheet over the tab bar, opened from Home's toolbar.
+        public var isSettingsPresented = false
+        #endif
         #if os(iOS)
         /// Video handed over by a detail screen the user dragged down, so
         /// playback can carry on in the floating mini player. It lives here
@@ -121,6 +133,7 @@ public struct TabReducer {
             self.queue = DownloadsReducer.State(serverConfig: serverConfig)
             #if !os(tvOS)
             self.deviceDownloads = DeviceDownloadsReducer.State(serverConfig: serverConfig)
+            self.discover = DiscoverReducer.State(serverConfig: serverConfig)
             #endif
             self.settings = SettingsReducer.State(serverConfig: serverConfig, supportURL: supportURL)
             #if os(tvOS)
@@ -133,6 +146,9 @@ public struct TabReducer {
         public mutating func openVideoOnHome(_ video: VideoResponse) {
             selectedTab = .home
             settingsUnlocked = false
+            #if !os(tvOS)
+            isSettingsPresented = false
+            #endif
             @Shared(.autoPlayEnabled) var autoPlayEnabled
             let detail = VideoDetailReducer.State(
                 serverConfig: videoList.serverConfig,
@@ -153,6 +169,9 @@ public struct TabReducer {
         case selectTab(AppTab?)
         case settingsPin(PresentationAction<PinEntryReducer.Action>)
         case settingsPinLoaded(String?)
+        #if !os(tvOS)
+        case presentSettings
+        #endif
         case appeared
         case homeChannelTapped(ChannelResponse)
         case homePlaylistTapped(PlaylistResponse)
@@ -162,6 +181,7 @@ public struct TabReducer {
         case queue(DownloadsReducer.Action)
         #if !os(tvOS)
         case deviceDownloads(DeviceDownloadsReducer.Action)
+        case discover(DiscoverReducer.Action)
         #endif
         case settings(SettingsReducer.Action)
         #if os(iOS)
@@ -193,6 +213,9 @@ public struct TabReducer {
 
     @Dependency(\.pinStore) var pinStore
     @Dependency(\.videoService) var videoService
+    #if !os(tvOS)
+    @Dependency(\.continuousClock) var clock
+    #endif
     #if os(iOS)
     @Dependency(\.miniPlayerClient) var miniPlayerClient
     @Dependency(\.playerClient) var playerClient
@@ -202,6 +225,14 @@ public struct TabReducer {
         BindingReducer()
         Reduce { state, action in
             switch action {
+            #if !os(tvOS)
+            case .binding(\.isSettingsPresented):
+                // Closing the sheet locks Settings again.
+                if !state.isSettingsPresented {
+                    state.settingsUnlocked = false
+                }
+                return .none
+            #endif
             case .binding:
                 return .none
             case .selectTab(let tab):
@@ -209,17 +240,28 @@ public struct TabReducer {
             case .settingsPinLoaded(let pin):
                 return handleSettingsPinLoaded(pin, state: &state)
             case .settingsPin(.presented(.succeeded)):
-                state.settingsUnlocked = true
-                state.settingsPin = nil
-                return .none
+                return handleSettingsPinSucceeded(state: &state)
             case .settingsPin(.presented(.cancelled)), .settingsPin(.dismiss):
                 state.settingsPin = nil
+                #if os(tvOS)
                 if !state.settingsUnlocked {
                     state.selectedTab = .home
                 }
+                #endif
                 return .none
             case .settingsPin:
                 return .none
+            #if !os(tvOS)
+            case .presentSettings:
+                state.isSettingsPresented = true
+                return .none
+            case .videoList(.view(.settingsTapped)):
+                return handleSettingsRequested(state: &state)
+            // A video queued from Discover makes the server busy, same as
+            // one queued from a channel.
+            case .discover(.delegate(.didQueueDownload)):
+                return .send(.settings(.activeTask(.startPolling)))
+            #endif
             case .appeared:
                 return handleAppeared(state: &state)
 
@@ -333,7 +375,7 @@ public struct TabReducer {
             case .videoList, .channels, .playlists, .queue, .settings:
                 return .none
             #if !os(tvOS)
-            case .deviceDownloads:
+            case .deviceDownloads, .discover:
                 return .none
             #endif
             #if os(tvOS)
@@ -369,6 +411,9 @@ public struct TabReducer {
         #if !os(tvOS)
         Scope(state: \.deviceDownloads, action: \.deviceDownloads) {
             DeviceDownloadsReducer()
+        }
+        Scope(state: \.discover, action: \.discover) {
+            DiscoverReducer()
         }
         #endif
         Scope(state: \.settings, action: \.settings) {

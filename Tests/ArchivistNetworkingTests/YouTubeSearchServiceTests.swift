@@ -4,8 +4,9 @@ import DependenciesTestSupport
 import Foundation
 import Testing
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
-struct YouTubeSearchServiceTests {
+// An extension, not its own suite: both share `StubURLProtocol`'s handler, so
+// they must run serialised together.
+extension NetworkAPIRequestTests {
     private func json(_ text: String) -> StubURLProtocol.Response {
         .init(statusCode: 200, body: Data(text.utf8))
     }

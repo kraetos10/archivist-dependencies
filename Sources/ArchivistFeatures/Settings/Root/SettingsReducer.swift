@@ -19,6 +19,11 @@ public struct SettingsReducer {
         @Shared(.autoPlayPlaylist) public var autoPlayPlaylist
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
+        #if !os(tvOS)
+        /// Whether a YouTube Data API key is saved, for the Discover row.
+        var hasYouTubeKey = false
+        @Presents var youTubeSetup: DiscoverSetupReducer.State?
+        #endif
 
         var connectionDescription: String {
             serverConfig.useHTTP ? "HTTP" : "HTTPS"
@@ -52,6 +57,9 @@ public struct SettingsReducer {
 
     public enum AlertAction: Equatable, Sendable {
         case dismissed
+        #if !os(tvOS)
+        case confirmRemoveYouTubeKey
+        #endif
     }
 
     public enum Action: ViewAction {
@@ -63,6 +71,10 @@ public struct SettingsReducer {
         case videoDetail(PresentationAction<VideoDetailReducer.Action>)
         case activeTask(ActiveTaskReducer.Action)
         case path(StackActionOf<SettingsPath>)
+        #if !os(tvOS)
+        case youTubeSetup(PresentationAction<DiscoverSetupReducer.Action>)
+        case youTubeKeyLoaded(Bool)
+        #endif
 
         @CasePathable
         public enum View {
@@ -78,12 +90,17 @@ public struct SettingsReducer {
             case historyTapped
             #if !os(tvOS)
             case thirdPartyLibrariesTapped
+            case youTubeKeyTapped
+            case removeYouTubeKeyTapped
             #endif
         }
     }
 
     @Dependency(\.diagnosticsLog) var diagnosticsLog
     @Dependency(\.taskService) var taskService
+    #if !os(tvOS)
+    @Dependency(\.youTubeAPIKeyStore) var youTubeAPIKeyStore
+    #endif
 
     public var body: some Reducer<State, Action> {
         Scope(state: \.activeTask, action: \.activeTask) {
@@ -112,11 +129,32 @@ public struct SettingsReducer {
                 return .none
             case .rescanSubscriptionsResult(let result):
                 return handleRescanResult(result, state: &state)
+            #if !os(tvOS)
+            case .youTubeKeyLoaded(let hasKey):
+                state.hasYouTubeKey = hasKey
+                return .none
+            case .youTubeSetup(.presented(.delegate(.keySaved))):
+                state.hasYouTubeKey = true
+                state.youTubeSetup = nil
+                return .none
+            case .youTubeSetup(.presented(.delegate(.cancelled))):
+                state.youTubeSetup = nil
+                return .none
+            case .alert(.presented(.confirmRemoveYouTubeKey)):
+                return handleRemoveYouTubeKeyConfirmed(state: &state)
+            case .youTubeSetup:
+                return .none
+            #endif
             case .alert, .activeTask, .didRequestLogout, .path, .videoDetail:
                 return .none
             }
         }
         .ifLet(\.$alert, action: \.alert)
+        #if !os(tvOS)
+        .ifLet(\.$youTubeSetup, action: \.youTubeSetup) {
+            DiscoverSetupReducer()
+        }
+        #endif
         .ifLet(\.$videoDetail, action: \.videoDetail) {
             VideoDetailReducer()
         }

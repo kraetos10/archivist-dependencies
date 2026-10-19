@@ -93,18 +93,34 @@ struct TabReducerTests {
 
     // MARK: - Child mode
 
+    @Test func settingsOpensStraightAwayOutsideChildMode() async {
+        @Shared(.childModeEnabled) var childModeEnabled
+        $childModeEnabled.withLock { $0 = false }
+        let store = TestStore(initialState: TabReducer.State(serverConfig: config)) {
+            TabReducer()
+        }
+
+        await store.send(.videoList(.view(.settingsTapped))) {
+            $0.isSettingsPresented = true
+        }
+        // Closing the sheet locks it again.
+        await store.send(.binding(.set(\.isSettingsPresented, false))) {
+            $0.isSettingsPresented = false
+        }
+    }
+
     @Test func settingsAsksForThePinInChildMode() async {
         @Shared(.childModeEnabled) var childModeEnabled
         $childModeEnabled.withLock { $0 = true }
+        let clock = TestClock()
         let store = TestStore(initialState: TabReducer.State(serverConfig: config)) {
             TabReducer()
         } withDependencies: {
             $0.pinStore = .inMemory("1234")
+            $0.continuousClock = clock
         }
 
-        await store.send(.selectTab(.settings)) {
-            $0.selectedTab = .settings
-        }
+        await store.send(.videoList(.view(.settingsTapped)))
         await store.receive(\.settingsPinLoaded) {
             $0.settingsPin = PinEntryReducer.State(expectedPin: "1234")
         }
@@ -112,26 +128,34 @@ struct TabReducerTests {
             $0.settingsUnlocked = true
             $0.settingsPin = nil
         }
+        // Settings waits for the PIN sheet to finish dismissing.
+        await clock.advance(by: .milliseconds(400))
+        await store.receive(\.presentSettings) {
+            $0.isSettingsPresented = true
+        }
+        await store.send(.binding(.set(\.isSettingsPresented, false))) {
+            $0.isSettingsPresented = false
+            $0.settingsUnlocked = false
+        }
     }
 
-    @Test func cancellingThePinReturnsHome() async {
+    @Test func cancellingThePinLeavesTheTabAlone() async {
         @Shared(.childModeEnabled) var childModeEnabled
         $childModeEnabled.withLock { $0 = true }
-        let store = TestStore(initialState: TabReducer.State(serverConfig: config)) {
+        var initial = TabReducer.State(serverConfig: config)
+        initial.selectedTab = .channels
+        let store = TestStore(initialState: initial) {
             TabReducer()
         } withDependencies: {
             $0.pinStore = .inMemory("1234")
         }
 
-        await store.send(.selectTab(.settings)) {
-            $0.selectedTab = .settings
-        }
+        await store.send(.videoList(.view(.settingsTapped)))
         await store.receive(\.settingsPinLoaded) {
             $0.settingsPin = PinEntryReducer.State(expectedPin: "1234")
         }
         await store.send(.settingsPin(.presented(.cancelled))) {
             $0.settingsPin = nil
-            $0.selectedTab = .home
         }
     }
 
@@ -144,12 +168,38 @@ struct TabReducerTests {
             $0.pinStore = .inMemory()
         }
 
-        await store.send(.selectTab(.settings)) {
-            $0.selectedTab = .settings
-        }
+        await store.send(.videoList(.view(.settingsTapped)))
         await store.receive(\.settingsPinLoaded) {
             $0.settingsUnlocked = true
+            $0.isSettingsPresented = true
         }
+    }
+
+    @Test func theSettingsShortcutOpensTheSheetWithoutChangingTab() async {
+        @Shared(.childModeEnabled) var childModeEnabled
+        $childModeEnabled.withLock { $0 = false }
+        var initial = TabReducer.State(serverConfig: config)
+        initial.selectedTab = .channels
+        let store = TestStore(initialState: initial) {
+            TabReducer()
+        }
+
+        await store.send(.selectTab(.settings)) {
+            $0.isSettingsPresented = true
+        }
+        #expect(store.state.selectedTab == .channels)
+    }
+
+    @Test func aDiscoverQueueTriggersTaskPolling() async {
+        let store = TestStore(initialState: TabReducer.State(serverConfig: config)) {
+            TabReducer()
+        } withDependencies: {
+            $0.taskService.getDownloadNotifications = { _ in [] }
+        }
+        store.exhaustivity = .off
+
+        await store.send(.discover(.delegate(.didQueueDownload)))
+        await store.receive(\.settings.activeTask.startPolling)
     }
 
     // MARK: - Deep links
@@ -158,9 +208,11 @@ struct TabReducerTests {
         var state = TabReducer.State(serverConfig: config)
         state.selectedTab = .channels
 
+        state.isSettingsPresented = true
         state.openVideoOnHome(TestFixtures.video1)
 
         #expect(state.selectedTab == .home)
+        #expect(!state.isSettingsPresented)
         #expect(state.videoList.destination?.videoDetail?.video.videoId == TestFixtures.video1.videoId)
     }
 }

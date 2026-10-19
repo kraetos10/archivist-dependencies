@@ -33,6 +33,8 @@ extension VideoListReducer {
             return handlePlayNextTapped(video, state: &state)
         case .queuedDownloadTapped(let download):
             return handleQueuedDownloadTapped(download, state: &state)
+        case .settingsTapped:
+            return .none
         case .addVideoTapped:
             state.destination = .addVideo(AddVideoReducer.State(serverConfig: state.serverConfig))
             return .none

@@ -27,12 +27,15 @@ extension TabReducer {
         #endif
     }
 
-    /// Switches tab. Leaving Settings re-locks it; entering it with child
-    /// mode on asks for the PIN, which is read from the Keychain first.
+    /// Switches tab. On tvOS, leaving Settings re-locks it and entering it
+    /// with child mode on asks for the PIN, which is read from the Keychain
+    /// first. On iPhone and iPad Settings isn't a tab, so selecting it opens
+    /// the Settings sheet instead and the selected tab stays put.
     func handleSelectTab(
         _ tab: AppTab?,
         state: inout State
     ) -> Effect<Action> {
+        #if os(tvOS)
         state.selectedTab = tab
         guard tab == .settings else {
             state.settingsUnlocked = false
@@ -42,6 +45,13 @@ extension TabReducer {
         return .run { [pinStore] send in
             await send(.settingsPinLoaded(pinStore.load()))
         }
+        #else
+        if tab == .settings {
+            return handleSettingsRequested(state: &state)
+        }
+        state.selectedTab = tab
+        return .none
+        #endif
     }
 
     func handleSettingsPinLoaded(
@@ -49,15 +59,51 @@ extension TabReducer {
         state: inout State
     ) -> Effect<Action> {
         // The user may have moved on while the Keychain was read.
+        #if os(tvOS)
         guard state.selectedTab == .settings, state.isSettingsLocked else { return .none }
+        #else
+        guard state.isSettingsLocked else { return .none }
+        #endif
         guard let pin else {
             // Child mode without a PIN has nothing to check against.
             state.settingsUnlocked = true
+            #if !os(tvOS)
+            state.isSettingsPresented = true
+            #endif
             return .none
         }
         state.settingsPin = PinEntryReducer.State(expectedPin: pin)
         return .none
     }
+
+    func handleSettingsPinSucceeded(state: inout State) -> Effect<Action> {
+        state.settingsUnlocked = true
+        state.settingsPin = nil
+        #if os(tvOS)
+        return .none
+        #else
+        // The PIN sheet has to finish dismissing before another sheet can
+        // be presented from the same view, or SwiftUI drops the second.
+        return .run { [clock] send in
+            try await clock.sleep(for: .milliseconds(400))
+            await send(.presentSettings)
+        }
+        #endif
+    }
+
+    #if !os(tvOS)
+    /// Opens Settings, behind the child-mode PIN when that's on.
+    func handleSettingsRequested(state: inout State) -> Effect<Action> {
+        guard !state.isSettingsPresented, state.settingsPin == nil else { return .none }
+        guard state.isSettingsLocked else {
+            state.isSettingsPresented = true
+            return .none
+        }
+        return .run { [pinStore] send in
+            await send(.settingsPinLoaded(pinStore.load()))
+        }
+    }
+    #endif
 
     #if os(iOS)
     // MARK: - Mini Player

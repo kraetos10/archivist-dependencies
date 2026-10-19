@@ -87,12 +87,15 @@ struct SettingsReducerTests {
                 logFileURL: { logURL },
                 clear: { cleared.setValue(true) }
             )
+            $0.youTubeAPIKeyStore = .inMemory()
         }
 
+        // The log lookup and the key lookup race, so take both as they land.
+        store.exhaustivity = .off(showSkippedAssertions: false)
         await store.send(.view(.viewDidAppear))
-        await store.receive(\.diagnosticLogLoaded) {
-            $0.diagnosticLogURL = logURL
-        }
+        await store.finish()
+        await store.skipReceivedActions()
+        #expect(store.state.diagnosticLogURL == logURL)
         await store.send(.view(.clearDiagnosticLogsTapped)) {
             $0.diagnosticLogURL = nil
         }

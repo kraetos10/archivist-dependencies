@@ -606,6 +606,105 @@
           }
         }
       }
+    },
+    "settings.youtubeKey" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube API Key"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.set" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.notSet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not set"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.replace" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace Key"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.setUp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up Key"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.remove" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Key"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.removeTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove YouTube API key?"
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.removeMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discover will ask for a key again the next time you open it."
+          }
+        }
+      }
+    },
+    "settings.youtubeKey.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used by Discover to search YouTube. Stored in this device's Keychain."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

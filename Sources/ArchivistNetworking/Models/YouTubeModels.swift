@@ -40,7 +40,7 @@ public nonisolated struct YouTubeVideo: Sendable, Equatable, Identifiable, Hasha
         durationSeconds.map { DurationText.clock(seconds: Double($0)) }
     }
 
-    /// "1.2M views".
+    /// "1.2M".
     public var viewsText: String? {
         viewCount.map { YouTubeCountText.compact($0) }
     }
@@ -48,11 +48,6 @@ public nonisolated struct YouTubeVideo: Sendable, Equatable, Identifiable, Hasha
     /// "2 weeks ago".
     public var publishedText: String? {
         published.map { PublishedDate.relative($0) }
-    }
-
-    /// "1.2M views · 2 weeks ago", skipping whichever half is missing.
-    public var detailText: String {
-        [viewsText, publishedText].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -82,7 +77,7 @@ public nonisolated struct YouTubeChannel: Sendable, Equatable, Identifiable, Has
         self.videoCount = videoCount
     }
 
-    /// "1.2M subscribers".
+    /// "1.2M".
     public var subscribersText: String? {
         subscriberCount.map { YouTubeCountText.compact($0) }
     }
