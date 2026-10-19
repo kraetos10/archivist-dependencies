@@ -412,6 +412,8 @@ public final class PlayerManager: NSObject {
             // stay paused and leave it to the user.
             guard reactivated else { return }
             if shouldResumePlayback {
+                // The interruption cut in mid-sentence; pick up a beat early.
+                self.seekTo(max(self.currentTime - 1, 0))
                 self.resume()
             } else if self.isPlaying {
                 self.backend?.refreshAudio()

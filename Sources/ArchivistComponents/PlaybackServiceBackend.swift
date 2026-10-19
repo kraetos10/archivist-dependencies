@@ -319,6 +319,24 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         MainActor.assumeIsolated { onPiPStateChanged?(enabled) }
     }
 
+    /// Applies the resume seek the moment libvlc will take it. Waiting for
+    /// the first position update let the first second or so of the video
+    /// play before the jump. If the stream isn't seekable yet this does
+    /// nothing, and `handlePositionUpdate` applies it a little later as
+    /// before.
+    private func applyPendingResumeIfReady() {
+        let lengthMs = service.mediaDuration
+        guard pendingResumeSec > 0, service.isSeekable, lengthMs > 0 else { return }
+        let length = Double(lengthMs) / 1000.0
+        guard length >= pendingResumeSec else { return }
+        duration = length
+        currentTime = pendingResumeSec
+        furthestTime = max(furthestTime, currentTime)
+        onTimeUpdate?(currentTime)
+        service.playbackPosition = Float(min(max(pendingResumeSec / length, 0), 1))
+        pendingResumeSec = 0
+    }
+
     private func handlePositionUpdate() {
         let lengthMs = service.mediaDuration
         if lengthMs > 0 {
@@ -382,6 +400,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
             hasReachedPlaying = true
             isPlaying = true
             isBuffering = false
+            applyPendingResumeIfReady()
         case .paused:
             isPlaying = false
             isBuffering = false
