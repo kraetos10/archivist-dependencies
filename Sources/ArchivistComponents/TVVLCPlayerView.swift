@@ -126,7 +126,7 @@ public struct TVVLCPlayerView: View {
                         onExit: { model.exitUpNext() }
                     )
                     .onPlayPauseCommand { playerManager.togglePlayPause() }
-                    .padding(.top, 32)
+                    .padding(.top, 20)
                 }
             }
             .padding(.horizontal, 80)
@@ -148,7 +148,7 @@ public struct TVVLCPlayerView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: model.showsUpNextRibbon ? 760 : 420)
+            .frame(height: model.isBrowsingUpNext ? 760 : 420)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)

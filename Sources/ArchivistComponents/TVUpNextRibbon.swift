@@ -1,12 +1,11 @@
 #if os(tvOS)
 import SwiftUI
 
-/// The row of videos under the tvOS player's transport: what could play
-/// next. Shown with the controls; Down on the remote moves focus into it,
-/// Select plays the focused video, and Up or Menu goes back to the video.
-///
-/// While not browsing, its cards are disabled so the focus engine leaves
-/// the player's press capture alone.
+/// What could play next, under the tvOS player's transport. With the
+/// controls up it's just an "Up Next" label pointing down, as in the Apple
+/// TV app; Down on the remote reveals the row of cards and moves focus
+/// into it, Select plays the focused video, and Up or Menu goes back to
+/// the video.
 struct TVUpNextRibbon: View {
     let items: [UpNextItem]
     let isBrowsing: Bool
@@ -18,7 +17,7 @@ struct TVUpNextRibbon: View {
     @FocusState private var focusedID: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 Text(String.localised("video.upNext", table: .videos))
                     .font(.headline)
@@ -30,30 +29,36 @@ struct TVUpNextRibbon: View {
             }
             .foregroundStyle(.white.opacity(isBrowsing ? 1 : 0.8))
 
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 40) {
-                    ForEach(items) { item in
-                        TVUpNextCard(
-                            item: item,
-                            isFocused: focusedID == item.id
-                        ) {
-                            onSelect(item)
+            if isBrowsing {
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top, spacing: 40) {
+                        ForEach(items) { item in
+                            TVUpNextCard(
+                                item: item,
+                                isFocused: focusedID == item.id
+                            ) {
+                                onSelect(item)
+                            }
+                            .focused($focusedID, equals: item.id)
                         }
-                        .focused($focusedID, equals: item.id)
-                        .disabled(!isBrowsing)
                     }
+                    .padding(.vertical, 24)
                 }
-                .padding(.vertical, 24)
+                // A horizontal scroll view takes all the height it's
+                // offered; this keeps it to its cards, so the transport
+                // above stays at the bottom of the screen.
+                .fixedSize(horizontal: false, vertical: true)
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+                .focusSection()
+                .defaultFocus($focusedID, items.first?.id)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-            .focusSection()
         }
-        // Dimmed until it's being browsed, so the video stays the subject.
-        .opacity(isBrowsing ? 1 : 0.75)
+        .animation(.easeInOut(duration: 0.25), value: isBrowsing)
         .onChange(of: isBrowsing) { _, browsing in
-            // The cards enable in this same update; focus can only land on
-            // them once they have.
+            // The cards are inserted in this same update; focus can only
+            // land on them once they're on screen.
             Task { @MainActor in
                 focusedID = browsing ? items.first?.id : nil
             }
