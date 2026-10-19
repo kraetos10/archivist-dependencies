@@ -7,6 +7,9 @@
     "·" : {
 
     },
+    "· %@" : {
+
+    },
     "· %@ views" : {
 
     },
@@ -75,10 +78,13 @@
     "childMode.pinSetup.title" : {
 
     },
+    "generic.add" : {
+
+    },
     "generic.cancel" : {
 
     },
-    "generic.comments" : {
+    "generic.more" : {
 
     },
     "generic.pending" : {
@@ -93,6 +99,18 @@
     "generic.share" : {
 
     },
+    "theme.amethyst" : {
+
+    },
+    "theme.forest" : {
+
+    },
+    "theme.ocean" : {
+
+    },
+    "theme.sunset" : {
+
+    },
     "video.addToPlaylist" : {
 
     },
@@ -102,10 +120,34 @@
     "video.cached" : {
 
     },
+    "video.comment.creator" : {
+
+    },
+    "video.comment.favorited" : {
+
+    },
+    "video.comment.likes %lld" : {
+
+    },
+    "video.controls.hide" : {
+
+    },
+    "video.controls.show" : {
+
+    },
     "video.deleteDownload" : {
 
     },
     "video.deleteFromServer" : {
+
+    },
+    "video.dislikes %@" : {
+
+    },
+    "video.downloaded" : {
+
+    },
+    "video.downloading" : {
 
     },
     "video.downloadToDevice" : {
@@ -147,16 +189,83 @@
     "video.empty.watchDescription" : {
 
     },
+    "video.enterFullscreen" : {
+
+    },
+    "video.exitFullscreen" : {
+
+    },
+    "video.inProgress" : {
+
+    },
+    "video.likes %@" : {
+
+    },
     "video.markAsUnwatched" : {
 
     },
     "video.markAsWatched" : {
 
     },
+    "video.miniPlayer.close" : {
+
+    },
+    "video.miniPlayer.expandHint" : {
+
+    },
+    "video.openChannelHint" : {
+
+    },
+    "video.pause" : {
+
+    },
+    "video.pictureInPicture" : {
+
+    },
+    "video.play" : {
+
+    },
+    "video.playbackSpeed" : {
+
+    },
     "video.playNext" : {
 
     },
+    "video.progressValue %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "video.progressValue %1$@ %2$@"
+          }
+        }
+      }
+    },
+    "video.rotate" : {
+
+    },
+    "video.share.tubeArchivist" : {
+
+    },
+    "video.share.youtube" : {
+
+    },
+    "video.skipBackward" : {
+
+    },
+    "video.skipForward" : {
+
+    },
+    "video.sort" : {
+
+    },
     "video.upNext" : {
+
+    },
+    "video.watched" : {
+
+    },
+    "video.watchProgress" : {
 
     }
   },

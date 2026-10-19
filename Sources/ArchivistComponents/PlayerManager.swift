@@ -179,6 +179,7 @@ public final class PlayerManager: NSObject {
     /// often it happens (see `reassertSpokenAudioMode`).
     @ObservationIgnored var spokenAudioReasserts: [ContinuousClock.Instant] = []
     @ObservationIgnored var silenceHintObserver: NSObjectProtocol?
+    @ObservationIgnored var spokenAudioWatch: Task<Void, Never>?
     #endif
 
     #if !os(tvOS) && !os(watchOS)
@@ -546,15 +547,11 @@ public final class PlayerManager: NSObject {
                 // have settled before we retarget the drawable.
                 try? await Task.sleep(for: .milliseconds(50))
                 self.refreshVideoOutput()
-                // Lock/unlock tears down VLC's audio unit; rebuild it so we
-                // don't come back to a silent-but-playing video. Not after
-                // PiP: audio played straight through it, and the rebuild
-                // would *cause* a few seconds of silence rather than cure
-                // one.
+                // No audio rebuild here. Audio keeps playing through a
+                // lock, and `refreshAudio` itself is a few seconds of
+                // silence — on-device logs showed it cutting out sound
+                // that was fine.
                 self.logBecomeActive(returningFromPiP: returningFromPiP)
-                if self.isPlaying, !returningFromPiP {
-                    self.backend?.refreshAudio()
-                }
             }
         }
     }
@@ -1120,6 +1117,11 @@ public final class PlayerManager: NSObject {
             // in case no `.categoryChange` said so.
             if !wasPlaying && backend.isPlaying {
                 self.reassertSpokenAudioMode()
+            }
+            if backend.isPlaying {
+                self.startSpokenAudioWatch()
+            } else {
+                self.stopSpokenAudioWatch()
             }
             #endif
         }

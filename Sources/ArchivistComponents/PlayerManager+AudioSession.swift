@@ -58,10 +58,31 @@ extension PlayerManager {
 
     func logBecomeActive(returningFromPiP: Bool) {
         let playing = isPlaying
-        let refreshing = playing && !returningFromPiP
-        Self.audioLog.notice(
-            "becomeActive isPlaying=\(playing) returningFromPiP=\(returningFromPiP) refreshAudio=\(refreshing)"
-        )
+        Self.audioLog.notice("becomeActive isPlaying=\(playing) returningFromPiP=\(returningFromPiP)")
+    }
+
+    /// Keep checking the session mode while playback runs.
+    ///
+    /// Neither trigger `reassertSpokenAudioMode` had was enough. A change of
+    /// mode alone posts no route-change notification, and the "playback
+    /// started" hook runs before VLC's audio output has set its own mode.
+    /// Device logs showed `.moviePlayback` in force while a Siri
+    /// announcement played over the video. Checking on a timer needs no
+    /// notification; the call is a cheap no-op while the mode is right.
+    func startSpokenAudioWatch() {
+        guard spokenAudioWatch == nil else { return }
+        spokenAudioWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                reassertSpokenAudioMode()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    func stopSpokenAudioWatch() {
+        spokenAudioWatch?.cancel()
+        spokenAudioWatch = nil
     }
 
     /// Put the session back in `.spokenAudio` after VLC changed it.
