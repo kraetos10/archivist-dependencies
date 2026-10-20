@@ -3,7 +3,7 @@ import Foundation
 /// A video returned by YouTube's Data API. Not an archive video: it carries
 /// only what the API sends, and its `videoId` is what TubeArchivist's
 /// add-to-queue endpoint takes.
-public nonisolated struct YouTubeVideo: Sendable, Equatable, Identifiable, Hashable {
+public nonisolated struct YouTubeVideo: Sendable, Equatable, Identifiable, Hashable, Codable {
     public let videoId: String
     public let title: String
     public let channelId: String
@@ -48,6 +48,30 @@ public nonisolated struct YouTubeVideo: Sendable, Equatable, Identifiable, Hasha
     /// "2 weeks ago".
     public var publishedText: String? {
         published.map { PublishedDate.relative($0) }
+    }
+}
+
+public nonisolated struct YouTubePlaylist: Sendable, Equatable, Identifiable, Hashable {
+    public let playlistId: String
+    public let title: String
+    public let channelTitle: String
+    public let thumbnailURL: URL?
+    public let itemCount: Int?
+
+    public var id: String { playlistId }
+
+    public init(
+        playlistId: String,
+        title: String,
+        channelTitle: String = "",
+        thumbnailURL: URL? = nil,
+        itemCount: Int? = nil
+    ) {
+        self.playlistId = playlistId
+        self.title = title
+        self.channelTitle = channelTitle
+        self.thumbnailURL = thumbnailURL
+        self.itemCount = itemCount
     }
 }
 
@@ -104,6 +128,60 @@ public nonisolated enum YouTubeSearchOrder: String, Sendable, CaseIterable, Equa
     case rating
 }
 
+/// Narrowing for a video search. `any` leaves a filter off.
+public nonisolated struct YouTubeSearchFilters: Sendable, Equatable {
+    /// YouTube's own buckets: short is under 4 minutes, medium 4 to 20, long over 20.
+    public enum Duration: String, Sendable, CaseIterable, Equatable {
+        case any
+        case short
+        case medium
+        case long
+
+        /// The `videoDuration` parameter, or `nil` for any.
+        public var apiValue: String? { self == .any ? nil : rawValue }
+    }
+
+    public enum Uploaded: String, Sendable, CaseIterable, Equatable {
+        case any
+        case today
+        case week
+        case month
+        case year
+
+        /// The earliest upload the filter allows, or `nil` for any.
+        public func earliest(relativeTo now: Date) -> Date? {
+            let component: Calendar.Component
+            switch self {
+            case .any: return nil
+            case .today: component = .day
+            case .week: component = .weekOfYear
+            case .month: component = .month
+            case .year: component = .year
+            }
+            // UTC, so "a week ago" is the same instant in every time zone
+            // and doesn't stretch or shrink across a daylight-saving change.
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = .gmt
+            return calendar.date(byAdding: component, value: -1, to: now)
+        }
+    }
+
+    public var duration: Duration
+    public var uploaded: Uploaded
+
+    public init(
+        duration: Duration = .any,
+        uploaded: Uploaded = .any
+    ) {
+        self.duration = duration
+        self.uploaded = uploaded
+    }
+
+    public var isActive: Bool {
+        duration != .any || uploaded != .any
+    }
+}
+
 public nonisolated enum YouTubeCountText {
     /// "1.2M", "34K", "980".
     public static func compact(_ count: Int) -> String {
@@ -122,6 +200,8 @@ public nonisolated enum YouTubeError: Error, Equatable, Sendable {
     case quotaExceeded
     /// Anything else Google rejected, with its message for diagnostics.
     case rejected(String)
+    /// YouTube has no such chart (a trending category some regions lack).
+    case notFound
     case network
     case decodingFailed
 
@@ -147,6 +227,8 @@ public nonisolated enum YouTubeError: Error, Equatable, Sendable {
             self = .invalidKey
         } else if reasons.contains("API_KEY_SERVICE_BLOCKED") || reasons.contains("ipRefererBlocked") {
             self = .invalidKey
+        } else if !reasons.isDisjoint(with: ["videoChartNotFound", "notFound"]) {
+            self = .notFound
         } else {
             self = .rejected(message.isEmpty ? "HTTP \(statusCode)" : message)
         }

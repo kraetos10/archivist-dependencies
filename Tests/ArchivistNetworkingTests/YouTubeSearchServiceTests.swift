@@ -48,7 +48,7 @@ extension NetworkAPIRequestTests {
         let page = try await withDependencies {
             $0.urlSession = session
         } operation: {
-            try await YouTubeSearchService.liveValue.searchVideos("KEY", "swift", .relevance, nil)
+            try await YouTubeSearchService.liveValue.searchVideos("KEY", "swift", .relevance, YouTubeSearchFilters(), nil)
         }
 
         #expect(page.items.map(\.videoId) == ["bbb", "aaa"])
@@ -117,5 +117,105 @@ extension NetworkAPIRequestTests {
         }
         #expect(channel.subscriberCount == nil)
         #expect(channel.title == "One")
+    }
+
+    @Test func filtersBecomeSearchParameters() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let session = StubURLProtocol.session { _ in json(#"{"items":[]}"#) }
+        _ = try await withDependencies {
+            $0.urlSession = session
+            $0.date.now = now
+        } operation: {
+            try await YouTubeSearchService.liveValue.searchVideos(
+                "KEY",
+                "swift",
+                .date,
+                YouTubeSearchFilters(duration: .long, uploaded: .week),
+                nil
+            )
+        }
+
+        let query = StubURLProtocol.requests.value.first?.url?.query ?? ""
+        #expect(query.contains("videoDuration=long"))
+        #expect(query.contains("order=date"))
+        // A week before `now`, in UTC.
+        #expect(query.contains("publishedAfter=2023-11-07T22:13:20Z"))
+    }
+
+    @Test func noFiltersSendNeitherParameter() async throws {
+        let session = StubURLProtocol.session { _ in json(#"{"items":[]}"#) }
+        _ = try await withDependencies {
+            $0.urlSession = session
+        } operation: {
+            try await YouTubeSearchService.liveValue.searchVideos(
+                "KEY", "swift", .relevance, YouTubeSearchFilters(), nil
+            )
+        }
+
+        let query = StubURLProtocol.requests.value.first?.url?.query ?? ""
+        #expect(!query.contains("videoDuration"))
+        #expect(!query.contains("publishedAfter"))
+    }
+
+    @Test func trendingCanBeNarrowedToACategory() async throws {
+        let session = StubURLProtocol.session { _ in json(#"{"items":[]}"#) }
+        _ = try await withDependencies {
+            $0.urlSession = session
+        } operation: {
+            try await YouTubeSearchService.liveValue.trending("KEY", "GB", "10", nil)
+        }
+
+        let query = StubURLProtocol.requests.value.first?.url?.query ?? ""
+        #expect(query.contains("videoCategoryId=10"))
+        #expect(query.contains("chart=mostPopular"))
+        #expect(query.contains("regionCode=GB"))
+    }
+
+    @Test func aMissingChartIsAnEmptyPageNotAnError() async throws {
+        let session = StubURLProtocol.session { _ in
+            failure(400, #"{"error":{"code":400,"message":"x","errors":[{"reason":"videoChartNotFound"}]}}"#)
+        }
+        let page = try await withDependencies {
+            $0.urlSession = session
+        } operation: {
+            try await YouTubeSearchService.liveValue.trending("KEY", "GB", "29", nil)
+        }
+
+        #expect(page.items.isEmpty)
+        #expect(page.nextPageToken == nil)
+    }
+
+    @Test func playlistSearchIsEnrichedWithItemCounts() async throws {
+        let session = StubURLProtocol.session { request in
+            if request.url?.path.hasSuffix("/search") == true {
+                return json(#"{"nextPageToken":"N","items":[{"id":{"playlistId":"PL2"}},{"id":{"playlistId":"PL1"}}]}"#)
+            }
+            return json("""
+            {"items":[
+              {"id":"PL1","snippet":{"title":"One","channelTitle":"Chan"},"contentDetails":{"itemCount":12}},
+              {"id":"PL2","snippet":{"title":"Two"}}]}
+            """)
+        }
+        let page = try await withDependencies {
+            $0.urlSession = session
+        } operation: {
+            try await YouTubeSearchService.liveValue.searchPlaylists("KEY", "swift", nil)
+        }
+
+        #expect(page.items.map(\.playlistId) == ["PL2", "PL1"])
+        #expect(page.items[1].itemCount == 12)
+        #expect(page.items[0].itemCount == nil)
+        #expect(page.nextPageToken == "N")
+        #expect(StubURLProtocol.requests.value.first?.url?.query?.contains("type=playlist") == true)
+    }
+
+    @Test func uploadedFiltersReachBackTheRightAmount() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        #expect(YouTubeSearchFilters.Uploaded.any.earliest(relativeTo: now) == nil)
+        #expect(YouTubeSearchFilters.Uploaded.today.earliest(relativeTo: now) == now.addingTimeInterval(-86_400))
+        #expect(YouTubeSearchFilters.Uploaded.week.earliest(relativeTo: now) == now.addingTimeInterval(-7 * 86_400))
+        #expect(YouTubeSearchFilters().isActive == false)
+        #expect(YouTubeSearchFilters(duration: .short).isActive)
     }
 }

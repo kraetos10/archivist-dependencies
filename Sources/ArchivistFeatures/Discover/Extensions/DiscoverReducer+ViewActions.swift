@@ -23,6 +23,10 @@ extension DiscoverReducer {
             return handleAddToQueueTapped(video, startNow: startNow, state: &state)
         case .subscribeTapped(let channel):
             return handleSubscribeTapped(channel, state: &state)
+        case .subscribePlaylistTapped(let playlist):
+            return handleSubscribePlaylistTapped(playlist, state: &state)
+        case .categorySelected(let category):
+            return handleCategorySelected(category, state: &state)
         case .channelTapped(let channel):
             return openChannel(channel, state: &state)
         case .videoChannelTapped(let video):
@@ -99,6 +103,35 @@ extension DiscoverReducer {
             }
             await send(.subscribeResult(channelId: channelId, result))
         }
+    }
+
+    func handleSubscribePlaylistTapped(
+        _ playlist: YouTubePlaylist,
+        state: inout State
+    ) -> Effect<Action> {
+        guard !state.subscribedPlaylistIds.contains(playlist.playlistId),
+              !state.pendingIds.contains(playlist.playlistId) else { return .none }
+        state.pendingIds.insert(playlist.playlistId)
+        let config = state.serverConfig
+        let playlistId = playlist.playlistId
+        return .run { [playlistService] send in
+            let result = await Result {
+                try await playlistService.subscribePlaylists(
+                    config: config,
+                    items: [PlaylistSubscribeItem(playlistId: playlistId, playlistSubscribed: true)]
+                )
+            }
+            await send(.subscribePlaylistResult(playlistId: playlistId, result))
+        }
+    }
+
+    func handleCategorySelected(
+        _ category: DiscoverCategory?,
+        state: inout State
+    ) -> Effect<Action> {
+        guard state.trendingCategory != category else { return .none }
+        state.trendingCategory = category
+        return reloadFeed(state: &state)
     }
 
     func openChannel(

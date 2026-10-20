@@ -18,12 +18,21 @@ extension DiscoverReducer {
             return handleChannelFeedResult(result, append: append, state: &state)
         case .channelDetailsLoaded(let result):
             return handleChannelDetailsLoaded(result, state: &state)
-        case .statusesLoaded(let archived, let subscribed):
-            return handleStatusesLoaded(archived: archived, subscribed: subscribed, state: &state)
+        case .shelvesLoaded(let result):
+            return handleShelvesLoaded(result, state: &state)
+        case .statusesLoaded(let archived, let subscribed, let subscribedPlaylists):
+            return handleStatusesLoaded(
+                archived: archived,
+                subscribed: subscribed,
+                subscribedPlaylists: subscribedPlaylists,
+                state: &state
+            )
         case .addResult(let videoId, let result):
             return handleAddResult(videoId: videoId, result: result, state: &state)
         case .subscribeResult(let channelId, let result):
             return handleSubscribeResult(channelId: channelId, result: result, state: &state)
+        case .subscribePlaylistResult(let playlistId, let result):
+            return handleSubscribePlaylistResult(playlistId: playlistId, result: result, state: &state)
         default:
             return .none
         }
@@ -36,13 +45,14 @@ extension DiscoverReducer {
         state: inout State
     ) -> Effect<Action> {
         switch action {
-        case \.searchScope, \.order:
-            // A new scope or sort is a new search, but only worth running
-            // when there's something to run it for.
+        case \.searchScope, \.order, \.filters, \.filters.duration, \.filters.uploaded:
+            // A new scope, sort or filter is a new search, but only worth
+            // running when there's something to run it for.
             guard state.apiKey != nil else { return .none }
-            if state.searchScope == .channels && state.submittedQuery.isEmpty {
+            if state.searchScope != .videos && state.submittedQuery.isEmpty {
                 state.videos = []
                 state.channels = []
+                state.playlists = []
                 state.nextPageToken = nil
                 state.errorMessage = nil
                 state.isLoading = false
@@ -81,17 +91,19 @@ extension DiscoverReducer {
             state.nextPageToken = nil
             state.hasLoadedFeed = false
             state.isLoading = false
+            state.shelves = []
+            state.isLoadingShelves = false
             if !state.hasPromptedSetup {
                 state.hasPromptedSetup = true
                 state.setup = DiscoverSetupReducer.State()
             }
-            return .cancel(id: CancelID.feed)
+            return .merge(.cancel(id: CancelID.feed), .cancel(id: CancelID.shelves))
         }
         if state.apiKey == key, state.hasLoadedFeed || state.isLoading {
             return .none
         }
         state.apiKey = key
-        return reloadFeed(state: &state)
+        return .merge(reloadFeed(state: &state), loadShelves(state: &state))
     }
 
     func handleKeySaved(
@@ -102,7 +114,7 @@ extension DiscoverReducer {
         state.apiKey = key
         state.hasLoadedKey = true
         state.isQuotaExceeded = false
-        return reloadFeed(state: &state)
+        return .merge(reloadFeed(state: &state), loadShelves(state: &state))
     }
 
     // MARK: - Feed
@@ -111,6 +123,7 @@ extension DiscoverReducer {
     func reloadFeed(state: inout State) -> Effect<Action> {
         state.videos = []
         state.channels = []
+        state.playlists = []
         state.nextPageToken = nil
         state.isLoadingMore = false
         return loadFeed(append: false, state: &state)
@@ -124,13 +137,15 @@ extension DiscoverReducer {
         let query = state.submittedQuery
         let searchScope = state.searchScope
         let order = state.order
+        let filters = state.filters
+        let category = state.trendingCategory?.rawValue
         let pageToken: String?
         if append {
             guard state.canLoadMore, let token = state.nextPageToken else { return .none }
             state.isLoadingMore = true
             pageToken = token
         } else {
-            // Channels have no Trending to fall back on.
+            // Channels and playlists have no Trending to fall back on.
             guard searchScope == .videos || !query.isEmpty else {
                 state.isLoading = false
                 return .cancel(id: CancelID.feed)
@@ -148,6 +163,7 @@ extension DiscoverReducer {
                         try await youTubeSearchService.trending(
                             key: key,
                             regionCode: region,
+                            categoryId: category,
                             pageToken: pageToken
                         )
                     )
@@ -157,6 +173,15 @@ extension DiscoverReducer {
                             key: key,
                             query: query,
                             order: order,
+                            filters: filters,
+                            pageToken: pageToken
+                        )
+                    )
+                case .playlists:
+                    return .playlists(
+                        try await youTubeSearchService.searchPlaylists(
+                            key: key,
+                            query: query,
                             pageToken: pageToken
                         )
                     )
@@ -209,6 +234,18 @@ extension DiscoverReducer {
                 return statusEffect(
                     videoIds: [],
                     channelIds: page.items.map(\.channelId),
+                    state: state
+                )
+            case .playlists(let page):
+                let known = Set(state.playlists.map(\.playlistId))
+                state.playlists = append
+                    ? state.playlists + page.items.filter { !known.contains($0.playlistId) }
+                    : page.items
+                state.nextPageToken = page.nextPageToken
+                return statusEffect(
+                    videoIds: [],
+                    channelIds: [],
+                    playlistIds: page.items.map(\.playlistId),
                     state: state
                 )
             }
@@ -322,49 +359,67 @@ extension DiscoverReducer {
     func statusEffect(
         videoIds: [String],
         channelIds: [String],
+        playlistIds: [String] = [],
         state: State
     ) -> Effect<Action> {
         let videoIds = videoIds.filter { state.itemStatus[$0] == nil }
         let channelIds = channelIds.filter { !state.subscribedChannelIds.contains($0) }
-        guard !videoIds.isEmpty || !channelIds.isEmpty else { return .none }
+        let playlistIds = playlistIds.filter { !state.subscribedPlaylistIds.contains($0) }
+        guard !videoIds.isEmpty || !channelIds.isEmpty || !playlistIds.isEmpty else { return .none }
         let config = state.serverConfig
-        return .run { [videoService, channelService] send in
+        return .run { [videoService, channelService, playlistService] send in
+            enum Kind { case video, channel, playlist }
             var archived = Set<String>()
             var subscribed = Set<String>()
-            await withTaskGroup(of: (id: String, isVideo: Bool, found: Bool).self) { group in
+            var subscribedPlaylists = Set<String>()
+            await withTaskGroup(of: (id: String, kind: Kind, found: Bool).self) { group in
                 for id in videoIds {
                     group.addTask {
                         let video = try? await videoService.getVideo(config: config, id: id)
-                        return (id, true, video != nil)
+                        return (id, .video, video != nil)
                     }
                 }
                 for id in channelIds {
                     group.addTask {
                         let channel = try? await channelService.getChannel(config: config, id: id)
-                        return (id, false, channel?.channelSubscribed == true)
+                        return (id, .channel, channel?.channelSubscribed == true)
+                    }
+                }
+                for id in playlistIds {
+                    group.addTask {
+                        let playlist = try? await playlistService.getPlaylist(config: config, id: id)
+                        return (id, .playlist, playlist?.playlistSubscribed == true)
                     }
                 }
                 for await outcome in group where outcome.found {
-                    if outcome.isVideo {
-                        archived.insert(outcome.id)
-                    } else {
-                        subscribed.insert(outcome.id)
+                    switch outcome.kind {
+                    case .video: archived.insert(outcome.id)
+                    case .channel: subscribed.insert(outcome.id)
+                    case .playlist: subscribedPlaylists.insert(outcome.id)
                     }
                 }
             }
-            await send(.statusesLoaded(archived: archived, subscribed: subscribed))
+            await send(
+                .statusesLoaded(
+                    archived: archived,
+                    subscribed: subscribed,
+                    subscribedPlaylists: subscribedPlaylists
+                )
+            )
         }
     }
 
     func handleStatusesLoaded(
         archived: Set<String>,
         subscribed: Set<String>,
+        subscribedPlaylists: Set<String>,
         state: inout State
     ) -> Effect<Action> {
         for id in archived {
             state.itemStatus[id] = .inArchive
         }
         state.subscribedChannelIds.formUnion(subscribed)
+        state.subscribedPlaylistIds.formUnion(subscribedPlaylists)
         return .none
     }
 
@@ -385,6 +440,26 @@ extension DiscoverReducer {
                 TextState(String.localised("discover.error.title", table: .discover))
             } message: {
                 TextState(String.localised("discover.error.addFailed", table: .discover))
+            }
+            return .none
+        }
+    }
+
+    func handleSubscribePlaylistResult(
+        playlistId: String,
+        result: Result<Void, Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        state.pendingIds.remove(playlistId)
+        switch result {
+        case .success:
+            state.subscribedPlaylistIds.insert(playlistId)
+            return .none
+        case .failure:
+            state.alert = AlertState {
+                TextState(String.localised("discover.error.title", table: .discover))
+            } message: {
+                TextState(String.localised("discover.error.subscribeFailed", table: .discover))
             }
             return .none
         }

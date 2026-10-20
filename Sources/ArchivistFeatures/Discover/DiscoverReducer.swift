@@ -6,7 +6,10 @@ import Foundation
 
 /// Search and browse YouTube with the user's own Data API key, then hand
 /// what they find to their TubeArchivist server: add a video to the queue,
-/// or subscribe to a channel.
+/// or subscribe to a channel or playlist.
+///
+/// With nothing searched for, the screen shows shelves built from what the
+/// user has watched, then trending, which a category chip narrows.
 ///
 /// The key is read from the Keychain each time the screen appears, so
 /// removing it in Settings sends the user back through setup.
@@ -19,6 +22,7 @@ public struct DiscoverReducer {
         public enum SearchScope: String, CaseIterable, Sendable, Identifiable {
             case videos
             case channels
+            case playlists
 
             public var id: String { rawValue }
         }
@@ -41,14 +45,22 @@ public struct DiscoverReducer {
         var query = ""
         var searchScope: SearchScope = .videos
         var order: YouTubeSearchOrder = .relevance
+        var filters = YouTubeSearchFilters()
+        /// Narrows Trending; `nil` is the overall chart.
+        var trendingCategory: DiscoverCategory?
         /// What the results on screen are for. Typing doesn't change it —
         /// only submitting does, so a search costs quota once, not per key.
         var submittedQuery = ""
         var videos: [YouTubeVideo] = []
         var channels: [YouTubeChannel] = []
+        var playlists: [YouTubePlaylist] = []
         var nextPageToken: String?
         var isLoading = false
         var isLoadingMore = false
+
+        // Shelves above Trending, from what the archive says was watched
+        var shelves: [DiscoverShelf] = []
+        var isLoadingShelves = false
 
         // Channel page
         var browsedChannel: YouTubeChannel?
@@ -62,7 +74,8 @@ public struct DiscoverReducer {
         var errorMessage: String?
         var itemStatus: [String: ItemStatus] = [:]
         var subscribedChannelIds: Set<String> = []
-        /// Video and channel IDs with a server write in flight.
+        var subscribedPlaylistIds: Set<String> = []
+        /// Video, channel and playlist IDs with a server write in flight.
         var pendingIds: Set<String> = []
 
         @Presents var setup: DiscoverSetupReducer.State?
@@ -80,8 +93,23 @@ public struct DiscoverReducer {
             searchScope == .videos && submittedQuery.isEmpty
         }
 
-        var showsChannelPrompt: Bool {
-            searchScope == .channels && submittedQuery.isEmpty
+        /// Channels and playlists have nothing to show until searched for.
+        var showsSearchPrompt: Bool {
+            searchScope != .videos && submittedQuery.isEmpty
+        }
+
+        /// The shelves sit above the overall chart only: a chosen category
+        /// is a narrower question than they answer.
+        var showsShelves: Bool {
+            isShowingTrending && trendingCategory == nil && !shelves.isEmpty
+        }
+
+        var emptyScopeIsEmpty: Bool {
+            switch searchScope {
+            case .videos: videos.isEmpty
+            case .channels: channels.isEmpty
+            case .playlists: playlists.isEmpty
+            }
         }
 
         var showsNoResults: Bool {
@@ -89,8 +117,8 @@ public struct DiscoverReducer {
                 && !isLoading
                 && errorMessage == nil
                 && !isQuotaExceeded
-                && !showsChannelPrompt
-                && (searchScope == .videos ? videos.isEmpty : channels.isEmpty)
+                && !showsSearchPrompt
+                && emptyScopeIsEmpty
         }
 
         var canLoadMore: Bool {
@@ -119,6 +147,7 @@ public struct DiscoverReducer {
     public enum DiscoverFeedPage: Equatable, Sendable {
         case videos(YouTubePage<YouTubeVideo>)
         case channels(YouTubePage<YouTubeChannel>)
+        case playlists(YouTubePage<YouTubePlaylist>)
     }
 
     public enum Action: ViewAction, BindableAction {
@@ -131,9 +160,15 @@ public struct DiscoverReducer {
         case feedResult(append: Bool, Result<DiscoverFeedPage, Error>)
         case channelFeedResult(append: Bool, Result<YouTubePage<YouTubeVideo>, Error>)
         case channelDetailsLoaded(Result<YouTubeChannel, Error>)
-        case statusesLoaded(archived: Set<String>, subscribed: Set<String>)
+        case shelvesLoaded(Result<[DiscoverShelf], Error>)
+        case statusesLoaded(
+            archived: Set<String>,
+            subscribed: Set<String>,
+            subscribedPlaylists: Set<String>
+        )
         case addResult(videoId: String, Result<Void, Error>)
         case subscribeResult(channelId: String, Result<Void, Error>)
+        case subscribePlaylistResult(playlistId: String, Result<Void, Error>)
 
         @CasePathable
         public enum View {
@@ -144,6 +179,8 @@ public struct DiscoverReducer {
             case channelLastItemAppeared
             case addToQueueTapped(YouTubeVideo, startNow: Bool)
             case subscribeTapped(YouTubeChannel)
+            case subscribePlaylistTapped(YouTubePlaylist)
+            case categorySelected(DiscoverCategory?)
             case channelTapped(YouTubeChannel)
             case videoChannelTapped(YouTubeVideo)
             case setUpKeyTapped
@@ -160,6 +197,7 @@ public struct DiscoverReducer {
     enum CancelID {
         case feed
         case channelFeed
+        case shelves
     }
 
     @Dependency(\.youTubeSearchService) var youTubeSearchService
@@ -167,6 +205,9 @@ public struct DiscoverReducer {
     @Dependency(\.downloadService) var downloadService
     @Dependency(\.channelService) var channelService
     @Dependency(\.videoService) var videoService
+    @Dependency(\.playlistService) var playlistService
+    @Dependency(\.discoverCache) var discoverCache
+    @Dependency(\.date.now) var now
 
     public var body: some Reducer<State, Action> {
         BindingReducer()

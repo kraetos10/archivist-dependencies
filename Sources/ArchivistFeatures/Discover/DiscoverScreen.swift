@@ -14,6 +14,7 @@ public struct DiscoverScreen: View {
 
     private let videoColumns = [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)]
     private let channelColumns = [GridItem(.adaptive(minimum: 340), spacing: 12)]
+    private let playlistColumns = [GridItem(.adaptive(minimum: 380), spacing: 12)]
 
     public var body: some View {
         NavigationStack {
@@ -64,6 +65,8 @@ public struct DiscoverScreen: View {
                         .tag(DiscoverReducer.State.SearchScope.videos)
                     Text(String.localised("discover.scope.channels", table: .discover))
                         .tag(DiscoverReducer.State.SearchScope.channels)
+                    Text(String.localised("discover.scope.playlists", table: .discover))
+                        .tag(DiscoverReducer.State.SearchScope.playlists)
                 }
                 .pickerStyle(.segmented)
 
@@ -97,12 +100,8 @@ public struct DiscoverScreen: View {
 
     @ViewBuilder
     private var results: some View {
-        if store.showsChannelPrompt {
-            EmptyStateView(
-                icon: "person.2.wave.2",
-                title: String.localised("discover.empty.channels.title", table: .discover),
-                description: String.localised("discover.empty.channels.description", table: .discover)
-            )
+        if store.showsSearchPrompt {
+            searchPrompt
         } else if store.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity)
@@ -113,24 +112,63 @@ public struct DiscoverScreen: View {
                 title: String.localised("discover.empty.noResults.title", table: .discover),
                 description: String.localised("discover.empty.noResults.description", table: .discover)
             )
-        } else if store.searchScope == .videos {
-            videoResults
         } else {
-            channelResults
+            switch store.searchScope {
+            case .videos: videoResults
+            case .channels: channelResults
+            case .playlists: playlistResults
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var searchPrompt: some View {
+        if store.searchScope == .playlists {
+            EmptyStateView(
+                icon: "rectangle.stack",
+                title: String.localised("discover.empty.playlists.title", table: .discover),
+                description: String.localised("discover.empty.playlists.description", table: .discover)
+            )
+        } else {
+            EmptyStateView(
+                icon: "person.2.wave.2",
+                title: String.localised("discover.empty.channels.title", table: .discover),
+                description: String.localised("discover.empty.channels.description", table: .discover)
+            )
         }
     }
 
     @ViewBuilder
     private var videoResults: some View {
+        if store.showsShelves {
+            ForEach(store.shelves) { shelf in
+                DiscoverShelfView(
+                    shelf: shelf,
+                    status: { store.itemStatus[$0.videoId] },
+                    isPending: { store.pendingIds.contains($0.videoId) },
+                    onAdd: { send(.addToQueueTapped($0, startNow: $1)) },
+                    onChannelTapped: { send(.videoChannelTapped($0)) }
+                )
+            }
+        }
+
+        if store.isShowingTrending {
+            Text(String.localised("discover.trending", table: .discover))
+                .font(.title3.bold())
+                .foregroundStyle(Color.Text.primary)
+                .accessibilityAddTraits(.isHeader)
+
+            DiscoverCategoryChips(selected: store.trendingCategory) {
+                send(.categorySelected($0))
+            }
+        } else if !store.videos.isEmpty {
+            Text(String.localised("discover.results", table: .discover))
+                .font(.title3.bold())
+                .foregroundStyle(Color.Text.primary)
+                .accessibilityAddTraits(.isHeader)
+        }
+
         if !store.videos.isEmpty {
-            Text(
-                store.isShowingTrending
-                    ? String.localised("discover.trending", table: .discover)
-                    : String.localised("discover.results", table: .discover)
-            )
-            .font(.title3.bold())
-            .foregroundStyle(Color.Text.primary)
-            .accessibilityAddTraits(.isHeader)
 
             LazyVGrid(columns: videoColumns, spacing: 20) {
                 ForEach(store.videos) { video in
@@ -154,6 +192,30 @@ public struct DiscoverScreen: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var playlistResults: some View {
+        LazyVGrid(columns: playlistColumns, spacing: 12) {
+            ForEach(store.playlists) { playlist in
+                DiscoverPlaylistRow(
+                    playlist: playlist,
+                    isSubscribed: store.subscribedPlaylistIds.contains(playlist.playlistId),
+                    isPending: store.pendingIds.contains(playlist.playlistId),
+                    onSubscribe: { send(.subscribePlaylistTapped(playlist)) }
+                )
+                .onAppear {
+                    if playlist == store.playlists.last {
+                        send(.lastItemAppeared)
+                    }
+                }
+            }
+        }
+
+        if store.isLoadingMore {
+            ProgressView()
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -194,6 +256,24 @@ public struct DiscoverScreen: View {
                     Text(order.title).tag(order)
                 }
             }
+            if store.searchScope == .videos {
+                Picker(
+                    String.localised("discover.filter.duration", table: .discover),
+                    selection: $store.filters.duration
+                ) {
+                    ForEach(YouTubeSearchFilters.Duration.allCases, id: \.self) { duration in
+                        Text(duration.title).tag(duration)
+                    }
+                }
+                Picker(
+                    String.localised("discover.filter.uploaded", table: .discover),
+                    selection: $store.filters.uploaded
+                ) {
+                    ForEach(YouTubeSearchFilters.Uploaded.allCases, id: \.self) { uploaded in
+                        Text(uploaded.title).tag(uploaded)
+                    }
+                }
+            }
             Divider()
             Button(
                 String.localised("discover.changeKey", table: .discover),
@@ -202,7 +282,11 @@ public struct DiscoverScreen: View {
                 send(.setUpKeyTapped)
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(
+                systemName: store.filters.isActive
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "ellipsis.circle"
+            )
         }
         .accessibilityLabel(String.localised("discover.sort", table: .discover))
     }
@@ -228,6 +312,29 @@ public struct DiscoverScreen: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private extension YouTubeSearchFilters.Duration {
+    var title: String {
+        switch self {
+        case .any: String.localised("discover.filter.any", table: .discover)
+        case .short: String.localised("discover.filter.duration.short", table: .discover)
+        case .medium: String.localised("discover.filter.duration.medium", table: .discover)
+        case .long: String.localised("discover.filter.duration.long", table: .discover)
+        }
+    }
+}
+
+private extension YouTubeSearchFilters.Uploaded {
+    var title: String {
+        switch self {
+        case .any: String.localised("discover.filter.any", table: .discover)
+        case .today: String.localised("discover.filter.uploaded.today", table: .discover)
+        case .week: String.localised("discover.filter.uploaded.week", table: .discover)
+        case .month: String.localised("discover.filter.uploaded.month", table: .discover)
+        case .year: String.localised("discover.filter.uploaded.year", table: .discover)
+        }
     }
 }
 

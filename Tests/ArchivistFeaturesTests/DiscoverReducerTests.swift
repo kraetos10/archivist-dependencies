@@ -36,6 +36,11 @@ struct DiscoverReducerTests {
                 return TestFixtures.video1
             }
             $0.channelService.getChannel = { _, _ in throw NetworkingError.errorStatusCode(404, "") }
+            $0.playlistService.getPlaylist = { _, _ in throw NetworkingError.errorStatusCode(404, "") }
+            // Nothing watched, so no shelves unless a test supplies some.
+            $0.videoService.getVideos = { _, _, _, _, _, _, _, _ in TestFixtures.emptyVideos }
+            $0.discoverCache = .inMemory()
+            $0.date.now = Date(timeIntervalSince1970: 1_700_000_000)
             configure(&$0)
         }
         // Archive lookups arrive on their own schedule; their effect on
@@ -66,7 +71,7 @@ struct DiscoverReducerTests {
 
     @Test func aSavedKeyLoadsTrending() async {
         let store = makeStore(key: nil) {
-            $0.youTubeSearchService.trending = { key, _, _ in
+            $0.youTubeSearchService.trending = { key, _, _, _ in
                 #expect(key == "KEY")
                 return YouTubePage(items: [videoA], nextPageToken: "P2")
             }
@@ -85,7 +90,7 @@ struct DiscoverReducerTests {
         let keyStore = YouTubeAPIKeyStore.inMemory("KEY")
         let store = makeStore {
             $0.youTubeAPIKeyStore = keyStore
-            $0.youTubeSearchService.searchVideos = { _, _, _, _ in throw YouTubeError.invalidKey }
+            $0.youTubeSearchService.searchVideos = { _, _, _, _, _ in throw YouTubeError.invalidKey }
         }
 
         store.exhaustivity = .on
@@ -106,7 +111,7 @@ struct DiscoverReducerTests {
 
     @Test func submittingASearchReplacesTheListAndPagingAppends() async {
         let store = makeStore {
-            $0.youTubeSearchService.searchVideos = { _, query, _, pageToken in
+            $0.youTubeSearchService.searchVideos = { _, query, _, _, pageToken in
                 #expect(query == "swift")
                 return pageToken == nil
                     ? YouTubePage(items: [videoA], nextPageToken: "P2")
@@ -129,7 +134,7 @@ struct DiscoverReducerTests {
 
     @Test func clearingTheFieldReturnsToTrending() async {
         let store = makeStore(submittedQuery: "swift") {
-            $0.youTubeSearchService.trending = { _, _, _ in YouTubePage(items: [videoB]) }
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: [videoB]) }
         }
 
         await store.send(.binding(.set(\.query, "")))
@@ -142,13 +147,13 @@ struct DiscoverReducerTests {
         let store = makeStore()
 
         await store.send(.binding(.set(\.searchScope, .channels)))
-        #expect(store.state.showsChannelPrompt)
+        #expect(store.state.showsSearchPrompt)
         #expect(!store.state.isLoading)
     }
 
     @Test func runningOutOfQuotaShowsTheBanner() async {
         let store = makeStore {
-            $0.youTubeSearchService.searchVideos = { _, _, _, _ in throw YouTubeError.quotaExceeded }
+            $0.youTubeSearchService.searchVideos = { _, _, _, _, _ in throw YouTubeError.quotaExceeded }
         }
 
         await store.send(.binding(.set(\.query, "swift")))
@@ -160,7 +165,7 @@ struct DiscoverReducerTests {
 
     @Test func videosAlreadyOnTheServerAreMarked() async {
         let store = makeStore(archived: ["aaa"]) {
-            $0.youTubeSearchService.trending = { _, _, _ in YouTubePage(items: [videoA, videoB]) }
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: [videoA, videoB]) }
         }
 
         await store.send(.view(.viewDidAppear))
@@ -261,6 +266,227 @@ struct DiscoverReducerTests {
         // Popping the page clears it.
         await store.send(.binding(.set(\.browsedChannel, nil)))
         #expect(store.state.channelVideos.isEmpty)
+    }
+
+    // MARK: - Shelves
+
+    private let watchedByChannel = PaginatedResponse<VideoResponse>(
+        data: [TestFixtures.video1, TestFixtures.video2],
+        paginate: TestFixtures.paginatedVideos.paginate
+    )
+
+    @Test func shelvesAreBuiltFromWhatWasWatchedAndCached() async {
+        let saved = LockIsolated<[String]>([])
+        let fresh = YouTubeVideo(videoId: "fresh", title: "Fresh", channelId: "UC_channel1", channelTitle: "One")
+        let similar = YouTubeVideo(videoId: "similar", title: "Similar", channelId: "UC9", channelTitle: "Nine")
+        let store = makeStore(key: nil) {
+            $0.videoService.getVideos = { [watchedByChannel] _, _, _, _, _, _, _, _ in watchedByChannel }
+            $0.discoverCache = DiscoverCache(
+                load: { _ in nil },
+                save: { name, _ in saved.withValue { $0.append(name) } }
+            )
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: []) }
+            $0.youTubeSearchService.channelUploads = { _, channelId, _ in
+                #expect(channelId == "UC_channel1")
+                return YouTubePage(items: [fresh])
+            }
+            $0.youTubeSearchService.searchVideos = { _, query, _, filters, _ in
+                #expect(query == "Test Video 1")
+                #expect(!filters.isActive)
+                return YouTubePage(items: [similar])
+            }
+        }
+
+        await store.send(.view(.setUpKeyTapped))
+        await store.send(.setup(.presented(.delegate(.keySaved("KEY")))))
+        await store.finish()
+        await store.skipReceivedActions()
+
+        #expect(store.state.shelves.map(\.id) == ["channels", "because-video_1"])
+        #expect(store.state.shelves.first?.videos == [fresh])
+        #expect(store.state.shelves.last?.videos == [similar])
+        #expect(saved.value.count == 1)
+    }
+
+    @Test func cachedShelvesAreUsedWithoutTouchingYouTube() async throws {
+        let cached = [DiscoverShelf(id: "channels", title: "Cached", videos: [videoA])]
+        let data = try JSONEncoder().encode(cached)
+        let store = makeStore(key: nil) {
+            $0.discoverCache = DiscoverCache(load: { _ in data }, save: { _, _ in })
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: []) }
+            // No `channelUploads` or `searchVideos`: either would fail the test.
+        }
+
+        await store.send(.view(.setUpKeyTapped))
+        await store.send(.setup(.presented(.delegate(.keySaved("KEY")))))
+        await store.finish()
+        await store.skipReceivedActions()
+
+        #expect(store.state.shelves == cached)
+    }
+
+    @Test func nothingWatchedMeansNoShelvesAndNothingCached() async {
+        let saved = LockIsolated(0)
+        let store = makeStore(key: nil) {
+            $0.discoverCache = DiscoverCache(load: { _ in nil }, save: { _, _ in saved.withValue { $0 += 1 } })
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: []) }
+        }
+
+        await store.send(.view(.setUpKeyTapped))
+        await store.send(.setup(.presented(.delegate(.keySaved("KEY")))))
+        await store.finish()
+        await store.skipReceivedActions()
+
+        #expect(store.state.shelves.isEmpty)
+        #expect(saved.value == 0)
+    }
+
+    @Test func runningOutOfQuotaWhileBuildingShelvesShowsTheBanner() async {
+        let store = makeStore(key: nil) {
+            $0.videoService.getVideos = { [watchedByChannel] _, _, _, _, _, _, _, _ in watchedByChannel }
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: []) }
+            $0.youTubeSearchService.channelUploads = { _, _, _ in throw YouTubeError.quotaExceeded }
+        }
+
+        await store.send(.view(.setUpKeyTapped))
+        await store.send(.setup(.presented(.delegate(.keySaved("KEY")))))
+        await store.finish()
+        await store.skipReceivedActions()
+
+        #expect(store.state.isQuotaExceeded)
+        #expect(store.state.shelves.isEmpty)
+    }
+
+    @Test func aNetworkFailureBuildingShelvesLeavesTrendingAlone() async {
+        let store = makeStore(key: nil) {
+            $0.videoService.getVideos = { _, _, _, _, _, _, _, _ in throw NetworkingError.missingData }
+            $0.youTubeSearchService.trending = { _, _, _, _ in YouTubePage(items: [videoB]) }
+        }
+
+        await store.send(.view(.setUpKeyTapped))
+        await store.send(.setup(.presented(.delegate(.keySaved("KEY")))))
+        await store.finish()
+        await store.skipReceivedActions()
+
+        #expect(store.state.videos == [videoB])
+        #expect(store.state.errorMessage == nil)
+        #expect(!store.state.isQuotaExceeded)
+    }
+
+    @Test func shelvesOnlySitAboveTheOverallChart() {
+        var state = DiscoverReducer.State(serverConfig: config)
+        state.shelves = [DiscoverShelf(id: "x", title: "X", videos: [videoA])]
+        #expect(state.showsShelves)
+
+        state.trendingCategory = .music
+        #expect(!state.showsShelves)
+
+        state.trendingCategory = nil
+        state.submittedQuery = "swift"
+        #expect(!state.showsShelves)
+    }
+
+    // MARK: - Categories and filters
+
+    @Test func choosingACategoryNarrowsTrending() async {
+        let seen = LockIsolated<[String?]>([])
+        let store = makeStore {
+            $0.youTubeSearchService.trending = { _, _, category, _ in
+                seen.withValue { $0.append(category) }
+                return YouTubePage(items: [videoA])
+            }
+        }
+
+        await store.send(.view(.categorySelected(.music)))
+        await store.receive(\.feedResult)
+        #expect(store.state.trendingCategory == .music)
+        #expect(seen.value == ["10"])
+
+        // The same chip again is not a new question.
+        await store.send(.view(.categorySelected(.music)))
+        #expect(seen.value == ["10"])
+
+        await store.send(.view(.categorySelected(nil)))
+        await store.receive(\.feedResult)
+        #expect(seen.value == ["10", nil])
+    }
+
+    @Test func changingAFilterSearchesAgainWithIt() async {
+        let filters = LockIsolated<[YouTubeSearchFilters]>([])
+        let store = makeStore(submittedQuery: "swift") {
+            $0.youTubeSearchService.searchVideos = { _, _, _, applied, _ in
+                filters.withValue { $0.append(applied) }
+                return YouTubePage(items: [videoA])
+            }
+        }
+
+        await store.send(.binding(.set(\.filters.duration, .long)))
+        await store.receive(\.feedResult)
+
+        #expect(filters.value == [YouTubeSearchFilters(duration: .long)])
+        #expect(store.state.filters.isActive)
+    }
+
+    // MARK: - Playlists
+
+    @Test func playlistsAreSearchedAndSubscribedTo() async {
+        let playlist = YouTubePlaylist(playlistId: "PL1", title: "Mix", channelTitle: "Chan", itemCount: 3)
+        let subscribed = LockIsolated<[PlaylistSubscribeItem]>([])
+        let store = makeStore {
+            $0.youTubeSearchService.searchPlaylists = { _, query, _ in
+                #expect(query == "swift")
+                return YouTubePage(items: [playlist])
+            }
+            $0.playlistService.subscribePlaylists = { _, items in subscribed.setValue(items) }
+        }
+
+        // Nothing to show until there's a query.
+        await store.send(.binding(.set(\.searchScope, .playlists)))
+        #expect(store.state.showsSearchPrompt)
+
+        await store.send(.binding(.set(\.query, "swift")))
+        await store.send(.view(.searchSubmitted))
+        await store.receive(\.feedResult)
+        #expect(store.state.playlists == [playlist])
+
+        await store.send(.view(.subscribePlaylistTapped(playlist)))
+        await store.receive(\.subscribePlaylistResult)
+        #expect(store.state.subscribedPlaylistIds == ["PL1"])
+        #expect(subscribed.value.first?.playlistId == "PL1")
+        #expect(subscribed.value.first?.playlistSubscribed == true)
+
+        // Already subscribed: a second tap does nothing.
+        await store.send(.view(.subscribePlaylistTapped(playlist)))
+        #expect(subscribed.value.count == 1)
+    }
+
+    @Test func playlistsAlreadyOnTheServerAreMarkedSubscribed() async {
+        let playlist = YouTubePlaylist(playlistId: "PL1", title: "Mix")
+        let store = makeStore(submittedQuery: "swift") {
+            $0.youTubeSearchService.searchPlaylists = { _, _, _ in YouTubePage(items: [playlist]) }
+            $0.playlistService.getPlaylist = { _, _ in
+                PlaylistResponse(
+                    playlistId: "PL1",
+                    playlistName: "Mix",
+                    playlistType: TestFixtures.playlist1.playlistType,
+                    playlistChannelId: nil,
+                    playlistChannel: nil,
+                    playlistDescription: nil,
+                    playlistThumbnail: nil,
+                    playlistSubscribed: true,
+                    playlistActive: true,
+                    playlistSortOrder: nil,
+                    playlistLastRefresh: nil,
+                    playlistEntries: nil
+                )
+            }
+        }
+
+        await store.send(.binding(.set(\.searchScope, .playlists)))
+        await store.receive(\.feedResult)
+        await store.receive(\.statusesLoaded)
+
+        #expect(store.state.subscribedPlaylistIds == ["PL1"])
     }
 }
 #endif

@@ -17,16 +17,25 @@ public struct YouTubeSearchService: Sendable {
         _ key: String,
         _ query: String,
         _ order: YouTubeSearchOrder,
+        _ filters: YouTubeSearchFilters,
         _ pageToken: String?
     ) async throws -> YouTubePage<YouTubeVideo>
+    public var searchPlaylists: @Sendable (
+        _ key: String,
+        _ query: String,
+        _ pageToken: String?
+    ) async throws -> YouTubePage<YouTubePlaylist>
     public var searchChannels: @Sendable (
         _ key: String,
         _ query: String,
         _ pageToken: String?
     ) async throws -> YouTubePage<YouTubeChannel>
+    /// `categoryId` is one of YouTube's video category IDs (10 is Music), or
+    /// `nil` for the overall chart. A chart a region doesn't have comes back empty.
     public var trending: @Sendable (
         _ key: String,
         _ regionCode: String?,
+        _ categoryId: String?,
         _ pageToken: String?
     ) async throws -> YouTubePage<YouTubeVideo>
     public var channelUploads: @Sendable (
@@ -49,7 +58,13 @@ extension YouTubeSearchService: DependencyKey {
     static let pageSize = 25
 
     public static let liveValue = YouTubeSearchService(
-        searchVideos: { key, query, order, pageToken in
+        searchVideos: { key, query, order, filters, pageToken in
+            // The clock is only needed for an upload window.
+            let earliest: Date? = {
+                guard filters.uploaded != .any else { return nil }
+                @Dependency(\.date.now) var now
+                return filters.uploaded.earliest(relativeTo: now)
+            }()
             let search = try await YouTubeClient.get(
                 SearchListResponse.self,
                 endpoint: "search",
@@ -59,6 +74,11 @@ extension YouTubeSearchService: DependencyKey {
                     URLQueryItem(name: "type", value: "video"),
                     URLQueryItem(name: "q", value: query),
                     URLQueryItem(name: "order", value: order.rawValue),
+                    URLQueryItem(name: "videoDuration", value: filters.duration.apiValue),
+                    URLQueryItem(
+                        name: "publishedAfter",
+                        value: earliest?.formatted(.iso8601)
+                    ),
                     URLQueryItem(name: "maxResults", value: "\(pageSize)"),
                     URLQueryItem(name: "pageToken", value: pageToken)
                 ]
@@ -66,6 +86,23 @@ extension YouTubeSearchService: DependencyKey {
             let ids = search.items.compactMap(\.id.videoId)
             let videos = try await YouTubeClient.videos(ids: ids, key: key)
             return YouTubePage(items: videos, nextPageToken: search.nextPageToken)
+        },
+        searchPlaylists: { key, query, pageToken in
+            let search = try await YouTubeClient.get(
+                SearchListResponse.self,
+                endpoint: "search",
+                key: key,
+                queryItems: [
+                    URLQueryItem(name: "part", value: "snippet"),
+                    URLQueryItem(name: "type", value: "playlist"),
+                    URLQueryItem(name: "q", value: query),
+                    URLQueryItem(name: "maxResults", value: "\(pageSize)"),
+                    URLQueryItem(name: "pageToken", value: pageToken)
+                ]
+            )
+            let ids = search.items.compactMap(\.id.playlistId)
+            let playlists = try await YouTubeClient.playlists(ids: ids, key: key)
+            return YouTubePage(items: playlists, nextPageToken: search.nextPageToken)
         },
         searchChannels: { key, query, pageToken in
             let search = try await YouTubeClient.get(
@@ -84,23 +121,28 @@ extension YouTubeSearchService: DependencyKey {
             let channels = try await YouTubeClient.channels(ids: ids, key: key)
             return YouTubePage(items: channels, nextPageToken: search.nextPageToken)
         },
-        trending: { key, regionCode, pageToken in
-            let response = try await YouTubeClient.get(
-                VideoListResponse.self,
-                endpoint: "videos",
-                key: key,
-                queryItems: [
-                    URLQueryItem(name: "part", value: "snippet,contentDetails,statistics"),
-                    URLQueryItem(name: "chart", value: "mostPopular"),
-                    URLQueryItem(name: "regionCode", value: regionCode),
-                    URLQueryItem(name: "maxResults", value: "\(pageSize)"),
-                    URLQueryItem(name: "pageToken", value: pageToken)
-                ]
-            )
-            return YouTubePage(
-                items: response.items.compactMap(\.video),
-                nextPageToken: response.nextPageToken
-            )
+        trending: { key, regionCode, categoryId, pageToken in
+            do {
+                let response = try await YouTubeClient.get(
+                    VideoListResponse.self,
+                    endpoint: "videos",
+                    key: key,
+                    queryItems: [
+                        URLQueryItem(name: "part", value: "snippet,contentDetails,statistics"),
+                        URLQueryItem(name: "chart", value: "mostPopular"),
+                        URLQueryItem(name: "regionCode", value: regionCode),
+                        URLQueryItem(name: "videoCategoryId", value: categoryId),
+                        URLQueryItem(name: "maxResults", value: "\(pageSize)"),
+                        URLQueryItem(name: "pageToken", value: pageToken)
+                    ]
+                )
+                return YouTubePage(
+                    items: response.items.compactMap(\.video),
+                    nextPageToken: response.nextPageToken
+                )
+            } catch YouTubeError.notFound {
+                return YouTubePage(items: [])
+            }
         },
         channelUploads: { key, channelId, pageToken in
             // A channel's uploads playlist ID is its channel ID with the
@@ -223,6 +265,27 @@ enum YouTubeClient {
         return ids.compactMap { byId[$0] }
     }
 
+    static func playlists(
+        ids: [String],
+        key: String
+    ) async throws -> [YouTubePlaylist] {
+        guard !ids.isEmpty else { return [] }
+        let response = try await get(
+            PlaylistListResponse.self,
+            endpoint: "playlists",
+            key: key,
+            queryItems: [
+                URLQueryItem(name: "part", value: "snippet,contentDetails"),
+                URLQueryItem(name: "id", value: ids.joined(separator: ","))
+            ]
+        )
+        let byId = Dictionary(
+            response.items.map { ($0.id, $0.playlist) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return ids.compactMap { byId[$0] }
+    }
+
     static func channels(
         ids: [String],
         key: String
@@ -252,6 +315,7 @@ struct SearchListResponse: Decodable, Sendable {
         struct Identifier: Decodable, Sendable {
             let videoId: String?
             let channelId: String?
+            let playlistId: String?
         }
 
         let id: Identifier
@@ -316,6 +380,36 @@ struct VideoListResponse: Decodable, Sendable {
 
     let items: [Item]
     let nextPageToken: String?
+}
+
+struct PlaylistListResponse: Decodable, Sendable {
+    struct Item: Decodable, Sendable {
+        struct Snippet: Decodable, Sendable {
+            let title: String
+            let channelTitle: String?
+            let thumbnails: Thumbnails?
+        }
+
+        struct ContentDetails: Decodable, Sendable {
+            let itemCount: Int?
+        }
+
+        let id: String
+        let snippet: Snippet
+        let contentDetails: ContentDetails?
+
+        var playlist: YouTubePlaylist {
+            YouTubePlaylist(
+                playlistId: id,
+                title: snippet.title,
+                channelTitle: snippet.channelTitle ?? "",
+                thumbnailURL: snippet.thumbnails?.best,
+                itemCount: contentDetails?.itemCount
+            )
+        }
+    }
+
+    let items: [Item]
 }
 
 struct ChannelListResponse: Decodable, Sendable {
