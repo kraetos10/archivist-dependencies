@@ -45,73 +45,84 @@ private struct ServerSetupContentView: View {
     @Bindable var store: StoreOf<ServerSetupReducer>
 
     public var body: some View {
-        VStack(spacing: 32) {
-            LottieView(animation: LottieAnimationFile.server.animation)
-                .playing(loopMode: .playOnce)
-                .frame(width: 200, height: 200)
-                .accessibilityHidden(true)
+        // Scrolls, with the button pinned below it, like `LoginScreen`: in the
+        // iPad's form sheet this screen is taller than the sheet, and the
+        // button used to sit below the fold with no way to reach it.
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 32) {
+                    LottieView(animation: LottieAnimationFile.server.animation)
+                        .playing(loopMode: .playOnce)
+                        .frame(width: 200, height: 200)
+                        .accessibilityHidden(true)
 
-            VStack(spacing: 16) {
-                Text(String.localised("login.title", table: .login))
-                    .font(.largeTitle)
-                    .bold()
-                    .foregroundStyle(Color.Text.primary)
+                    VStack(spacing: 16) {
+                        Text(String.localised("login.title", table: .login))
+                            .font(.largeTitle)
+                            .bold()
+                            .foregroundStyle(Color.Text.primary)
 
-                Text(String.localised("login.subtitle", table: .login))
-                    .font(.headline)
-                    .foregroundStyle(Color.Brand.secondary)
+                        Text(String.localised("login.subtitle", table: .login))
+                            .font(.headline)
+                            .foregroundStyle(Color.Brand.secondary)
+                    }
+
+                    VStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String.localised("login.serverUrl", table: .login))
+                                .font(.subheadline)
+                                .foregroundStyle(Color.Text.primary)
+                            TextField(String.localised(
+                                "login.serverUrl",
+                                table: .login
+                            ), text: $store.registrationDetails.serverAddress)
+                                .textFieldStyle(.roundedBorder)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.URL)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String.localised("login.port", table: .login))
+                                .font(.subheadline)
+                                .foregroundStyle(Color.Text.primary)
+                            TextField(String.localised("login.port", table: .login), text: $store.registrationDetails.port)
+                                .textFieldStyle(.roundedBorder)
+                                .keyboardType(.numberPad)
+                        }
+
+                        Toggle(String.localised("login.useHttp", table: .login), isOn: $store.registrationDetails.useHTTP)
+                            .foregroundStyle(Color.Text.primary)
+                            .tint(Color.Accent.dark)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Toggle(
+                                String.localised("childMode.toggle", table: .login),
+                                isOn: $store.childModeToggle
+                            )
+                            .foregroundStyle(Color.Text.primary)
+                            .tint(Color.Accent.dark)
+
+                            Text(String.localised("childMode.toggle.subtitle", table: .login))
+                                .font(.caption)
+                                .foregroundStyle(Color.Brand.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 32)
+                .padding(.bottom, 16)
             }
-
-            VStack(spacing: 24) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String.localised("login.serverUrl", table: .login))
-                        .font(.subheadline)
-                        .foregroundStyle(Color.Text.primary)
-                    TextField(String.localised(
-                        "login.serverUrl",
-                        table: .login
-                    ), text: $store.registrationDetails.serverAddress)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String.localised("login.port", table: .login))
-                        .font(.subheadline)
-                        .foregroundStyle(Color.Text.primary)
-                    TextField(String.localised("login.port", table: .login), text: $store.registrationDetails.port)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.numberPad)
-                }
-
-                Toggle(String.localised("login.useHttp", table: .login), isOn: $store.registrationDetails.useHTTP)
-                    .foregroundStyle(Color.Text.primary)
-                    .tint(Color.Accent.dark)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle(
-                        String.localised("childMode.toggle", table: .login),
-                        isOn: $store.childModeToggle
-                    )
-                    .foregroundStyle(Color.Text.primary)
-                    .tint(Color.Accent.dark)
-
-                    Text(String.localised("childMode.toggle.subtitle", table: .login))
-                        .font(.caption)
-                        .foregroundStyle(Color.Brand.secondary)
-                }
-            }
-
-            Spacer()
+            .scrollDismissesKeyboard(.interactively)
 
             LoadingButton(title: String.localised("generic.next", table: .generic), isLoading: store.isLoading) {
                 send(.nextButtonTapped)
             }
             .disabled(store.registrationDetails.serverAddress.isEmpty || store.isLoading)
+            .padding(.horizontal, 32)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
-        .padding(.all, 32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Brand.primary)
         .navigationBarTitleDisplayMode(.inline)
