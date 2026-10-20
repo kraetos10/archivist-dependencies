@@ -131,22 +131,50 @@ public struct VideoDetailReducer {
         /// `handleVideoPlaybackDidEnd` resolves in, but only as far as is
         /// known ahead of time: a looping playlist and the server's similar
         /// lookup are only settled at the end, so they give no hint.
-        var predictedNextTitle: String? {
+        var predictedNextItem: UpNextItem? {
             @Shared(.autoPlayEnabled) var autoPlayEnabled
             guard autoPlayEnabled else { return nil }
             if let queued = playNextItems.first {
-                return queued.title
+                return upNextItem(for: queued)
             }
             if shouldAutoPlayNextVideo, let next = nextVideos.first {
-                return next.title
+                return upNextItem(for: next)
             }
             guard loopVideoIds.isEmpty else { return nil }
-            return similarVideos.first?.title
+            return similarVideos.first.map { upNextItem(for: $0) }
+        }
+
+        var predictedNextTitle: String? {
+            predictedNextItem?.title
         }
 
         /// The hint mirrored into the player: only while it's up.
+        var upNextHint: UpNextItem? {
+            isPlaying ? predictedNextItem : nil
+        }
+
         var upNextHintTitle: String? {
-            isPlaying ? predictedNextTitle : nil
+            upNextHint?.title
+        }
+
+        private func upNextItem(for queued: PlayNextItem) -> UpNextItem {
+            UpNextItem(
+                id: queued.videoId,
+                title: queued.title,
+                channelName: queued.channelName,
+                thumbnailURL: queued.thumbUrl.flatMap { serverConfig.fullURL(for: $0) },
+                duration: queued.duration
+            )
+        }
+
+        private func upNextItem(for candidate: VideoResponse) -> UpNextItem {
+            UpNextItem(
+                id: candidate.videoId,
+                title: candidate.title,
+                channelName: candidate.channelName,
+                thumbnailURL: candidate.vidThumbUrl.flatMap { serverConfig.fullURL(for: $0) },
+                duration: candidate.durationStr
+            )
         }
 
         /// The tvOS player's Up Next ribbon: the Play Next queue, the rest
@@ -158,23 +186,11 @@ public struct VideoDetailReducer {
             var seen: Set<String> = [video.videoId]
             var items: [UpNextItem] = []
             for queued in playNextItems where seen.insert(queued.videoId).inserted {
-                items.append(UpNextItem(
-                    id: queued.videoId,
-                    title: queued.title,
-                    channelName: queued.channelName,
-                    thumbnailURL: queued.thumbUrl.flatMap { serverConfig.fullURL(for: $0) },
-                    duration: queued.duration
-                ))
+                items.append(upNextItem(for: queued))
             }
             for candidate in nextVideos + similarVideos
             where seen.insert(candidate.videoId).inserted {
-                items.append(UpNextItem(
-                    id: candidate.videoId,
-                    title: candidate.title,
-                    channelName: candidate.channelName,
-                    thumbnailURL: candidate.vidThumbUrl.flatMap { serverConfig.fullURL(for: $0) },
-                    duration: candidate.durationStr
-                ))
+                items.append(upNextItem(for: candidate))
             }
             return Array(items.prefix(Self.upNextRibbonLimit))
         }
@@ -404,14 +420,14 @@ public struct VideoDetailReducer {
                 .cancellable(id: CancelID.countdownMirror, cancelInFlight: true)
             }
         }
-        .onChange(of: \.upNextHintTitle) { _, _ in
+        .onChange(of: \.upNextHint) { _, _ in
             // Only the tvOS player draws the hint. Keyed on `isPlaying` too,
             // so pressing Play publishes a guess that was settled before.
             Reduce { state, _ in
                 #if os(tvOS)
-                let title = state.upNextHintTitle
+                let hint = state.upNextHint
                 return .run { [playerClient] _ in
-                    await playerClient.setUpNextTitle(title)
+                    await playerClient.setUpNextHint(hint)
                 }
                 .cancellable(id: CancelID.upNextMirror, cancelInFlight: true)
                 #else

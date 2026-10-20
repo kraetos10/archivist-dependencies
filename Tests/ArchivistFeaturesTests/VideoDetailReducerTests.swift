@@ -498,6 +498,21 @@ struct VideoDetailReducerTests {
         await store.send(.view(.upNextRibbonItemSelected(videoId: "gone")))
     }
 
+    /// The hint card needs more than a title: the video to start when it's
+    /// selected, and the art to show.
+    @Test func theHintCarriesTheVideoAndItsArtwork() {
+        var state = VideoDetailReducer.State(serverConfig: config, video: TestFixtures.video1)
+        state.nextVideos = [TestFixtures.video2]
+        state.isPlaying = true
+
+        let hint = state.upNextHint
+        #expect(hint?.id == TestFixtures.video2.videoId)
+        #expect(hint?.title == TestFixtures.video2.title)
+        #expect(hint?.channelName == TestFixtures.video2.channelName)
+        #expect(hint?.thumbnailURL
+            == TestFixtures.video2.vidThumbUrl.flatMap { config.fullURL(for: $0) })
+    }
+
     /// A looping playlist is only settled once the video ends, so there's
     /// nothing honest to hint — not the similar videos it won't play.
     @Test func aLoopingPlaylistGivesNoHint() {

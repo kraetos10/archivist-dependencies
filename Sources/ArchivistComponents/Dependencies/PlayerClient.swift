@@ -126,8 +126,8 @@ public struct PlayerClient: Sendable {
     /// Mirror of the VideoDetail auto-play countdown for the fullscreen VC.
     public var setAutoPlayCountdown: @MainActor @Sendable (_ info: AutoPlayCountdownInfo?) -> Void
     public var setCanGoPrevious: @MainActor @Sendable (_ canGoPrevious: Bool) -> Void
-    /// Mirror of the likely next video's title for the tvOS player's hint.
-    public var setUpNextTitle: @MainActor @Sendable (_ title: String?) -> Void
+    /// Mirror of the likely next video for the tvOS player's hint card.
+    public var setUpNextHint: @MainActor @Sendable (_ item: UpNextItem?) -> Void
     /// Mirror of the Up Next ribbon for the tvOS player.
     public var setUpNextItems: @MainActor @Sendable (_ items: [UpNextItem]) -> Void
 
@@ -170,7 +170,7 @@ public struct PlayerClient: Sendable {
         setActivePlayerSurfaceRole: @escaping @MainActor @Sendable (_ role: PlayerSurfaceRole) -> Void,
         setAutoPlayCountdown: @escaping @MainActor @Sendable (_ info: AutoPlayCountdownInfo?) -> Void,
         setCanGoPrevious: @escaping @MainActor @Sendable (_ canGoPrevious: Bool) -> Void,
-        setUpNextTitle: @escaping @MainActor @Sendable (_ title: String?) -> Void,
+        setUpNextHint: @escaping @MainActor @Sendable (_ item: UpNextItem?) -> Void,
         setUpNextItems: @escaping @MainActor @Sendable (_ items: [UpNextItem]) -> Void,
         playbackSpeed: @escaping @MainActor @Sendable () -> Float,
         setPlaybackSpeed: @escaping @MainActor @Sendable (_ speed: Float) -> Void,
@@ -201,7 +201,7 @@ public struct PlayerClient: Sendable {
         self.setActivePlayerSurfaceRole = setActivePlayerSurfaceRole
         self.setAutoPlayCountdown = setAutoPlayCountdown
         self.setCanGoPrevious = setCanGoPrevious
-        self.setUpNextTitle = setUpNextTitle
+        self.setUpNextHint = setUpNextHint
         self.setUpNextItems = setUpNextItems
         self.playbackSpeed = playbackSpeed
         self.setPlaybackSpeed = setPlaybackSpeed
@@ -296,7 +296,7 @@ extension PlayerClient: DependencyKey {
             setActivePlayerSurfaceRole: { PlayerManager.shared.activePlayerSurfaceRole = $0 },
             setAutoPlayCountdown: { PlayerManager.shared.autoPlayCountdown = $0 },
             setCanGoPrevious: { PlayerManager.shared.canGoPrevious = $0 },
-            setUpNextTitle: { PlayerManager.shared.upNextTitle = $0 },
+            setUpNextHint: { PlayerManager.shared.upNextHint = $0 },
             setUpNextItems: { PlayerManager.shared.upNextItems = $0 },
             playbackSpeed: { PlayerManager.shared.playbackSpeed },
             setPlaybackSpeed: { PlayerManager.shared.setPlaybackSpeed($0) },
@@ -358,7 +358,7 @@ extension PlayerClient: DependencyKey {
             setActivePlayerSurfaceRole: { _ in unimplementedCall("setActivePlayerSurfaceRole", placeholder: ()) },
             setAutoPlayCountdown: { _ in unimplementedCall("setAutoPlayCountdown", placeholder: ()) },
             setCanGoPrevious: { _ in unimplementedCall("setCanGoPrevious", placeholder: ()) },
-            setUpNextTitle: { _ in unimplementedCall("setUpNextTitle", placeholder: ()) },
+            setUpNextHint: { _ in unimplementedCall("setUpNextHint", placeholder: ()) },
             setUpNextItems: { _ in unimplementedCall("setUpNextItems", placeholder: ()) },
             playbackSpeed: { unimplementedCall("playbackSpeed", placeholder: 1) },
             setPlaybackSpeed: { _ in unimplementedCall("setPlaybackSpeed", placeholder: ()) },
@@ -398,7 +398,7 @@ extension PlayerClient: DependencyKey {
             setActivePlayerSurfaceRole: { _ in },
             setAutoPlayCountdown: { _ in },
             setCanGoPrevious: { _ in },
-            setUpNextTitle: { _ in },
+            setUpNextHint: { _ in },
             setUpNextItems: { _ in },
             playbackSpeed: { 1 },
             setPlaybackSpeed: { _ in },

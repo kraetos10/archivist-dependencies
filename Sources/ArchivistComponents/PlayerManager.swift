@@ -105,7 +105,9 @@ public final class PlayerManager: NSObject {
 
     public private(set) var backend: (any PlayerBackend)?
 
-    public private(set) var isPlaying = false
+    public private(set) var isPlaying = false {
+        didSet { updateIdleTimer() }
+    }
     public private(set) var isBuffering = true
     public private(set) var currentTime: Double = 0
     public private(set) var duration: Double = 0
@@ -243,16 +245,17 @@ public final class PlayerManager: NSObject {
     /// reducer's store.
     public var autoPlayCountdown: AutoPlayCountdownInfo?
 
-    /// Title of the video auto-advance will most likely play next, mirrored
-    /// from the `VideoDetail` reducer for the tvOS player's end-of-video
-    /// hint. A guess made before the video ends; the countdown has the
-    /// final say.
-    public var upNextTitle: String?
+    /// The video auto-advance will most likely play next, mirrored from the
+    /// `VideoDetail` reducer for the tvOS player's end-of-video hint card.
+    /// A guess made before the video ends; the countdown has the final say.
+    public var upNextHint: UpNextItem?
 
     /// What could play after this video — the Play Next queue, the rest of
     /// the list it was opened from, then similar videos — for the tvOS
     /// player's Up Next ribbon. Empty while nothing is playing.
     public var upNextItems: [UpNextItem] = []
+    /// Apple TV's pause-on-background observer (see `observeBackgrounding`).
+    @ObservationIgnored var backgroundPauseObserver: NSObjectProtocol?
 
     /// Watches the network path so the Wi-Fi-only prebuffer gate can read
     /// the current interface without a blocking reachability lookup. Only
@@ -285,6 +288,8 @@ public final class PlayerManager: NSObject {
         }
         #if !os(tvOS)
         setupBackgroundPlayback()
+        #else
+        observeBackgrounding()
         #endif
     }
 

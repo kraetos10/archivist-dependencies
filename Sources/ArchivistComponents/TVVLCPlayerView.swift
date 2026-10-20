@@ -78,7 +78,7 @@ public struct TVVLCPlayerView: View {
         skipFeedbackView
 
         upNextHint
-            .animation(.easeInOut(duration: 0.3), value: model.upNextHintTitle)
+            .animation(.easeInOut(duration: 0.3), value: model.upNextHint)
 
         // Press-event capture: `.onMoveCommand` only fires once per
         // press cycle so it can't distinguish a quick tap from a
@@ -86,8 +86,9 @@ public struct TVVLCPlayerView: View {
         // sub-300ms left/right press as a discrete skip and a longer
         // hold as rewind / fast-forward. The same view carries the
         // touch-surface pan used for scrubbing. It steps aside while the
-        // Up Next ribbon is browsed, so focus can move between its cards.
-        if !model.isBrowsingUpNext {
+        // Up Next ribbon is browsed or the hint card is focused, so focus
+        // can reach them.
+        if !model.isBrowsingUpNext, !model.isFocusingHint {
             pressCapture
         }
     }
@@ -299,31 +300,25 @@ public struct TVVLCPlayerView: View {
         }
     }
 
-    /// "Up next" in the last stretch of the video, so the countdown that
-    /// follows isn't a surprise. Sits above the transport, shown whether
-    /// or not the controls are.
+    /// The next video, as a card with its thumbnail, in the last stretch of
+    /// the video so the countdown that follows isn't a surprise. Sits above
+    /// the transport, shown whether or not the controls are. Down focuses
+    /// it and Select plays it now.
     @ViewBuilder
     private var upNextHint: some View {
-        if let title = model.upNextHintTitle {
-            HStack(spacing: 12) {
-                Text(String.localised("video.upNext", table: .videos))
-                    .font(.callout.weight(.bold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.white.opacity(0.7))
-                Text(title)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 14)
-            .background(.ultraThinMaterial, in: Capsule())
-            .frame(maxWidth: 900, alignment: .trailing)
+        if let item = model.upNextHint {
+            TVUpNextHintCard(
+                item: item,
+                isFocusing: model.isFocusingHint,
+                onSelect: { model.selectHint(item) },
+                onExit: { model.exitHint() }
+            )
+            .onPlayPauseCommand { playerManager.togglePlayPause() }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.horizontal, 80)
             .padding(.bottom, 180)
             .transition(.move(edge: .trailing).combined(with: .opacity))
-            .accessibilityElement(children: .combine)
+            .onDisappear { model.exitHint() }
         }
     }
 }

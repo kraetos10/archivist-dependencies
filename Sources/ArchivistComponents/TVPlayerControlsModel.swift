@@ -55,6 +55,9 @@ final class TVPlayerControlsModel {
     /// Focus is in the Up Next ribbon. The press capture steps aside
     /// meanwhile, so the focus engine can move between its cards.
     private(set) var isBrowsingUpNext = false
+    /// Focus is on the Up Next hint card. Like the ribbon, this steps the
+    /// press capture aside so the focus engine can reach the card.
+    private(set) var isFocusingHint = false
 
     /// The speed picker is open. The controls stay up meanwhile, and the
     /// auto-hide restarts once it closes.
@@ -116,17 +119,17 @@ final class TVPlayerControlsModel {
         controlsVisible && !upNextItems.isEmpty
     }
 
-    /// The next video's title in the last stretch of this one. Not while
-    /// the ribbon is up, which already shows it.
-    var upNextHintTitle: String? {
-        guard !showsUpNextRibbon, let title = playerManager.upNextTitle else { return nil }
+    /// The next video in the last stretch of this one. Not while the ribbon
+    /// is up, which already shows it.
+    var upNextHint: UpNextItem? {
+        guard !showsUpNextRibbon, let item = playerManager.upNextHint else { return nil }
         let total = playerManager.effectiveDuration
         let remaining = total - playerManager.currentTime
         guard total > Self.upNextHintLead * 2,
               remaining > 0,
               remaining <= Self.upNextHintLead
         else { return nil }
-        return title
+        return item
     }
 
     var statusIconName: String {
@@ -172,7 +175,9 @@ final class TVPlayerControlsModel {
             flashSkip(.forward)
             poke()
         case .downArrow:
-            if upNextItems.isEmpty {
+            if upNextHint != nil {
+                focusHint()
+            } else if upNextItems.isEmpty {
                 showControls()
                 isSpeedPickerPresented = true
             } else {
@@ -356,6 +361,24 @@ final class TVPlayerControlsModel {
 
     func selectUpNext(_ item: UpNextItem) {
         exitUpNext()
+        playerManager.emit(.upNextItemSelected(videoId: item.id))
+    }
+
+    // MARK: Up Next hint
+
+    private func focusHint() {
+        guard !isScrubbing, seekMode == nil else { return }
+        isFocusingHint = true
+    }
+
+    /// Back to the video: Up, Menu, or the hint going away.
+    func exitHint() {
+        isFocusingHint = false
+    }
+
+    /// Play the hinted video now rather than waiting for the countdown.
+    func selectHint(_ item: UpNextItem) {
+        exitHint()
         playerManager.emit(.upNextItemSelected(videoId: item.id))
     }
 
