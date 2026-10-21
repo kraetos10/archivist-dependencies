@@ -5,18 +5,45 @@ import Foundation
 
 /// A row of videos shown above Discover's trending grid.
 public struct DiscoverShelf: Equatable, Sendable, Identifiable, Codable {
+    /// A watched video a "because you watched" row can be based on.
+    public struct Choice: Equatable, Sendable, Identifiable, Codable {
+        public var videoId: String
+        public var title: String
+
+        public var id: String { videoId }
+
+        public init(
+            videoId: String,
+            title: String
+        ) {
+            self.videoId = videoId
+            self.title = title
+        }
+    }
+
+    /// Stays the same when the row is switched to another video, so the row
+    /// changes in place instead of being replaced.
     public var id: String
     public var title: String
     public var videos: [YouTubeVideo]
+    /// The watched video this row is based on, for "because you watched".
+    public var seedId: String?
+    /// Other recently watched videos the row could be based on instead.
+    /// Empty for rows that aren't "because you watched".
+    public var choices: [Choice]
 
     public init(
         id: String,
         title: String,
-        videos: [YouTubeVideo]
+        videos: [YouTubeVideo],
+        seedId: String? = nil,
+        choices: [Choice] = []
     ) {
         self.id = id
         self.title = title
         self.videos = videos
+        self.seedId = seedId
+        self.choices = choices
     }
 }
 
@@ -75,10 +102,13 @@ struct DiscoverTaste: Equatable, Sendable {
 
     static let channelLimit = 5
     static let seedLimit = 2
+    static let choiceLimit = 12
 
     var channels: [Channel]
     var seeds: [Seed]
     var watchedIds: Set<String>
+    /// Recent watched videos, offered when switching a row to another one.
+    var choices: [DiscoverShelf.Choice]
 
     /// `watched` is newest first, as the server returns it.
     init(watched: [VideoResponse]) {
@@ -113,6 +143,9 @@ struct DiscoverTaste: Equatable, Sendable {
             .prefix(Self.seedLimit)
             .map { Seed(videoId: $0.videoId, title: $0.title) }
         watchedIds = Set(watched.map(\.videoId))
+        choices = watched
+            .prefix(Self.choiceLimit)
+            .map { DiscoverShelf.Choice(videoId: $0.videoId, title: $0.title) }
     }
 
     var isEmpty: Bool { channels.isEmpty }
@@ -170,14 +203,17 @@ enum DiscoverShelves {
     static func becauseShelf(
         seed: DiscoverTaste.Seed,
         results: [YouTubeVideo],
-        excluding watched: Set<String>
+        excluding watched: Set<String>,
+        choices: [DiscoverShelf.Choice] = []
     ) -> DiscoverShelf? {
         let videos = results.filter { !watched.contains($0.videoId) && $0.videoId != seed.videoId }
         guard !videos.isEmpty else { return nil }
         return DiscoverShelf(
             id: "because-\(seed.videoId)",
             title: String.localised("discover.shelf.because \(seed.title)", table: .discover),
-            videos: videos
+            videos: videos,
+            seedId: seed.videoId,
+            choices: choices
         )
     }
 }

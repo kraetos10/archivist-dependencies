@@ -3,26 +3,27 @@ import ArchivistComponents
 import ArchivistNetworking
 import SwiftUI
 
-/// A titled row of videos that scrolls sideways.
+/// A titled row of videos that scrolls sideways. A "because you watched"
+/// row's title is a menu for basing it on a different video.
 struct DiscoverShelfView: View {
     let shelf: DiscoverShelf
+    /// Other videos the row can be switched to; empty for a plain row.
+    let choices: [DiscoverShelf.Choice]
+    let isLoading: Bool
     let status: (YouTubeVideo) -> DiscoverReducer.State.ItemStatus?
     let isPending: (YouTubeVideo) -> Bool
     let onAdd: (YouTubeVideo, _ startNow: Bool) -> Void
     let onChannelTapped: (YouTubeVideo) -> Void
-
-    private static let cardWidth: CGFloat = 270
+    let onChoose: (DiscoverShelf.Choice) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(shelf.title)
-                .font(.title3.bold())
-                .foregroundStyle(Color.Text.primary)
-                .lineLimit(2)
-                .accessibilityAddTraits(.isHeader)
-
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 16) {
+        DiscoverRow(
+            resetKey: shelf.seedId ?? shelf.id,
+            header: { header },
+            content: { cardWidth in
+                if isLoading {
+                    DiscoverCardSkeletons(cardWidth: cardWidth)
+                } else {
                     ForEach(shelf.videos) { video in
                         DiscoverVideoCard(
                             video: video,
@@ -32,16 +33,57 @@ struct DiscoverShelfView: View {
                             onAdd: { onAdd(video, $0) },
                             onChannelTapped: { onChannelTapped(video) }
                         )
-                        .frame(width: Self.cardWidth)
+                        .frame(width: cardWidth)
+                        .transition(.opacity)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
-            // Bleeds to the screen's edges, so the row doesn't look cut off
-            // at the page's own padding.
-            .padding(.horizontal, -16)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
+        )
+        .animation(.smooth, value: shelf)
+        .animation(.smooth, value: isLoading)
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if choices.isEmpty {
+            title
+        } else {
+            Menu {
+                Section(String.localised("discover.shelf.choose", table: .discover)) {
+                    ForEach(choices) { choice in
+                        Button {
+                            onChoose(choice)
+                        } label: {
+                            if choice.videoId == shelf.seedId {
+                                Label(choice.title, systemImage: "checkmark")
+                            } else {
+                                Text(choice.title)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    title
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.Accent.dark)
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String.localised("discover.shelf.choose.hint", table: .discover))
         }
+    }
+
+    private var title: some View {
+        Text(shelf.title)
+            .font(.headline)
+            .foregroundStyle(Color.Text.primary)
+            .multilineTextAlignment(.leading)
+            .lineLimit(2)
+            .accessibilityAddTraits(.isHeader)
+            .contentTransition(.opacity)
     }
 }
 #endif

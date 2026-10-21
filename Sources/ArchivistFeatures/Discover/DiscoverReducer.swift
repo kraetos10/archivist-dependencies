@@ -61,6 +61,8 @@ public struct DiscoverReducer {
         // Shelves above Trending, from what the archive says was watched
         var shelves: [DiscoverShelf] = []
         var isLoadingShelves = false
+        /// Rows being switched to another watched video.
+        var loadingShelfIds: Set<String> = []
 
         // Channel page
         var browsedChannel: YouTubeChannel?
@@ -98,10 +100,32 @@ public struct DiscoverReducer {
             searchScope != .videos && submittedQuery.isEmpty
         }
 
-        /// The shelves sit above the overall chart only: a chosen category
-        /// is a narrower question than they answer.
+        /// The shelves stay put when a category is chosen: only Trending
+        /// beneath them changes.
         var showsShelves: Bool {
-            isShowingTrending && trendingCategory == nil && !shelves.isEmpty
+            isShowingTrending && !shelves.isEmpty
+        }
+
+        /// Placeholder rows while the shelves are being built.
+        var showsShelfSkeleton: Bool {
+            isShowingTrending && shelves.isEmpty && (isLoadingShelves || !hasLoadedKey)
+        }
+
+        var showsTrendingSkeleton: Bool {
+            isLoading || (!hasLoadedFeed && errorMessage == nil && !isQuotaExceeded)
+        }
+
+        /// A chosen category keeps its row even when empty or failed, so the
+        /// chips are still there to pick another.
+        var showsTrendingRow: Bool {
+            trendingCategory != nil || showsTrendingSkeleton || !videos.isEmpty || showsNoResults
+        }
+
+        /// The watched videos a row can be switched to: not the ones other
+        /// rows are already based on.
+        func choices(for shelf: DiscoverShelf) -> [DiscoverShelf.Choice] {
+            let usedElsewhere = Set(shelves.filter { $0.id != shelf.id }.compactMap(\.seedId))
+            return shelf.choices.filter { !usedElsewhere.contains($0.videoId) }
         }
 
         var emptyScopeIsEmpty: Bool {
@@ -161,6 +185,7 @@ public struct DiscoverReducer {
         case channelFeedResult(append: Bool, Result<YouTubePage<YouTubeVideo>, Error>)
         case channelDetailsLoaded(Result<YouTubeChannel, Error>)
         case shelvesLoaded(Result<[DiscoverShelf], Error>)
+        case becauseShelfLoaded(shelfId: String, Result<DiscoverShelf?, Error>)
         case statusesLoaded(
             archived: Set<String>,
             subscribed: Set<String>,
@@ -181,6 +206,7 @@ public struct DiscoverReducer {
             case subscribeTapped(YouTubeChannel)
             case subscribePlaylistTapped(YouTubePlaylist)
             case categorySelected(DiscoverCategory?)
+            case becauseVideoSelected(shelfId: String, DiscoverShelf.Choice)
             case channelTapped(YouTubeChannel)
             case videoChannelTapped(YouTubeVideo)
             case setUpKeyTapped
@@ -194,10 +220,11 @@ public struct DiscoverReducer {
         }
     }
 
-    enum CancelID {
+    enum CancelID: Hashable {
         case feed
         case channelFeed
         case shelves
+        case because(String)
     }
 
     @Dependency(\.youTubeSearchService) var youTubeSearchService

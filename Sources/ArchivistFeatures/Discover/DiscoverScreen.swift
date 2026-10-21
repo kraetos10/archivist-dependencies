@@ -56,43 +56,45 @@ public struct DiscoverScreen: View {
 
     private var feed: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                Picker(
-                    String.localised("discover.title", table: .discover),
-                    selection: $store.searchScope
-                ) {
-                    Text(String.localised("discover.scope.videos", table: .discover))
-                        .tag(DiscoverReducer.State.SearchScope.videos)
-                    Text(String.localised("discover.scope.channels", table: .discover))
-                        .tag(DiscoverReducer.State.SearchScope.channels)
-                    Text(String.localised("discover.scope.playlists", table: .discover))
-                        .tag(DiscoverReducer.State.SearchScope.playlists)
-                }
-                .pickerStyle(.segmented)
+            LazyVStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Picker(
+                        String.localised("discover.title", table: .discover),
+                        selection: $store.searchScope
+                    ) {
+                        Text(String.localised("discover.scope.videos", table: .discover))
+                            .tag(DiscoverReducer.State.SearchScope.videos)
+                        Text(String.localised("discover.scope.channels", table: .discover))
+                            .tag(DiscoverReducer.State.SearchScope.channels)
+                        Text(String.localised("discover.scope.playlists", table: .discover))
+                            .tag(DiscoverReducer.State.SearchScope.playlists)
+                    }
+                    .pickerStyle(.segmented)
 
-                if store.isQuotaExceeded {
-                    DiscoverNotice(
-                        icon: "hourglass",
-                        title: String.localised("discover.quota.title", table: .discover),
-                        message: String.localised("discover.quota.message", table: .discover),
-                        retryTitle: nil,
-                        onRetry: {}
-                    )
-                }
+                    if store.isQuotaExceeded {
+                        DiscoverNotice(
+                            icon: "hourglass",
+                            title: String.localised("discover.quota.title", table: .discover),
+                            message: String.localised("discover.quota.message", table: .discover),
+                            retryTitle: nil,
+                            onRetry: {}
+                        )
+                    }
 
-                if let message = store.errorMessage {
-                    DiscoverNotice(
-                        icon: "wifi.exclamationmark",
-                        title: String.localised("discover.error.title", table: .discover),
-                        message: message,
-                        retryTitle: String.localised("discover.error.retry", table: .discover),
-                        onRetry: { send(.retryTapped) }
-                    )
+                    if let message = store.errorMessage {
+                        DiscoverNotice(
+                            icon: "wifi.exclamationmark",
+                            title: String.localised("discover.error.title", table: .discover),
+                            message: message,
+                            retryTitle: String.localised("discover.error.retry", table: .discover),
+                            onRetry: { send(.retryTapped) }
+                        )
+                    }
                 }
+                .padding(.horizontal, 16)
 
                 results
             }
-            .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -102,22 +104,43 @@ public struct DiscoverScreen: View {
     private var results: some View {
         if store.showsSearchPrompt {
             searchPrompt
+                .padding(.horizontal, 16)
+        } else if store.isShowingTrending {
+            browse
         } else if store.isLoading {
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding(.top, 60)
+            loadingResults
+                .padding(.horizontal, 16)
         } else if store.showsNoResults {
             EmptyStateView(
                 icon: "magnifyingglass",
                 title: String.localised("discover.empty.noResults.title", table: .discover),
                 description: String.localised("discover.empty.noResults.description", table: .discover)
             )
+            .padding(.horizontal, 16)
         } else {
-            switch store.searchScope {
-            case .videos: videoResults
-            case .channels: channelResults
-            case .playlists: playlistResults
+            Group {
+                switch store.searchScope {
+                case .videos: searchVideoResults
+                case .channels: channelResults
+                case .playlists: playlistResults
+                }
             }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    @ViewBuilder
+    private var loadingResults: some View {
+        if store.searchScope == .videos {
+            LazyVGrid(columns: videoColumns, spacing: 20) {
+                ForEach(0..<6, id: \.self) { _ in
+                    DiscoverCardSkeleton()
+                }
+            }
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.top, 60)
         }
     }
 
@@ -138,37 +161,102 @@ public struct DiscoverScreen: View {
         }
     }
 
-    @ViewBuilder
-    private var videoResults: some View {
-        if store.showsShelves {
+    // MARK: - Browse
+
+    /// Nothing searched for: shelves from the archive, then Trending. A
+    /// category only changes the Trending row; the rows above stay.
+    private var browse: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if store.showsShelfSkeleton {
+                DiscoverRowSkeleton()
+                DiscoverRowSkeleton()
+            }
             ForEach(store.shelves) { shelf in
                 DiscoverShelfView(
                     shelf: shelf,
+                    choices: store.state.choices(for: shelf),
+                    isLoading: store.loadingShelfIds.contains(shelf.id),
                     status: { store.itemStatus[$0.videoId] },
                     isPending: { store.pendingIds.contains($0.videoId) },
                     onAdd: { send(.addToQueueTapped($0, startNow: $1)) },
-                    onChannelTapped: { send(.videoChannelTapped($0)) }
+                    onChannelTapped: { send(.videoChannelTapped($0)) },
+                    onChoose: { send(.becauseVideoSelected(shelfId: shelf.id, $0)) }
                 )
+                .transition(.opacity)
+            }
+            if store.showsTrendingRow {
+                trendingRow
             }
         }
+        .animation(.smooth, value: store.showsShelfSkeleton)
+        .animation(.smooth, value: store.shelves.map(\.id))
+    }
 
-        if store.isShowingTrending {
-            Text(String.localised("discover.trending", table: .discover))
-                .font(.title3.bold())
+    private var trendingRow: some View {
+        DiscoverRow(
+            resetKey: store.trendingCategory?.rawValue ?? "",
+            header: {
+                Label(
+                    String.localised("discover.trending", table: .discover),
+                    systemImage: "flame"
+                )
+                .font(.headline)
                 .foregroundStyle(Color.Text.primary)
                 .accessibilityAddTraits(.isHeader)
-
-            DiscoverCategoryChips(selected: store.trendingCategory) {
-                send(.categorySelected($0))
+            },
+            subheader: {
+                DiscoverCategoryChips(selected: store.trendingCategory) {
+                    send(.categorySelected($0))
+                }
+            },
+            content: { cardWidth in
+                if store.showsTrendingSkeleton {
+                    DiscoverCardSkeletons(cardWidth: cardWidth)
+                } else if store.videos.isEmpty {
+                    Text(String.localised("discover.empty.noResults.title", table: .discover))
+                        .font(.subheadline)
+                        .foregroundStyle(Color.Brand.secondary)
+                        .frame(width: cardWidth, height: 120)
+                } else {
+                    ForEach(store.videos) { video in
+                        DiscoverVideoCard(
+                            video: video,
+                            status: store.itemStatus[video.videoId],
+                            isPending: store.pendingIds.contains(video.videoId),
+                            showsChannel: true,
+                            onAdd: { send(.addToQueueTapped(video, startNow: $0)) },
+                            onChannelTapped: { send(.videoChannelTapped(video)) }
+                        )
+                        .frame(width: cardWidth)
+                        .transition(.opacity)
+                        .onAppear {
+                            if video == store.videos.last {
+                                send(.lastItemAppeared)
+                            }
+                        }
+                    }
+                    if store.isLoadingMore {
+                        DiscoverCardSkeleton()
+                            .frame(width: cardWidth)
+                    }
+                }
             }
-        } else if !store.videos.isEmpty {
+        )
+        .animation(.smooth, value: store.videos)
+        .animation(.smooth, value: store.showsTrendingSkeleton)
+        .animation(.smooth, value: store.trendingCategory)
+        .transition(.opacity)
+    }
+
+    // MARK: - Search results
+
+    @ViewBuilder
+    private var searchVideoResults: some View {
+        if !store.videos.isEmpty {
             Text(String.localised("discover.results", table: .discover))
                 .font(.title3.bold())
                 .foregroundStyle(Color.Text.primary)
                 .accessibilityAddTraits(.isHeader)
-        }
-
-        if !store.videos.isEmpty {
 
             LazyVGrid(columns: videoColumns, spacing: 20) {
                 ForEach(store.videos) { video in

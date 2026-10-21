@@ -958,6 +958,28 @@
         }
       }
     },
+    "discover.shelf.choose" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Based on a different video"
+          }
+        }
+      }
+    },
+    "discover.shelf.choose.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose another video to base these on"
+          }
+        }
+      }
+    },
     "discover.shelf.because %@" : {
       "extractionState" : "manual",
       "localizations" : {

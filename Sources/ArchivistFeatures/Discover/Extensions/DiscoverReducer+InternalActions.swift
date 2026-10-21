@@ -20,6 +20,8 @@ extension DiscoverReducer {
             return handleChannelDetailsLoaded(result, state: &state)
         case .shelvesLoaded(let result):
             return handleShelvesLoaded(result, state: &state)
+        case .becauseShelfLoaded(let shelfId, let result):
+            return handleBecauseShelfLoaded(shelfId: shelfId, result: result, state: &state)
         case .statusesLoaded(let archived, let subscribed, let subscribedPlaylists):
             return handleStatusesLoaded(
                 archived: archived,
@@ -93,6 +95,7 @@ extension DiscoverReducer {
             state.isLoading = false
             state.shelves = []
             state.isLoadingShelves = false
+            state.loadingShelfIds = []
             if !state.hasPromptedSetup {
                 state.hasPromptedSetup = true
                 state.setup = DiscoverSetupReducer.State()

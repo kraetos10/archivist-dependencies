@@ -20,6 +20,7 @@ struct DiscoverReducerTests {
         key: String? = "KEY",
         archived: Set<String> = [],
         submittedQuery: String = "",
+        shelves: [DiscoverShelf] = [],
         configure: (inout DependencyValues) -> Void = { _ in }
     ) -> TestStore<DiscoverReducer.State, DiscoverReducer.Action> {
         var state = DiscoverReducer.State(serverConfig: config)
@@ -27,6 +28,7 @@ struct DiscoverReducerTests {
         state.hasLoadedKey = key != nil
         state.submittedQuery = submittedQuery
         state.query = submittedQuery
+        state.shelves = shelves
         let store = TestStore(initialState: state) {
             DiscoverReducer()
         } withDependencies: {
@@ -373,17 +375,77 @@ struct DiscoverReducerTests {
         #expect(!store.state.isQuotaExceeded)
     }
 
-    @Test func shelvesOnlySitAboveTheOverallChart() {
+    @Test func shelvesStayWhenACategoryIsChosenButNotWhenSearching() {
         var state = DiscoverReducer.State(serverConfig: config)
         state.shelves = [DiscoverShelf(id: "x", title: "X", videos: [videoA])]
         #expect(state.showsShelves)
 
         state.trendingCategory = .music
-        #expect(!state.showsShelves)
+        #expect(state.showsShelves)
 
         state.trendingCategory = nil
         state.submittedQuery = "swift"
         #expect(!state.showsShelves)
+    }
+
+    @Test func aRowCanOnlyBeSwitchedToVideosNoOtherRowUses() {
+        let choices = ["one", "two", "three"].map { DiscoverShelf.Choice(videoId: $0, title: $0) }
+        var state = DiscoverReducer.State(serverConfig: config)
+        state.shelves = [
+            DiscoverShelf(id: "because-one", title: "1", videos: [], seedId: "one", choices: choices),
+            DiscoverShelf(id: "because-two", title: "2", videos: [], seedId: "two", choices: choices)
+        ]
+
+        #expect(state.choices(for: state.shelves[0]).map(\.videoId) == ["one", "three"])
+        #expect(state.choices(for: state.shelves[1]).map(\.videoId) == ["two", "three"])
+    }
+
+    @Test func switchingARowRefillsItInPlaceAndRemembersTheChoice() async {
+        let saved = LockIsolated<[String]>([])
+        let old = YouTubeVideo(videoId: "old", title: "Old", channelId: "UC1", channelTitle: "One")
+        let fresh = YouTubeVideo(videoId: "fresh", title: "Fresh", channelId: "UC9", channelTitle: "Nine")
+        let choices = [
+            DiscoverShelf.Choice(videoId: "one", title: "First video"),
+            DiscoverShelf.Choice(videoId: "two", title: "Second video")
+        ]
+        let store = makeStore(
+            shelves: [
+                DiscoverShelf(id: "because-one", title: "Because First", videos: [old], seedId: "one", choices: choices)
+            ]
+        ) {
+            $0.discoverCache = DiscoverCache(
+                load: { _ in nil },
+                save: { name, _ in saved.withValue { $0.append(name) } }
+            )
+            $0.youTubeSearchService.searchVideos = { _, query, _, _, _ in
+                #expect(query == "Second video")
+                return YouTubePage(items: [fresh])
+            }
+        }
+
+        await store.send(.view(.becauseVideoSelected(shelfId: "because-one", choices[1])))
+        #expect(store.state.loadingShelfIds == ["because-one"])
+        await store.finish()
+        await store.skipReceivedActions()
+
+        let shelf = store.state.shelves[0]
+        #expect(shelf.id == "because-one")
+        #expect(shelf.seedId == "two")
+        #expect(shelf.videos == [fresh])
+        #expect(store.state.loadingShelfIds.isEmpty)
+        // The new row, then the whole set of shelves.
+        #expect(saved.value.count == 2)
+    }
+
+    @Test func choosingTheVideoARowIsAlreadyBasedOnDoesNothing() async {
+        let choices = [DiscoverShelf.Choice(videoId: "one", title: "First video")]
+        let store = makeStore(
+            shelves: [DiscoverShelf(id: "because-one", title: "T", videos: [], seedId: "one", choices: choices)]
+        )
+
+        await store.send(.view(.becauseVideoSelected(shelfId: "because-one", choices[0])))
+
+        #expect(store.state.loadingShelfIds.isEmpty)
     }
 
     // MARK: - Categories and filters

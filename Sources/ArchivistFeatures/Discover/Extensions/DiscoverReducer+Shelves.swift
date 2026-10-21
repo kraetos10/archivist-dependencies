@@ -10,14 +10,18 @@ extension DiscoverReducer {
     /// every visit would spend the allowance in a day.
     static let shelfLifetime: Duration = .seconds(12 * 60 * 60)
 
+    /// The server and region decide the shelves; the bucket is half a day.
+    func shelvesCacheName(config: ServerConfig) -> String {
+        let region = Locale.current.region?.identifier ?? ""
+        let bucket = Int(now.timeIntervalSince1970 / 43_200)
+        return "shelves-v2|\(config.baseURL)|\(region)|\(bucket)"
+    }
+
     func loadShelves(state: inout State) -> Effect<Action> {
         guard let key = state.apiKey, state.shelves.isEmpty, !state.isLoadingShelves else { return .none }
         state.isLoadingShelves = true
         let config = state.serverConfig
-        let region = Locale.current.region?.identifier ?? ""
-        let bucket = Int(now.timeIntervalSince1970 / 43_200)
-        // The server and region decide the shelves; the bucket is half a day.
-        let cacheName = "shelves-v1|\(config.baseURL)|\(region)|\(bucket)"
+        let cacheName = shelvesCacheName(config: config)
         return .run { [youTubeSearchService, videoService, discoverCache] send in
             if let data = discoverCache.load(name: cacheName),
                let cached = try? JSONDecoder().decode([DiscoverShelf].self, from: data) {
@@ -100,7 +104,8 @@ extension DiscoverReducer {
                let shelf = DiscoverShelves.becauseShelf(
                    seed: seed,
                    results: videos,
-                   excluding: taste.watchedIds
+                   excluding: taste.watchedIds,
+                   choices: taste.choices
                ) {
                 shelves.append(shelf)
             }
@@ -113,6 +118,92 @@ extension DiscoverReducer {
             if let error = error as? YouTubeError, error == .quotaExceeded || error == .invalidKey {
                 throw error
             }
+        }
+    }
+
+    /// Switches a "because you watched" row to another video. The row keeps
+    /// its place and shows placeholders until the new videos arrive.
+    func handleBecauseVideoSelected(
+        shelfId: String,
+        choice: DiscoverShelf.Choice,
+        state: inout State
+    ) -> Effect<Action> {
+        guard let key = state.apiKey,
+              let shelf = state.shelves.first(where: { $0.id == shelfId }),
+              shelf.seedId != choice.videoId,
+              !state.shelves.contains(where: { $0.seedId == choice.videoId }) else { return .none }
+        state.loadingShelfIds.insert(shelfId)
+        let config = state.serverConfig
+        let region = Locale.current.region?.identifier ?? ""
+        let bucket = Int(now.timeIntervalSince1970 / 43_200)
+        let cacheName = "because-v1|\(config.baseURL)|\(region)|\(bucket)|\(choice.videoId)"
+        let excluded = Set(shelf.choices.map(\.videoId))
+        let seed = DiscoverTaste.Seed(videoId: choice.videoId, title: choice.title)
+        return .run { [youTubeSearchService, discoverCache] send in
+            if let data = discoverCache.load(name: cacheName),
+               let cached = try? JSONDecoder().decode(DiscoverShelf.self, from: data) {
+                await send(.becauseShelfLoaded(shelfId: shelfId, .success(cached)))
+                return
+            }
+            let result = await Result { () -> DiscoverShelf? in
+                let query = DiscoverShelves.searchQuery(fromTitle: seed.title)
+                guard !query.isEmpty else { return nil }
+                let videos = try await youTubeSearchService.searchVideos(
+                    key: key,
+                    query: query,
+                    order: .relevance,
+                    filters: YouTubeSearchFilters(),
+                    pageToken: nil
+                ).items
+                let shelf = DiscoverShelves.becauseShelf(
+                    seed: seed,
+                    results: videos,
+                    excluding: excluded
+                )
+                if let shelf, let data = try? JSONEncoder().encode(shelf) {
+                    discoverCache.save(name: cacheName, data: data)
+                }
+                return shelf
+            }
+            await send(.becauseShelfLoaded(shelfId: shelfId, result))
+        }
+        .cancellable(id: CancelID.because(shelfId), cancelInFlight: true)
+    }
+
+    func handleBecauseShelfLoaded(
+        shelfId: String,
+        result: Result<DiscoverShelf?, Error>,
+        state: inout State
+    ) -> Effect<Action> {
+        state.loadingShelfIds.remove(shelfId)
+        switch result {
+        case .success(let replacement):
+            // Nothing similar came back: the row keeps what it had.
+            guard let replacement,
+                  let index = state.shelves.firstIndex(where: { $0.id == shelfId }) else { return .none }
+            state.shelves[index].seedId = replacement.seedId
+            state.shelves[index].title = replacement.title
+            state.shelves[index].videos = replacement.videos
+            let shelves = state.shelves
+            let cacheName = shelvesCacheName(config: state.serverConfig)
+            return .merge(
+                statusEffect(
+                    videoIds: replacement.videos.map(\.videoId),
+                    channelIds: [],
+                    state: state
+                ),
+                // So the choice is still there next time, until the shelves expire.
+                .run { [discoverCache] _ in
+                    if let data = try? JSONEncoder().encode(shelves) {
+                        discoverCache.save(name: cacheName, data: data)
+                    }
+                }
+            )
+        case .failure(let error):
+            if let error = error as? YouTubeError, error == .quotaExceeded || error == .invalidKey {
+                return handleFailure(error, state: &state)
+            }
+            return .none
         }
     }
 
