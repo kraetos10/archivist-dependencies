@@ -490,6 +490,15 @@ struct DiscoverReducerTests {
         #expect(store.state.videos == [videoA])
     }
 
+    @Test func quotaResetsAtTheNextMidnightPacific() throws {
+        // 2023-11-14 22:13 UTC is 14:13 in Los Angeles; midnight there is 08:00 UTC.
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let reset = try #require(DiscoverReducer.nextQuotaReset(after: now))
+
+        #expect(reset == Date(timeIntervalSince1970: 1_700_000_000 - (22 * 3600 + 13 * 60 + 20) + 32 * 3600))
+        #expect(reset > now)
+    }
+
     // MARK: - Categories and filters
 
     @Test func choosingACategoryNarrowsTrending() async {

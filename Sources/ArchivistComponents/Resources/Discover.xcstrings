@@ -502,7 +502,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A free YouTube key allows about 100 searches a day, and resets at midnight Pacific time. Trending and channel pages still work."
+            "value" : "A free YouTube key allows about 100 searches a day. Trending and channel pages still work."
           }
         }
       }
@@ -1064,6 +1064,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uploaded %@"
+          }
+        }
+      }
+    },
+    "discover.quota.resets %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resets %@."
+          }
+        }
+      }
+    },
+    "discover.quota.check" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See usage in Google Cloud"
           }
         }
       }

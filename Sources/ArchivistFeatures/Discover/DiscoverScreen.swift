@@ -87,9 +87,16 @@ public struct DiscoverScreen: View {
                         DiscoverNotice(
                             icon: "hourglass",
                             title: String.localised("discover.quota.title", table: .discover),
-                            message: String.localised("discover.quota.message", table: .discover),
+                            message: [
+                                String.localised("discover.quota.message", table: .discover),
+                                store.quotaResetText
+                            ]
+                            .compactMap { $0 }
+                            .joined(separator: " "),
                             retryTitle: nil,
-                            onRetry: {}
+                            onRetry: {},
+                            linkTitle: String.localised("discover.quota.check", table: .discover),
+                            linkURL: DiscoverQuota.consoleURL
                         )
                     }
 
@@ -416,6 +423,8 @@ struct DiscoverNotice: View {
     let message: String
     let retryTitle: String?
     let onRetry: () -> Void
+    var linkTitle: String?
+    var linkURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -425,6 +434,11 @@ struct DiscoverNotice: View {
             Text(message)
                 .font(.footnote)
                 .foregroundStyle(Color.Brand.secondary)
+            if let linkTitle, let linkURL {
+                Link(linkTitle, destination: linkURL)
+                    .font(.footnote.weight(.semibold))
+                    .tint(Color.Accent.dark)
+            }
             if let retryTitle {
                 Button(retryTitle, action: onRetry)
                     .buttonStyle(.bordered)

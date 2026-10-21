@@ -23,4 +23,10 @@ extension YouTubeChannel {
         return [subscribers, videos].compactMap { $0 }.joined(separator: " · ")
     }
 }
+
+enum DiscoverQuota {
+    /// Where the user's key shows how much of today's allowance is left; the
+    /// API itself never says.
+    static let consoleURL = URL(string: "https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas")
+}
 #endif

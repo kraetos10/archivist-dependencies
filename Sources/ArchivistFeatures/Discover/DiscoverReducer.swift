@@ -74,6 +74,8 @@ public struct DiscoverReducer {
 
         // Feedback
         var isQuotaExceeded = false
+        /// When YouTube's daily allowance next resets: midnight Pacific.
+        var quotaResetDate: Date?
         var errorMessage: String?
         var itemStatus: [String: ItemStatus] = [:]
         var subscribedChannelIds: Set<String> = []
@@ -99,6 +101,16 @@ public struct DiscoverReducer {
         /// Channels and playlists have nothing to show until searched for.
         var showsSearchPrompt: Bool {
             searchScope != .videos && submittedQuery.isEmpty
+        }
+
+        /// "Resets 22 Oct 2026 at 08:00", in the user's own time zone.
+        var quotaResetText: String? {
+            quotaResetDate.map {
+                String.localised(
+                    "discover.quota.resets \($0.formatted(date: .abbreviated, time: .shortened))",
+                    table: .discover
+                )
+            }
         }
 
         /// Sorting and filtering only mean something for a search.

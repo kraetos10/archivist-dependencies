@@ -327,6 +327,18 @@ extension DiscoverReducer {
 
     // MARK: - Failures
 
+    /// YouTube's daily quota resets at midnight Pacific time.
+    static func nextQuotaReset(after date: Date) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        guard let pacific = TimeZone(identifier: "America/Los_Angeles") else { return nil }
+        calendar.timeZone = pacific
+        return calendar.nextDate(
+            after: date,
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        )
+    }
+
     func handleFailure(
         _ error: Error,
         state: inout State
@@ -335,6 +347,7 @@ extension DiscoverReducer {
         switch error as? YouTubeError {
         case .quotaExceeded:
             state.isQuotaExceeded = true
+            state.quotaResetDate = Self.nextQuotaReset(after: now)
         case .invalidKey:
             // The saved key is dead. Forget it and send the user back
             // through setup, on the paste step, with a note saying why.
