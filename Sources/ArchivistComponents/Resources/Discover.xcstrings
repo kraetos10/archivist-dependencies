@@ -326,7 +326,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Length"
           }
         }
       }
@@ -980,6 +980,94 @@
         }
       }
     },
+    "discover.more" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        }
+      }
+    },
+    "discover.filters.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filters"
+          }
+        }
+      }
+    },
+    "discover.filters.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorting and filters change your search results. Trending and the rows above it aren’t affected."
+          }
+        }
+      }
+    },
+    "discover.filters.reset" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset"
+          }
+        }
+      }
+    },
+    "discover.filters.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "discover.filters.clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        }
+      }
+    },
+    "discover.filters.sortedBy %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorted by %@"
+          }
+        }
+      }
+    },
+    "discover.filters.uploaded %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploaded %@"
+          }
+        }
+      }
+    },
     "discover.shelf.because %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1008,7 +1096,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sort"
+            "value" : "Sort by"
           }
         }
       }

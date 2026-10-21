@@ -57,6 +57,7 @@ public struct DiscoverReducer {
         var nextPageToken: String?
         var isLoading = false
         var isLoadingMore = false
+        var isFiltersPresented = false
 
         // Shelves above Trending, from what the archive says was watched
         var shelves: [DiscoverShelf] = []
@@ -98,6 +99,32 @@ public struct DiscoverReducer {
         /// Channels and playlists have nothing to show until searched for.
         var showsSearchPrompt: Bool {
             searchScope != .videos && submittedQuery.isEmpty
+        }
+
+        /// Sorting and filtering only mean something for a search.
+        var showsFilters: Bool {
+            !submittedQuery.isEmpty
+        }
+
+        var hasActiveFilters: Bool {
+            order != .relevance || (searchScope == .videos && filters.isActive)
+        }
+
+        /// What is narrowing the search, in words, for the line under the
+        /// scope picker. `nil` when nothing is.
+        var filterSummary: String? {
+            guard showsFilters else { return nil }
+            var parts: [String] = []
+            if order != .relevance {
+                parts.append(String.localised("discover.filters.sortedBy \(order.title)", table: .discover))
+            }
+            if searchScope == .videos {
+                if filters.duration != .any { parts.append(filters.duration.title) }
+                if filters.uploaded != .any {
+                    parts.append(String.localised("discover.filters.uploaded \(filters.uploaded.title)", table: .discover))
+                }
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
         }
 
         /// The shelves stay put when a category is chosen: only Trending
@@ -206,6 +233,8 @@ public struct DiscoverReducer {
             case subscribeTapped(YouTubeChannel)
             case subscribePlaylistTapped(YouTubePlaylist)
             case categorySelected(DiscoverCategory?)
+            case filtersTapped
+            case resetFiltersTapped
             case becauseVideoSelected(shelfId: String, DiscoverShelf.Choice)
             case channelTapped(YouTubeChannel)
             case videoChannelTapped(YouTubeVideo)

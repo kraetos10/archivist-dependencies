@@ -448,6 +448,48 @@ struct DiscoverReducerTests {
         #expect(store.state.loadingShelfIds.isEmpty)
     }
 
+    @Test func filtersOnlyShowForASearchAndSayWhatTheyDo() {
+        var state = DiscoverReducer.State(serverConfig: config)
+        #expect(!state.showsFilters)
+        #expect(state.filterSummary == nil)
+
+        state.submittedQuery = "swift"
+        #expect(state.showsFilters)
+        #expect(state.filterSummary == nil)
+
+        state.order = .date
+        state.filters.duration = .short
+        #expect(state.hasActiveFilters)
+        #expect(state.filterSummary?.contains("Upload Date") == true)
+        #expect(state.filterSummary?.contains("Under 4 minutes") == true)
+
+        // Length and date filters are video-only.
+        state.searchScope = .channels
+        #expect(state.filterSummary?.contains("Under 4 minutes") == false)
+    }
+
+    @Test func resettingFiltersSearchesAgain() async {
+        let store = makeStore(submittedQuery: "swift") {
+            $0.youTubeSearchService.searchVideos = { _, _, order, filters, _ in
+                // Only the search after the reset is the one that matters.
+                if order == .relevance { #expect(!filters.isActive) }
+                return YouTubePage(items: [videoA])
+            }
+        }
+        await store.send(.binding(.set(\.order, .date)))
+        await store.send(.binding(.set(\.filters.duration, .long)))
+        await store.finish()
+        #expect(store.state.hasActiveFilters)
+
+        await store.send(.view(.resetFiltersTapped))
+        await store.finish()
+        await store.skipReceivedActions()
+
+        #expect(store.state.order == .relevance)
+        #expect(!store.state.filters.isActive)
+        #expect(store.state.videos == [videoA])
+    }
+
     // MARK: - Categories and filters
 
     @Test func choosingACategoryNarrowsTrending() async {

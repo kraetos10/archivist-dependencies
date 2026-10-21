@@ -36,6 +36,11 @@ public struct DiscoverScreen: View {
             .onSubmit(of: .search) { send(.searchSubmitted) }
             .toolbar {
                 if !store.needsSetup {
+                    if store.showsFilters {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            filtersButton
+                        }
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         optionsMenu
                     }
@@ -70,6 +75,13 @@ public struct DiscoverScreen: View {
                             .tag(DiscoverReducer.State.SearchScope.playlists)
                     }
                     .pickerStyle(.segmented)
+
+                    if let summary = store.filterSummary {
+                        DiscoverFilterSummary(
+                            text: summary,
+                            onClear: { send(.resetFiltersTapped) }
+                        )
+                    }
 
                     if store.isQuotaExceeded {
                         DiscoverNotice(
@@ -336,33 +348,6 @@ public struct DiscoverScreen: View {
 
     private var optionsMenu: some View {
         Menu {
-            Picker(
-                String.localised("discover.sort", table: .discover),
-                selection: $store.order
-            ) {
-                ForEach(YouTubeSearchOrder.allCases, id: \.self) { order in
-                    Text(order.title).tag(order)
-                }
-            }
-            if store.searchScope == .videos {
-                Picker(
-                    String.localised("discover.filter.duration", table: .discover),
-                    selection: $store.filters.duration
-                ) {
-                    ForEach(YouTubeSearchFilters.Duration.allCases, id: \.self) { duration in
-                        Text(duration.title).tag(duration)
-                    }
-                }
-                Picker(
-                    String.localised("discover.filter.uploaded", table: .discover),
-                    selection: $store.filters.uploaded
-                ) {
-                    ForEach(YouTubeSearchFilters.Uploaded.allCases, id: \.self) { uploaded in
-                        Text(uploaded.title).tag(uploaded)
-                    }
-                }
-            }
-            Divider()
             Button(
                 String.localised("discover.changeKey", table: .discover),
                 systemImage: "key"
@@ -370,13 +355,34 @@ public struct DiscoverScreen: View {
                 send(.setUpKeyTapped)
             }
         } label: {
-            Image(
-                systemName: store.filters.isActive
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel(String.localised("discover.more", table: .discover))
+    }
+
+    /// Sort and filter, which only apply to a search, so it's only there
+    /// once there is one.
+    private var filtersButton: some View {
+        Button {
+            send(.filtersTapped)
+        } label: {
+            Label(
+                String.localised("discover.filters.title", table: .discover),
+                systemImage: store.hasActiveFilters
                     ? "line.3.horizontal.decrease.circle.fill"
-                    : "ellipsis.circle"
+                    : "line.3.horizontal.decrease.circle"
             )
         }
-        .accessibilityLabel(String.localised("discover.sort", table: .discover))
+        .popover(isPresented: $store.isFiltersPresented) {
+            DiscoverFiltersView(
+                order: $store.order,
+                duration: $store.filters.duration,
+                uploaded: $store.filters.uploaded,
+                showsVideoFilters: store.searchScope == .videos,
+                hasActiveFilters: store.hasActiveFilters,
+                onReset: { send(.resetFiltersTapped) }
+            )
+        }
     }
 
     private var setupPrompt: some View {
@@ -400,40 +406,6 @@ public struct DiscoverScreen: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private extension YouTubeSearchFilters.Duration {
-    var title: String {
-        switch self {
-        case .any: String.localised("discover.filter.any", table: .discover)
-        case .short: String.localised("discover.filter.duration.short", table: .discover)
-        case .medium: String.localised("discover.filter.duration.medium", table: .discover)
-        case .long: String.localised("discover.filter.duration.long", table: .discover)
-        }
-    }
-}
-
-private extension YouTubeSearchFilters.Uploaded {
-    var title: String {
-        switch self {
-        case .any: String.localised("discover.filter.any", table: .discover)
-        case .today: String.localised("discover.filter.uploaded.today", table: .discover)
-        case .week: String.localised("discover.filter.uploaded.week", table: .discover)
-        case .month: String.localised("discover.filter.uploaded.month", table: .discover)
-        case .year: String.localised("discover.filter.uploaded.year", table: .discover)
-        }
-    }
-}
-
-private extension YouTubeSearchOrder {
-    var title: String {
-        switch self {
-        case .relevance: String.localised("discover.order.relevance", table: .discover)
-        case .date: String.localised("discover.order.date", table: .discover)
-        case .viewCount: String.localised("discover.order.viewCount", table: .discover)
-        case .rating: String.localised("discover.order.rating", table: .discover)
-        }
     }
 }
 

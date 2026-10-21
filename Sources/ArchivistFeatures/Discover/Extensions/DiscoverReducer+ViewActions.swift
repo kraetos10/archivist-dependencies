@@ -27,6 +27,14 @@ extension DiscoverReducer {
             return handleSubscribePlaylistTapped(playlist, state: &state)
         case .categorySelected(let category):
             return handleCategorySelected(category, state: &state)
+        case .filtersTapped:
+            state.isFiltersPresented = true
+            return .none
+        case .resetFiltersTapped:
+            state.order = .relevance
+            state.filters = YouTubeSearchFilters()
+            guard state.apiKey != nil, !state.submittedQuery.isEmpty else { return .none }
+            return reloadFeed(state: &state)
         case .becauseVideoSelected(let shelfId, let choice):
             return handleBecauseVideoSelected(shelfId: shelfId, choice: choice, state: &state)
         case .channelTapped(let channel):
