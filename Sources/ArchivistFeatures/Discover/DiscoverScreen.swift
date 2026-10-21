@@ -355,6 +355,33 @@ public struct DiscoverScreen: View {
 
     private var optionsMenu: some View {
         Menu {
+            Picker(
+                String.localised("discover.sort", table: .discover),
+                selection: $store.order
+            ) {
+                ForEach(YouTubeSearchOrder.allCases, id: \.self) { order in
+                    Text(order.title).tag(order)
+                }
+            }
+            if store.searchScope == .videos {
+                Picker(
+                    String.localised("discover.filter.duration", table: .discover),
+                    selection: $store.filters.duration
+                ) {
+                    ForEach(YouTubeSearchFilters.Duration.allCases, id: \.self) { duration in
+                        Text(duration.title).tag(duration)
+                    }
+                }
+                Picker(
+                    String.localised("discover.filter.uploaded", table: .discover),
+                    selection: $store.filters.uploaded
+                ) {
+                    ForEach(YouTubeSearchFilters.Uploaded.allCases, id: \.self) { uploaded in
+                        Text(uploaded.title).tag(uploaded)
+                    }
+                }
+            }
+            Divider()
             Button(
                 String.localised("discover.changeKey", table: .discover),
                 systemImage: "key"
@@ -362,7 +389,11 @@ public struct DiscoverScreen: View {
                 send(.setUpKeyTapped)
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(
+                systemName: store.hasActiveFilters
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "ellipsis.circle"
+            )
         }
         .accessibilityLabel(String.localised("discover.more", table: .discover))
     }
