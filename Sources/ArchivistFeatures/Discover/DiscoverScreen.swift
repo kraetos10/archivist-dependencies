@@ -355,29 +355,35 @@ public struct DiscoverScreen: View {
 
     private var optionsMenu: some View {
         Menu {
-            Picker(
-                String.localised("discover.sort", table: .discover),
-                selection: $store.order
-            ) {
-                ForEach(YouTubeSearchOrder.allCases, id: \.self) { order in
-                    Text(order.title).tag(order)
+            Section(String.localised("discover.sort", table: .discover)) {
+                Picker(
+                    String.localised("discover.sort", table: .discover),
+                    selection: $store.order
+                ) {
+                    ForEach(YouTubeSearchOrder.allCases, id: \.self) { order in
+                        Text(order.title).tag(order)
+                    }
                 }
             }
             if store.searchScope == .videos {
-                Picker(
-                    String.localised("discover.filter.duration", table: .discover),
-                    selection: $store.filters.duration
-                ) {
-                    ForEach(YouTubeSearchFilters.Duration.allCases, id: \.self) { duration in
-                        Text(duration.title).tag(duration)
+                Section(String.localised("discover.filter.duration", table: .discover)) {
+                    Picker(
+                        String.localised("discover.filter.duration", table: .discover),
+                        selection: $store.filters.duration
+                    ) {
+                        ForEach(YouTubeSearchFilters.Duration.allCases, id: \.self) { duration in
+                            Text(duration.title).tag(duration)
+                        }
                     }
                 }
-                Picker(
-                    String.localised("discover.filter.uploaded", table: .discover),
-                    selection: $store.filters.uploaded
-                ) {
-                    ForEach(YouTubeSearchFilters.Uploaded.allCases, id: \.self) { uploaded in
-                        Text(uploaded.title).tag(uploaded)
+                Section(String.localised("discover.filter.uploaded", table: .discover)) {
+                    Picker(
+                        String.localised("discover.filter.uploaded", table: .discover),
+                        selection: $store.filters.uploaded
+                    ) {
+                        ForEach(YouTubeSearchFilters.Uploaded.allCases, id: \.self) { uploaded in
+                            Text(uploaded.title).tag(uploaded)
+                        }
                     }
                 }
             }
