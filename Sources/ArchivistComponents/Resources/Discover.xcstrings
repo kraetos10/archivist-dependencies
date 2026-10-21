@@ -309,6 +309,17 @@
         }
       }
     },
+    "discover.filter.hideShorts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Shorts"
+          }
+        }
+      }
+    },
     "discover.filter.any" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -987,6 +998,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "More"
+          }
+        }
+      }
+    },
+    "discover.filters.noShorts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Shorts"
           }
         }
       }

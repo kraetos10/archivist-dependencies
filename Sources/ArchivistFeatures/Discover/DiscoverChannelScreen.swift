@@ -33,14 +33,14 @@ struct DiscoverChannelScreen: View {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
-                } else if !store.channelVideos.isEmpty {
+                } else if !store.visibleChannelVideos.isEmpty {
                     Text(String.localised("discover.latestUploads", table: .discover))
                         .font(.title3.bold())
                         .foregroundStyle(Color.Text.primary)
                         .accessibilityAddTraits(.isHeader)
 
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(store.channelVideos) { video in
+                        ForEach(store.visibleChannelVideos) { video in
                             DiscoverVideoCard(
                                 video: video,
                                 status: store.itemStatus[video.videoId],
@@ -50,7 +50,7 @@ struct DiscoverChannelScreen: View {
                                 onChannelTapped: {}
                             )
                             .onAppear {
-                                if video == store.channelVideos.last {
+                                if video == store.visibleChannelVideos.last {
                                     send(.channelLastItemAppeared)
                                 }
                             }

@@ -32,6 +32,11 @@ extension SharedKey where Self == AppStorageKey<Bool>.Default {
         Self[.appStorage("loopPlaylist"), default: false]
     }
 
+    /// Leave Shorts out of what Discover shows.
+    public static var discoverHidesShorts: Self {
+        Self[.appStorage("discoverHidesShorts"), default: false]
+    }
+
     /// Child mode on/off.
     public static var childModeEnabled: Self {
         Self[.appStorage(ChildMode.enabledKey), default: false]

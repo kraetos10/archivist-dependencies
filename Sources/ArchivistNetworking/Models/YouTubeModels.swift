@@ -40,6 +40,13 @@ public nonisolated struct YouTubeVideo: Sendable, Equatable, Identifiable, Hasha
         durationSeconds.map { DurationText.clock(seconds: Double($0)) }
     }
 
+    /// YouTube's API has no Shorts flag, so a Short is a video of a minute or
+    /// less. Shorts can now run to three minutes, but treating those as Shorts
+    /// would hide ordinary short videos too.
+    public var isShort: Bool {
+        durationSeconds.map { $0 <= 60 } ?? false
+    }
+
     /// "1.2M".
     public var viewsText: String? {
         viewCount.map { YouTubeCountText.compact($0) }

@@ -190,7 +190,7 @@ public struct DiscoverScreen: View {
                 DiscoverRowSkeleton()
                 DiscoverRowSkeleton()
             }
-            ForEach(store.shelves) { shelf in
+            ForEach(store.visibleShelves) { shelf in
                 DiscoverShelfView(
                     shelf: shelf,
                     choices: store.state.choices(for: shelf),
@@ -231,13 +231,13 @@ public struct DiscoverScreen: View {
             content: { cardWidth in
                 if store.showsTrendingSkeleton {
                     DiscoverCardSkeletons(cardWidth: cardWidth)
-                } else if store.videos.isEmpty {
+                } else if store.visibleVideos.isEmpty {
                     Text(String.localised("discover.empty.noResults.title", table: .discover))
                         .font(.subheadline)
                         .foregroundStyle(Color.Brand.secondary)
                         .frame(width: cardWidth, height: 120)
                 } else {
-                    ForEach(store.videos) { video in
+                    ForEach(store.visibleVideos) { video in
                         DiscoverVideoCard(
                             video: video,
                             status: store.itemStatus[video.videoId],
@@ -249,7 +249,7 @@ public struct DiscoverScreen: View {
                         .frame(width: cardWidth)
                         .transition(.opacity)
                         .onAppear {
-                            if video == store.videos.last {
+                            if video == store.visibleVideos.last {
                                 send(.lastItemAppeared)
                             }
                         }
@@ -261,7 +261,7 @@ public struct DiscoverScreen: View {
                 }
             }
         )
-        .animation(.smooth, value: store.videos)
+        .animation(.smooth, value: store.visibleVideos)
         .animation(.smooth, value: store.showsTrendingSkeleton)
         .animation(.smooth, value: store.trendingCategory)
         .transition(.opacity)
@@ -271,14 +271,14 @@ public struct DiscoverScreen: View {
 
     @ViewBuilder
     private var searchVideoResults: some View {
-        if !store.videos.isEmpty {
+        if !store.visibleVideos.isEmpty {
             Text(String.localised("discover.results", table: .discover))
                 .font(.title3.bold())
                 .foregroundStyle(Color.Text.primary)
                 .accessibilityAddTraits(.isHeader)
 
             LazyVGrid(columns: videoColumns, spacing: 20) {
-                ForEach(store.videos) { video in
+                ForEach(store.visibleVideos) { video in
                     DiscoverVideoCard(
                         video: video,
                         status: store.itemStatus[video.videoId],
@@ -288,7 +288,7 @@ public struct DiscoverScreen: View {
                         onChannelTapped: { send(.videoChannelTapped(video)) }
                     )
                     .onAppear {
-                        if video == store.videos.last {
+                        if video == store.visibleVideos.last {
                             send(.lastItemAppeared)
                         }
                     }
@@ -387,6 +387,10 @@ public struct DiscoverScreen: View {
                     }
                 }
             }
+            Toggle(
+                String.localised("discover.filter.hideShorts", table: .discover),
+                isOn: $store.hidesShorts.sending(\.view.hidesShortsToggled)
+            )
             Divider()
             Button(
                 String.localised("discover.changeKey", table: .discover),
@@ -422,6 +426,7 @@ public struct DiscoverScreen: View {
                 order: $store.order,
                 duration: $store.filters.duration,
                 uploaded: $store.filters.uploaded,
+                hidesShorts: $store.hidesShorts.sending(\.view.hidesShortsToggled),
                 showsVideoFilters: store.searchScope == .videos,
                 hasActiveFilters: store.hasActiveFilters,
                 onReset: { send(.resetFiltersTapped) }

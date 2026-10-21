@@ -452,13 +452,16 @@ struct Thumbnails: Decodable, Sendable {
         let url: String
     }
 
-    let medium: Thumbnail?
-    let high: Thumbnail?
+    let maxres: Thumbnail?
     let standard: Thumbnail?
+    let high: Thumbnail?
+    let medium: Thumbnail?
     let `default`: Thumbnail?
 
+    /// The sharpest size sent. `medium` is only 320x180, which is soft on a
+    /// card this wide; `maxres` is 1280x720 but missing on older videos.
     var best: URL? {
-        (medium ?? high ?? standard ?? `default`).flatMap { URL(string: $0.url) }
+        (maxres ?? standard ?? high ?? medium ?? `default`).flatMap { URL(string: $0.url) }
     }
 }
 

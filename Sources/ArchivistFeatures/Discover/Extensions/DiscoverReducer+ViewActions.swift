@@ -30,7 +30,11 @@ extension DiscoverReducer {
         case .filtersTapped:
             state.isFiltersPresented = true
             return .none
+        case .hidesShortsToggled(let isOn):
+            state.$hidesShorts.withLock { $0 = isOn }
+            return .none
         case .resetFiltersTapped:
+            state.$hidesShorts.withLock { $0 = false }
             state.order = .relevance
             state.filters = YouTubeSearchFilters()
             guard state.apiKey != nil, !state.submittedQuery.isEmpty else { return .none }

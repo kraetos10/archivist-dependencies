@@ -46,6 +46,7 @@ public struct DiscoverReducer {
         var searchScope: SearchScope = .videos
         var order: YouTubeSearchOrder = .relevance
         var filters = YouTubeSearchFilters()
+        @Shared(.discoverHidesShorts) var hidesShorts
         /// Narrows Trending; `nil` is the overall chart.
         var trendingCategory: DiscoverCategory?
         /// What the results on screen are for. Typing doesn't change it —
@@ -113,13 +114,32 @@ public struct DiscoverReducer {
             }
         }
 
+        /// Shorts can't be told apart server-side, so they are dropped here
+        /// and a toggle shows them again without another request.
+        var visibleVideos: [YouTubeVideo] {
+            hidesShorts ? videos.filter { !$0.isShort } : videos
+        }
+
+        var visibleChannelVideos: [YouTubeVideo] {
+            hidesShorts ? channelVideos.filter { !$0.isShort } : channelVideos
+        }
+
+        var visibleShelves: [DiscoverShelf] {
+            guard hidesShorts else { return shelves }
+            return shelves.map { shelf in
+                var shelf = shelf
+                shelf.videos = shelf.videos.filter { !$0.isShort }
+                return shelf
+            }
+        }
+
         /// Sorting and filtering only mean something for a search.
         var showsFilters: Bool {
             !submittedQuery.isEmpty
         }
 
         var hasActiveFilters: Bool {
-            order != .relevance || (searchScope == .videos && filters.isActive)
+            order != .relevance || (searchScope == .videos && (filters.isActive || hidesShorts))
         }
 
         /// What is narrowing the search, in words, for the line under the
@@ -131,6 +151,7 @@ public struct DiscoverReducer {
                 parts.append(String.localised("discover.filters.sortedBy \(order.title)", table: .discover))
             }
             if searchScope == .videos {
+                if hidesShorts { parts.append(String.localised("discover.filters.noShorts", table: .discover)) }
                 if filters.duration != .any { parts.append(filters.duration.title) }
                 if filters.uploaded != .any {
                     parts.append(String.localised("discover.filters.uploaded \(filters.uploaded.title)", table: .discover))
@@ -157,7 +178,7 @@ public struct DiscoverReducer {
         /// A chosen category keeps its row even when empty or failed, so the
         /// chips are still there to pick another.
         var showsTrendingRow: Bool {
-            trendingCategory != nil || showsTrendingSkeleton || !videos.isEmpty || showsNoResults
+            trendingCategory != nil || showsTrendingSkeleton || !visibleVideos.isEmpty || showsNoResults
         }
 
         /// The watched videos a row can be switched to: not the ones other
@@ -169,7 +190,7 @@ public struct DiscoverReducer {
 
         var emptyScopeIsEmpty: Bool {
             switch searchScope {
-            case .videos: videos.isEmpty
+            case .videos: visibleVideos.isEmpty
             case .channels: channels.isEmpty
             case .playlists: playlists.isEmpty
             }
@@ -247,6 +268,7 @@ public struct DiscoverReducer {
             case categorySelected(DiscoverCategory?)
             case filtersTapped
             case resetFiltersTapped
+            case hidesShortsToggled(Bool)
             case becauseVideoSelected(shelfId: String, DiscoverShelf.Choice)
             case channelTapped(YouTubeChannel)
             case videoChannelTapped(YouTubeVideo)

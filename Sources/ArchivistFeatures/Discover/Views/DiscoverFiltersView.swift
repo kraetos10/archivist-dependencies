@@ -11,6 +11,7 @@ struct DiscoverFiltersView: View {
     @Binding var order: YouTubeSearchOrder
     @Binding var duration: YouTubeSearchFilters.Duration
     @Binding var uploaded: YouTubeSearchFilters.Uploaded
+    @Binding var hidesShorts: Bool
     let showsVideoFilters: Bool
     let hasActiveFilters: Bool
     let onReset: () -> Void
@@ -30,6 +31,13 @@ struct DiscoverFiltersView: View {
                     Text(String.localised("discover.sort", table: .discover))
                 } footer: {
                     Text(String.localised("discover.filters.footer", table: .discover))
+                }
+
+                Section {
+                    Toggle(
+                        String.localised("discover.filter.hideShorts", table: .discover),
+                        isOn: $hidesShorts
+                    )
                 }
 
                 if showsVideoFilters {
