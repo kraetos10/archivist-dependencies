@@ -122,6 +122,25 @@ struct VideoListReducerTests {
         staleGate.open()
     }
 
+    /// Home is current every time it's shown, not just the first.
+    @Test func appearingAgainRefreshesLoadedVideos() async {
+        var state = VideoListReducer.State(serverConfig: config)
+        state.videos = [TestFixtures.watchedVideo]
+        state.hasLoaded = true
+        let store = TestStore(initialState: state) {
+            VideoListReducer()
+        } withDependencies: {
+            $0.videoService.getVideos = { _, _, _, _, _, _, _, _ in TestFixtures.paginatedVideos }
+        }
+        store.exhaustivity = .off
+
+        await store.send(.view(.viewDidAppear)) {
+            $0.isLoading = true
+        }
+        await store.receive(\.videosResult.success)
+        #expect(store.state.videos == [TestFixtures.video1, TestFixtures.video2])
+    }
+
     @Test func aFailedLoadSaysSo() async {
         let failure = URLError(.timedOut)
         let store = TestStore(initialState: VideoListReducer.State(serverConfig: config)) {

@@ -56,11 +56,10 @@ extension VideoListReducer {
 
     private func handleOnAppear(state: inout State) -> Effect<Action> {
         // downloadedVideoIDs is reactive via @FetchAll — no manual refresh needed
-        guard state.videos.isEmpty, !state.isLoading else { return .none }
-        return .merge(
-            fetchPage(1, state: &state),
-            fetchQueue(state: state)
-        )
+        guard !state.isLoading else { return .none }
+        // Every appear refreshes, so Home is current when the user returns
+        // to it. The existing rows stay on screen until the page lands.
+        return handleRefreshTriggered(state: &state)
     }
 
     func handleRefreshTriggered(state: inout State) -> Effect<Action> {
