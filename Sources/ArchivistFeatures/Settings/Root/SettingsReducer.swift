@@ -13,6 +13,8 @@ public struct SettingsReducer {
         var path = StackState<SettingsPath.State>()
         var isRescanningSubscriptions = false
         var supportURL: URL?
+        /// The community server, linked from the About section.
+        let discordURL = URL(string: "https://discord.gg/jUWGnavv8")
         /// The libvlc log, when there's something in it to share.
         var diagnosticLogURL: URL?
         @Shared(.autoPlayEnabled) public var autoPlayEnabled

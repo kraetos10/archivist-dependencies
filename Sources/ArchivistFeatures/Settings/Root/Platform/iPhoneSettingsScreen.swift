@@ -184,6 +184,22 @@ public struct iPhoneSettingsScreen: View {
                         title: String.localised("settings.thirdPartyLibraries", table: .settings)
                     )
                 }
+                if let discordURL = store.discordURL {
+                    Link(destination: discordURL) {
+                        HStack {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .foregroundStyle(Color.Accent.dark)
+                                .accessibilityHidden(true)
+                            Text(String.localised("settings.discord", table: .settings))
+                                .foregroundStyle(Color.Text.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.Brand.secondary)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                }
             } header: {
                 Text(String.localised("settings.about", table: .settings))
             }
