@@ -28,6 +28,14 @@ public struct PlayerClient: Sendable {
         public var replacesCurrent: Bool
         /// New value for `PlayerManager.canGoPrevious`; `nil` leaves it.
         public var canGoPrevious: Bool?
+        /// The video is AV1 at 4K or above. VLC's software AV1 decoder
+        /// crashes on it, so it only plays on a device with an AV1 hardware
+        /// decoder (decoded through VideoToolbox) and fails cleanly on the
+        /// rest.
+        public var isHighResolutionAV1: Bool
+        /// Stretches of the video to jump over as playback reaches them
+        /// (SponsorBlock). Empty plays everything.
+        public var skipRanges: [Range<Double>]
 
         public init(
             url: URL,
@@ -36,7 +44,9 @@ public struct PlayerClient: Sendable {
             expectedSize: Int64? = nil,
             metadata: PlayerManager.NowPlayingMetadata? = nil,
             replacesCurrent: Bool = false,
-            canGoPrevious: Bool? = nil
+            canGoPrevious: Bool? = nil,
+            isHighResolutionAV1: Bool = false,
+            skipRanges: [Range<Double>] = []
         ) {
             self.url = url
             self.startPosition = startPosition
@@ -45,6 +55,8 @@ public struct PlayerClient: Sendable {
             self.metadata = metadata
             self.replacesCurrent = replacesCurrent
             self.canGoPrevious = canGoPrevious
+            self.isHighResolutionAV1 = isHighResolutionAV1
+            self.skipRanges = skipRanges
         }
     }
 
@@ -130,6 +142,10 @@ public struct PlayerClient: Sendable {
     public var setUpNextHint: @MainActor @Sendable (_ item: UpNextItem?) -> Void
     /// Mirror of the Up Next ribbon for the tvOS player.
     public var setUpNextItems: @MainActor @Sendable (_ items: [UpNextItem]) -> Void
+    /// Updates the ranges skipped for `videoId`, which is ignored unless it
+    /// is the video now playing: a late refresh of the previous video must
+    /// not skip parts of this one.
+    public var setSkipRanges: @MainActor @Sendable (_ videoId: String, _ ranges: [Range<Double>]) -> Void
 
     // MARK: Speed
 
@@ -172,6 +188,7 @@ public struct PlayerClient: Sendable {
         setCanGoPrevious: @escaping @MainActor @Sendable (_ canGoPrevious: Bool) -> Void,
         setUpNextHint: @escaping @MainActor @Sendable (_ item: UpNextItem?) -> Void,
         setUpNextItems: @escaping @MainActor @Sendable (_ items: [UpNextItem]) -> Void,
+        setSkipRanges: @escaping @MainActor @Sendable (_ videoId: String, _ ranges: [Range<Double>]) -> Void,
         playbackSpeed: @escaping @MainActor @Sendable () -> Float,
         setPlaybackSpeed: @escaping @MainActor @Sendable (_ speed: Float) -> Void,
         setPlaybackRate: @escaping @MainActor @Sendable (_ rate: Float) -> Void,
@@ -203,6 +220,7 @@ public struct PlayerClient: Sendable {
         self.setCanGoPrevious = setCanGoPrevious
         self.setUpNextHint = setUpNextHint
         self.setUpNextItems = setUpNextItems
+        self.setSkipRanges = setSkipRanges
         self.playbackSpeed = playbackSpeed
         self.setPlaybackSpeed = setPlaybackSpeed
         self.setPlaybackRate = setPlaybackRate
@@ -298,6 +316,11 @@ extension PlayerClient: DependencyKey {
             setCanGoPrevious: { PlayerManager.shared.canGoPrevious = $0 },
             setUpNextHint: { PlayerManager.shared.upNextHint = $0 },
             setUpNextItems: { PlayerManager.shared.upNextItems = $0 },
+            setSkipRanges: { videoId, ranges in
+                let manager = PlayerManager.shared
+                guard manager.currentVideoID == videoId else { return }
+                (manager.backend as? PlaybackServiceBackend)?.skipRanges = ranges
+            },
             playbackSpeed: { PlayerManager.shared.playbackSpeed },
             setPlaybackSpeed: { PlayerManager.shared.setPlaybackSpeed($0) },
             setPlaybackRate: { PlayerManager.shared.setPlaybackRate($0) },
@@ -317,12 +340,21 @@ extension PlayerClient: DependencyKey {
         if let canGoPrevious = request.canGoPrevious {
             manager.canGoPrevious = canGoPrevious
         }
+        if request.isHighResolutionAV1, !AV1HardwareDecoding.isSupported {
+            // Never reaches dav1d. Reported like any other failed load, so
+            // the screen stops, says so and doesn't mark the video watched.
+            manager.currentVideoID = request.videoId
+            manager.emit(.playbackFailed(videoId: request.videoId))
+            return events
+        }
         manager.load(
             url: request.url,
             startPosition: request.startPosition,
             videoId: request.videoId,
-            expectedSize: request.expectedSize
+            expectedSize: request.expectedSize,
+            decodesAV1InHardware: request.isHighResolutionAV1
         )
+        (manager.backend as? PlaybackServiceBackend)?.skipRanges = request.skipRanges
         manager.currentVideoID = request.videoId
         if let metadata = request.metadata {
             manager.currentMetadata = metadata
@@ -360,6 +392,7 @@ extension PlayerClient: DependencyKey {
             setCanGoPrevious: { _ in unimplementedCall("setCanGoPrevious", placeholder: ()) },
             setUpNextHint: { _ in unimplementedCall("setUpNextHint", placeholder: ()) },
             setUpNextItems: { _ in unimplementedCall("setUpNextItems", placeholder: ()) },
+            setSkipRanges: { _, _ in unimplementedCall("setSkipRanges", placeholder: ()) },
             playbackSpeed: { unimplementedCall("playbackSpeed", placeholder: 1) },
             setPlaybackSpeed: { _ in unimplementedCall("setPlaybackSpeed", placeholder: ()) },
             setPlaybackRate: { _ in unimplementedCall("setPlaybackRate", placeholder: ()) },
@@ -400,6 +433,7 @@ extension PlayerClient: DependencyKey {
             setCanGoPrevious: { _ in },
             setUpNextHint: { _ in },
             setUpNextItems: { _ in },
+            setSkipRanges: { _, _ in },
             playbackSpeed: { 1 },
             setPlaybackSpeed: { _ in },
             setPlaybackRate: { _ in },

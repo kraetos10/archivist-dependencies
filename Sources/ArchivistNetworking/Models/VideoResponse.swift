@@ -21,6 +21,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
     public let streams: [VideoStream]?
     public let tags: [String]?
     public let commentCount: Int?
+    public let sponsorblock: SponsorBlock?
 
     public var id: String { videoId }
 
@@ -78,7 +79,22 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
             .contains { codec.contains($0) }
         guard hasNoHardwareDecoder else { return false }
 
-        return (stream.height ?? 0) >= 2160 || (stream.width ?? 0) >= 3840
+        return Self.isUltraHD(stream)
+    }
+
+    /// True for AV1 at 4K and above. The only video VLC's software AV1
+    /// decoder (dav1d) is known to crash on, so playback treats it
+    /// specially: it needs an AV1 hardware decoder or it doesn't start.
+    public var isHighResolutionAV1: Bool {
+        guard let stream = videoStream,
+              let codec = stream.codec?.lowercased()
+        else { return false }
+
+        return ["av1", "av01"].contains { codec.contains($0) } && Self.isUltraHD(stream)
+    }
+
+    private static func isUltraHD(_ stream: VideoStream) -> Bool {
+        (stream.height ?? 0) >= 2160 || (stream.width ?? 0) >= 3840
     }
 
     public var isWatched: Bool { player?.watched ?? false }
@@ -243,7 +259,8 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         subtitles: [VideoSubtitle]?,
         streams: [VideoStream]?,
         tags: [String]?,
-        commentCount: Int?
+        commentCount: Int?,
+        sponsorblock: SponsorBlock? = nil
     ) {
         self.videoId = videoId
         self.title = title
@@ -264,6 +281,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         self.streams = streams
         self.tags = tags
         self.commentCount = commentCount
+        self.sponsorblock = sponsorblock
     }
 
     public static let placeholder = VideoResponse(
@@ -344,6 +362,7 @@ public nonisolated struct VideoResponse: Decodable, Sendable, Equatable, Identif
         case streams
         case tags
         case commentCount = "comment_count"
+        case sponsorblock
     }
 }
 

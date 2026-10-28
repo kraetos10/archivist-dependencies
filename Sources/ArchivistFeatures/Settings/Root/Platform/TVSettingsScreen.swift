@@ -110,6 +110,17 @@ public struct TVSettingsScreen: View {
                 Text(String.localised("video.autoplaySection", table: .videos))
             }
 
+            Section {
+                Toggle(
+                    String.localised("video.sponsorBlock", table: .videos),
+                    isOn: $store.skipSponsorSegments.sending(\.view.skipSponsorSegmentsToggled)
+                )
+            } header: {
+                Text(String.localised("video.sponsorBlockSection", table: .videos))
+            } footer: {
+                Text(String.localised("video.sponsorBlock.footer", table: .videos))
+            }
+
             ThemePickerSection()
 
             // Above Log Out rather than in a trailing footer: the list only

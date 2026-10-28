@@ -17,6 +17,9 @@ extension SettingsReducer {
         case .autoPlayPlaylistToggled(let isOn):
             state.$autoPlayPlaylist.withLock { $0 = isOn }
             return .none
+        case .skipSponsorSegmentsToggled(let isOn):
+            state.$skipSponsorSegments.withLock { $0 = isOn }
+            return .none
         case .clearDiagnosticLogsTapped:
             state.diagnosticLogURL = nil
             return .run { [diagnosticsLog] _ in

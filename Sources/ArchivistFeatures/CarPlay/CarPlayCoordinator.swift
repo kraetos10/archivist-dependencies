@@ -296,7 +296,8 @@ public final class CarPlayCoordinator {
                 duration: Double(video.player?.duration ?? 0),
                 artworkURL: dataProvider.buildThumbnailURL(for: video.vidThumbUrl),
                 authHeaders: dataProvider.serverConfig.authHeaders
-            )
+            ),
+            isHighResolutionAV1: video.isHighResolutionAV1
         ))
     }
 
@@ -321,7 +322,8 @@ public final class CarPlayCoordinator {
                     duration: Double(video?.player?.duration ?? 0),
                     artworkURL: artworkURL,
                     authHeaders: headers
-                )
+                ),
+                isHighResolutionAV1: video?.isHighResolutionAV1 ?? false
             ))
         }
     }

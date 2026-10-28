@@ -348,7 +348,9 @@ extension VideoDetailReducer {
                 expectedSize: state.video.mediaSize.map { Int64($0) },
                 metadata: Self.nowPlayingMetadata(for: video, config: config),
                 replacesCurrent: true,
-                canGoPrevious: hasPrevious
+                canGoPrevious: hasPrevious,
+                isHighResolutionAV1: state.video.isHighResolutionAV1,
+                skipRanges: state.sponsorSkipRanges
             )
         }
         let playbackEffect: Effect<Action> = .run { [playerClient, videoService] send in

@@ -198,6 +198,30 @@ struct VideoDetailReducerTests {
         }
     }
 
+    // MARK: - SponsorBlock
+
+    @Test func playbackSkipsSponsorSegmentsOnlyWhenTheSettingIsOn() async {
+        @Shared(.skipSponsorSegments) var skipSponsorSegments
+        defer { $skipSponsorSegments.withLock { $0 = false } }
+        let requests = LockIsolated<[PlayerClient.PlaybackRequest]>([])
+        let (events, _) = AsyncStream<PlayerEvent>.makeStream()
+        let store = makeStore(video: TestFixtures.videoWithSponsorSegment)
+        store.dependencies.playerClient.startPlayback = { request in
+            requests.withValue { $0.append(request) }
+            return events
+        }
+
+        $skipSponsorSegments.withLock { $0 = false }
+        await store.send(.view(.playTapped)) { $0.isPlaying = true }
+        await store.send(.view(.stopPlayback)) { $0.isPlaying = false }
+
+        $skipSponsorSegments.withLock { $0 = true }
+        await store.send(.view(.playTapped)) { $0.isPlaying = true }
+        await store.send(.view(.stopPlayback)) { $0.isPlaying = false }
+
+        expectNoDifference(requests.value.map(\.skipRanges), [[], [30..<45]])
+    }
+
     // MARK: - Subscribe to channel
 
     @Test func subscribeButtonShowsOnlyWhenTheChannelIsKnownToBeUnsubscribed() {
@@ -695,6 +719,41 @@ private extension TestFixtures {
         width: 1920,
         height: 1080,
         bitrate: nil
+    )
+
+    /// `videoWithMedia` carrying one skippable SponsorBlock segment (30s–45s).
+    static let videoWithSponsorSegment = VideoResponse(
+        videoId: video1.videoId,
+        title: video1.title,
+        description: nil,
+        category: nil,
+        channel: video1.channel,
+        published: video1.published,
+        dateDownloaded: nil,
+        vidLastRefresh: nil,
+        vidThumbUrl: nil,
+        vidType: nil,
+        active: nil,
+        mediaUrl: "/media/video_1.mp4",
+        mediaSize: nil,
+        player: nil,
+        stats: nil,
+        subtitles: nil,
+        streams: nil,
+        tags: nil,
+        commentCount: nil,
+        sponsorblock: SponsorBlock(
+            isEnabled: true,
+            segments: [
+                SponsorBlockSegment(
+                    uuid: "segment-1",
+                    category: "sponsor",
+                    actionType: "skip",
+                    start: 30,
+                    end: 45
+                )
+            ]
+        )
     )
 
     /// `video1` with a server media path, so it can be played.

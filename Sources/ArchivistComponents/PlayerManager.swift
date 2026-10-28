@@ -635,7 +635,8 @@ public final class PlayerManager: NSObject {
         url: URL,
         startPosition: Double?,
         videoId: String? = nil,
-        expectedSize: Int64? = nil
+        expectedSize: Int64? = nil,
+        decodesAV1InHardware: Bool = false
     ) {
         // A new video invalidates any pending auto-play countdown. The
         // mirror below is written by the VideoDetail reducer's `onChange`,
@@ -692,7 +693,8 @@ public final class PlayerManager: NSObject {
             playingFromCache = true
         }
 
-        let newBackend: any PlayerBackend = PlaybackServiceBackend()
+        let newBackend = PlaybackServiceBackend()
+        newBackend.decodesAV1InHardware = decodesAV1InHardware  // dav1d crashes on 4K AV1
         setupBackendCallbacks(newBackend)
         // Assign `backend` BEFORE `load` so the seeded resume position
         // (and any state callbacks fired synchronously inside `load`)

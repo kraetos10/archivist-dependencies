@@ -67,6 +67,39 @@
         }
       }
     },
+    "video.sponsorBlock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip Sponsored Segments"
+          }
+        }
+      }
+    },
+    "video.sponsorBlockSection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SponsorBlock"
+          }
+        }
+      }
+    },
+    "video.sponsorBlock.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jumps over the sponsor, intro and similar segments TubeArchivist has marked for a video. Only videos with SponsorBlock data on your server are affected."
+          }
+        }
+      }
+    },
     "video.upNext": {
       "extractionState": "manual",
       "localizations": {

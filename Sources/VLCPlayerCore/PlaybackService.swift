@@ -623,13 +623,17 @@ public final class PlaybackService: NSObject, @unchecked Sendable {
     ///   kVLCSettingHardwareDecoding = "codec"            default ""
     ///   kVLCSettingNetworkRTSPTCP   = "rtsp-tcp"
     ///   kVLCSettingNetworkRTSPHTTP  = "rtsp-http"
+    /// Decoder module list for the next media, taking priority over the
+    /// stored `codec` setting. `nil` leaves libvlc to choose.
+    public var codecOverride: String?
+
     @objc public var mediaOptionsDictionary: [AnyHashable: Any]? {
         let defaults = UserDefaults.standard
         return [
             "network-caching": defaults.object(forKey: "network-caching") ?? 999,
             "subsdec-encoding": defaults.object(forKey: "subsdec-encoding") ?? "Windows-1252",
             "avcodec-skiploopfilter": defaults.object(forKey: "avcodec-skiploopfilter") ?? 0,
-            "codec": defaults.object(forKey: "codec") ?? "",
+            "codec": codecOverride ?? defaults.object(forKey: "codec") ?? "",
             "rtsp-tcp": defaults.object(forKey: "rtsp-tcp") ?? false,
             "rtsp-http": defaults.object(forKey: "rtsp-http") ?? false
         ]

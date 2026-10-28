@@ -65,4 +65,27 @@ struct SoftwareDecodeDetectionTests {
         #expect(!video(codec: "vp9", width: 3840, height: 2160, type: "audio")
             .requiresSoftwareDecodingAtHighResolution)
     }
+
+    // MARK: - High-resolution AV1
+
+    /// The one case VLC's software decoder (dav1d) crashes on, so it gets
+    /// its own, narrower rule than the warning above.
+    @Test(arguments: ["av1", "AV1", "av01.0.12M.08"])
+    func flagsAV1AtOrAbove4K(codec: String) {
+        #expect(video(codec: codec, width: 3840, height: 2160).isHighResolutionAV1)
+        #expect(video(codec: codec, width: 3840, height: 1920).isHighResolutionAV1)
+    }
+
+    @Test func doesNotFlagAV1Below4K() {
+        #expect(!video(codec: "av1", width: 2560, height: 1440).isHighResolutionAV1)
+    }
+
+    @Test(arguments: ["vp9", "h264", "hevc"])
+    func doesNotFlagOtherCodecsAt4K(codec: String) {
+        #expect(!video(codec: codec, width: 3840, height: 2160).isHighResolutionAV1)
+    }
+
+    @Test func doesNotFlagWhenTheServerReportsNoStreams() {
+        #expect(!TestFixtures.video1.isHighResolutionAV1)
+    }
 }

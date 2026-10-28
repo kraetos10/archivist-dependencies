@@ -368,7 +368,9 @@ extension VideoDetailReducer {
             startPosition: startPosition,
             videoId: videoId,
             expectedSize: state.video.mediaSize.map { Int64($0) },
-            metadata: Self.nowPlayingMetadata(for: state.video, config: config)
+            metadata: Self.nowPlayingMetadata(for: state.video, config: config),
+            isHighResolutionAV1: state.video.isHighResolutionAV1,
+            skipRanges: state.sponsorSkipRanges
         )
         return .run { [playerClient, videoService] send in
             // Subscribes before loading, in one main-actor turn, so nothing

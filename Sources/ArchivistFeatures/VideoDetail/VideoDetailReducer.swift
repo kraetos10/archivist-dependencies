@@ -114,6 +114,12 @@ public struct VideoDetailReducer {
             return serverConfig.fullURL(for: mediaPath)
         }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
+        /// What playback jumps over: the video's SponsorBlock segments, and
+        /// only when the user has turned skipping on.
+        var sponsorSkipRanges: [Range<Double>] {
+            @Shared(.skipSponsorSegments) var skipSponsorSegments
+            return skipSponsorSegments ? video.sponsorSkipRanges : []
+        }
         /// Offered only when the server says the channel is *not*
         /// subscribed: `nil` means unknown (an offline copy), which must not
         /// invite a subscribe. Child mode never offers it.
@@ -371,6 +377,7 @@ public struct VideoDetailReducer {
         case countdownMirror
         case upNextMirror
         case upNextRibbonMirror
+        case skipRangesMirror
         /// Resolving what plays next once a video ends.
         case autoPlayResolve
         /// Per-video loads. Each restarts with `cancelInFlight` whenever the
@@ -453,6 +460,18 @@ public struct VideoDetailReducer {
                 #else
                 return .none
                 #endif
+            }
+        }
+        .onChange(of: \.sponsorSkipRanges) { _, _ in
+            // A refresh can land after playback began, so push the ranges
+            // into the running player too (ignored if it's another video).
+            Reduce { state, _ in
+                let videoId = state.video.videoId
+                let ranges = state.sponsorSkipRanges
+                return .run { [playerClient] _ in
+                    await playerClient.setSkipRanges(videoId, ranges)
+                }
+                .cancellable(id: CancelID.skipRangesMirror, cancelInFlight: true)
             }
         }
         .onChange(of: \.upNextRibbonItems) { _, _ in

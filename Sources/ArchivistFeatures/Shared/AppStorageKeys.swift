@@ -37,6 +37,12 @@ extension SharedKey where Self == AppStorageKey<Bool>.Default {
         Self[.appStorage("discoverHidesShorts"), default: false]
     }
 
+    /// Jump over the segments SponsorBlock marks (sponsors, intros…) when a
+    /// video has them. Off unless the user turns it on.
+    public static var skipSponsorSegments: Self {
+        Self[.appStorage("skipSponsorSegments"), default: false]
+    }
+
     /// Child mode on/off.
     public static var childModeEnabled: Self {
         Self[.appStorage(ChildMode.enabledKey), default: false]

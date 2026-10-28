@@ -32,6 +32,22 @@ struct SettingsReducerTests {
         }
     }
 
+    @Test func skippingSponsorSegmentsIsOffUntilTurnedOn() async {
+        let store = TestStore(initialState: SettingsReducer.State(serverConfig: config)) {
+            SettingsReducer()
+        }
+        #expect(!store.state.skipSponsorSegments)
+
+        await store.send(.view(.skipSponsorSegmentsToggled(true))) {
+            $0.$skipSponsorSegments.withLock { $0 = true }
+        }
+        #expect(store.state.skipSponsorSegments)
+
+        await store.send(.view(.skipSponsorSegmentsToggled(false))) {
+            $0.$skipSponsorSegments.withLock { $0 = false }
+        }
+    }
+
     @Test func failedRescanShowsAlert() async {
         let failure = URLError(.timedOut)
         let store = TestStore(initialState: SettingsReducer.State(serverConfig: config)) {

@@ -95,7 +95,17 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         super.init()
     }
 
+    /// Restricts libvlc to its avcodec module for this video, which decodes
+    /// AV1 through VideoToolbox rather than dav1d. Set before `load`.
+    public var decodesAV1InHardware = false
+
+    /// Stretches to jump over as playback reaches them. Each is skipped
+    /// once per load, so rewinding into one on purpose plays it.
+    public var skipRanges: [Range<Double>] = []
+    private var skippedRangeStarts: Set<Double> = []
+
     public func load(url: URL, startPosition: Double?) {
+        service.codecOverride = decodesAV1InHardware ? "avcodec" : nil
         isBuffering = true
         isPlaying = true
         hasReachedPlaying = false
@@ -372,6 +382,15 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         currentTime = Double(timeMs) / 1000.0
         furthestTime = max(furthestTime, currentTime)
         onTimeUpdate?(currentTime)
+        skipRangeIfReached()
+    }
+
+    private func skipRangeIfReached() {
+        guard let range = skipRanges.first(where: {
+            $0.contains(currentTime) && !skippedRangeStarts.contains($0.lowerBound)
+        }) else { return }
+        skippedRangeStarts.insert(range.lowerBound)
+        seekTo(duration > 0 ? min(range.upperBound, duration) : range.upperBound)
     }
 
     private func handleStateChange(_ currentState: VLCMediaPlayerState) {
