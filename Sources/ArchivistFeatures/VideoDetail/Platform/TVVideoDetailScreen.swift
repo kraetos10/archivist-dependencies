@@ -128,6 +128,19 @@ public struct TVVideoDetailScreen: View {
                         )
                     }
                     .buttonStyle(.bordered)
+
+                    if store.showsSubscribeButton {
+                        Button {
+                            send(.subscribeToChannelTapped)
+                        } label: {
+                            Label(
+                                String.localised("video.subscribeToChannel", table: .videos),
+                                systemImage: "plus.circle"
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(store.isSubscribingToChannel)
+                    }
                 }
 
                 if let description = store.descriptionPreview {

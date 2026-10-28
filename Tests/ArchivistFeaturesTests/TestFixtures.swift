@@ -320,6 +320,50 @@ enum TestFixtures {
         )
     }
 
+    /// `video1` from a channel the server reports as not subscribed.
+    static let unsubscribedChannelVideo = videoFromChannel(subscribed: false)
+
+    /// `video1` from a channel whose subscription state is unknown, as in an
+    /// offline copy.
+    static let unknownSubscriptionVideo = videoFromChannel(subscribed: nil)
+
+    private static func videoFromChannel(subscribed: Bool?) -> VideoResponse {
+        VideoResponse(
+            videoId: video1.videoId,
+            title: video1.title,
+            description: nil,
+            category: nil,
+            channel: VideoChannel(
+                channelId: video1.channel.channelId,
+                channelName: video1.channel.channelName,
+                channelActive: nil,
+                channelBannerUrl: nil,
+                channelThumbUrl: nil,
+                channelTvartUrl: nil,
+                channelDescription: nil,
+                channelLastRefresh: nil,
+                channelSubs: nil,
+                channelSubscribed: subscribed,
+                channelTags: nil,
+                channelTabs: nil
+            ),
+            published: video1.published,
+            dateDownloaded: nil,
+            vidLastRefresh: nil,
+            vidThumbUrl: nil,
+            vidType: nil,
+            active: nil,
+            mediaUrl: nil,
+            mediaSize: nil,
+            player: nil,
+            stats: nil,
+            subtitles: nil,
+            streams: nil,
+            tags: nil,
+            commentCount: nil
+        )
+    }
+
     static let comment1 = VideoComment(
         commentId: "comment_1",
         commentText: "First comment",

@@ -16,6 +16,8 @@ extension VideoDetailReducer {
             return handleServerDeleteResult(result, state: &state)
         case .watchedToggleResult(let result):
             return handleWatchedToggleResult(result, state: &state)
+        case .subscribeResult(let videoId, let result):
+            return handleSubscribeResult(result, videoId: videoId, state: &state)
         case .autoPlayVideo(let video):
             return handleAutoPlayVideo(video, state: &state)
         case .autoPlayExhausted:
@@ -154,6 +156,26 @@ extension VideoDetailReducer {
     ) -> Effect<Action> {
         if case .success = result {
             state.watchedOverride = !(state.watchedOverride ?? state.video.isWatched)
+        }
+        return .none
+    }
+
+    private func handleSubscribeResult(
+        _ result: Result<Void, Error>,
+        videoId: String,
+        state: inout State
+    ) -> Effect<Action> {
+        guard videoId == state.video.videoId else { return .none }
+        state.isSubscribingToChannel = false
+        switch result {
+        case .success:
+            state.subscribedOverride = true
+        case .failure(let error):
+            state.alert = AlertState {
+                TextState(String.localised("generic.error", table: .generic))
+            } message: {
+                TextState(error.localizedDescription)
+            }
         }
         return .none
     }

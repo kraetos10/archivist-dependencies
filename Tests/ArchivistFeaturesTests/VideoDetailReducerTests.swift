@@ -198,6 +198,70 @@ struct VideoDetailReducerTests {
         }
     }
 
+    // MARK: - Subscribe to channel
+
+    @Test func subscribeButtonShowsOnlyWhenTheChannelIsKnownToBeUnsubscribed() {
+        #expect(makeStore(video: TestFixtures.unsubscribedChannelVideo).state.showsSubscribeButton)
+        #expect(!makeStore(video: TestFixtures.unknownSubscriptionVideo).state.showsSubscribeButton)
+    }
+
+    @Test func subscribeButtonIsHiddenInChildMode() {
+        let store = makeStore(video: TestFixtures.unsubscribedChannelVideo)
+        store.state.$childModeEnabled.withLock { $0 = true }
+        defer { store.state.$childModeEnabled.withLock { $0 = false } }
+
+        #expect(!store.state.showsSubscribeButton)
+    }
+
+    @Test func subscribeToChannelSubscribesAndHidesTheButton() async {
+        let store = makeStore(video: TestFixtures.unsubscribedChannelVideo)
+        store.dependencies.channelService.subscribeChannels = { _, items in
+            #expect(items.map(\.channelId) == ["UC_channel1"])
+            #expect(items.allSatisfy { $0.channelSubscribed })
+        }
+
+        await store.send(.view(.subscribeToChannelTapped)) {
+            $0.isSubscribingToChannel = true
+        }
+        await store.receive(\.subscribeResult) {
+            $0.isSubscribingToChannel = false
+            $0.subscribedOverride = true
+        }
+        #expect(!store.state.showsSubscribeButton)
+    }
+
+    @Test func subscribeToChannelFailureShowsAnAlertAndKeepsTheButton() async {
+        let store = makeStore(video: TestFixtures.unsubscribedChannelVideo)
+        store.dependencies.channelService.subscribeChannels = { _, _ in throw TestError.failed }
+
+        await store.send(.view(.subscribeToChannelTapped)) {
+            $0.isSubscribingToChannel = true
+        }
+        await store.receive(\.subscribeResult) {
+            $0.isSubscribingToChannel = false
+            $0.alert = AlertState {
+                TextState(String.localised("generic.error", table: .generic))
+            } message: {
+                TextState(TestError.failed.localizedDescription)
+            }
+        }
+        #expect(store.state.showsSubscribeButton)
+    }
+
+    @Test func subscribeToChannelIsIgnoredForASubscribedChannel() async {
+        let store = makeStore()
+
+        await store.send(.view(.subscribeToChannelTapped))
+    }
+
+    @Test func subscribeResultForAnotherVideoIsIgnored() async {
+        let store = makeStore(video: TestFixtures.unsubscribedChannelVideo) {
+            $0.isSubscribingToChannel = true
+        }
+
+        await store.send(.subscribeResult(videoId: "video_2", .success(())))
+    }
+
     // MARK: - Cache status
 
     @Test func cacheStatusChangedUpdatesTheCachedFlag() async {

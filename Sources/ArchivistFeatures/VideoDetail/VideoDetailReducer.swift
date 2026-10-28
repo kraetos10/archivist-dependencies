@@ -62,6 +62,10 @@ public struct VideoDetailReducer {
         var isCached = false
         var isDeletingFromServer = false
         var isDescriptionExpanded = false
+        var isSubscribingToChannel = false
+        /// Set once a subscribe succeeds, since `video.channel` was fetched
+        /// before it. Cleared when the screen switches to another video.
+        var subscribedOverride: Bool?
         /// tvOS: the comment open in the full-text view.
         var expandedComment: VideoComment?
         /// Set when the user answers the tvOS resume prompt with "start from
@@ -91,6 +95,8 @@ public struct VideoDetailReducer {
         /// it's worth saying once and never again.
         @Shared(.hasSeenSoftwareDecodeWarning)
         var hasSeenSoftwareDecodeWarning
+        @Shared(.childModeEnabled)
+        var childModeEnabled
         @FetchAll(PlayNextItem.all.order(by: \.id))
         var playNextItems
         @Presents var playlistPicker: PlaylistPickerReducer.State?
@@ -108,6 +114,13 @@ public struct VideoDetailReducer {
             return serverConfig.fullURL(for: mediaPath)
         }
         var isWatched: Bool { watchedOverride ?? video.isWatched }
+        /// Offered only when the server says the channel is *not*
+        /// subscribed: `nil` means unknown (an offline copy), which must not
+        /// invite a subscribe. Child mode never offers it.
+        var showsSubscribeButton: Bool {
+            guard !childModeEnabled else { return false }
+            return subscribedOverride == nil && video.channel.channelSubscribed == false
+        }
         var effectiveWatchProgress: Double { localWatchProgress ?? video.watchProgress }
         var channelThumbURL: URL? {
             guard let path = video.channel.channelThumbUrl else { return nil }
@@ -241,6 +254,8 @@ public struct VideoDetailReducer {
             downloadError = nil
             isDeletingFromServer = false
             isDescriptionExpanded = false
+            isSubscribingToChannel = false
+            subscribedOverride = nil
             expandedComment = nil
             playbackStartsAtBeginning = false
             showAllComments = false
@@ -301,6 +316,9 @@ public struct VideoDetailReducer {
         case resumePlaybackObservation
         case serverDeleteResult(Result<Void, Error>)
         case watchedToggleResult(Result<Void, Error>)
+        /// Carries the video it was sent for, like the other per-video
+        /// results: an in-place switch can leave it in flight.
+        case subscribeResult(videoId: String, Result<Void, Error>)
 
         public enum Delegate {
             case didRequestMinimize
@@ -329,6 +347,7 @@ public struct VideoDetailReducer {
             case repliesToggled(commentId: String)
             case upNextRibbonItemSelected(videoId: String)
             case toggleWatchedTapped
+            case subscribeToChannelTapped
             case addToPlaylistTapped
             case addToPlayNextTapped
             case addUpNextToPlayNextTapped(VideoResponse)
@@ -364,6 +383,7 @@ public struct VideoDetailReducer {
 
     @Dependency(\.dismiss) var dismiss
     @Dependency(\.videoService) var videoService
+    @Dependency(\.channelService) var channelService
     @Dependency(\.localVideoStorage) var localVideoStorage
     @Dependency(\.persistentDownloadManager) var persistentDownloadManager
     @Dependency(\.deviceDownloadDatabase) var deviceDownloadDatabase

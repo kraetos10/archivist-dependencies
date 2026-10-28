@@ -46,6 +46,8 @@ extension VideoDetailReducer {
             return .none
         case .toggleWatchedTapped:
             return handleToggleWatched(state: &state)
+        case .subscribeToChannelTapped:
+            return handleSubscribeToChannelTapped(state: &state)
         default:
             return .none
         }
@@ -734,6 +736,23 @@ extension VideoDetailReducer {
                 }
             }
             await send(.watchedToggleResult(result))
+        }
+    }
+
+    private func handleSubscribeToChannelTapped(state: inout State) -> Effect<Action> {
+        guard state.showsSubscribeButton, !state.isSubscribingToChannel else { return .none }
+        state.isSubscribingToChannel = true
+        let config = state.serverConfig
+        let videoId = state.video.videoId
+        let item = ChannelSubscribeItem(
+            channelId: state.video.channel.channelId,
+            channelSubscribed: true
+        )
+        return .run { [channelService] send in
+            let result = await Result {
+                try await channelService.subscribeChannels(config: config, items: [item])
+            }
+            await send(.subscribeResult(videoId: videoId, result))
         }
     }
 

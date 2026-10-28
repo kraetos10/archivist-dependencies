@@ -297,6 +297,21 @@ public struct VideoDetailScreen: View {
                 onChannelTapped: { send(.channelTapped) }
             )
 
+            if store.showsSubscribeButton {
+                Button {
+                    send(.subscribeToChannelTapped)
+                } label: {
+                    Label(
+                        String.localised("video.subscribeToChannel", table: .videos),
+                        systemImage: "plus.circle.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(Color.Accent.dark)
+                .disabled(store.isSubscribingToChannel)
+            }
+
             VideoInfoRow(
                 qualityLabel: store.video.qualityLabel,
                 fileSize: store.video.formattedFileSize,
