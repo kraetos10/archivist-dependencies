@@ -334,6 +334,16 @@ extension VideoDetailReducer {
     /// would just train the user to dismiss it. Playing is still the
     /// default action — the warning informs, it doesn't block.
     func handlePlayTappedWarningIfNeeded(state: inout State) -> Effect<Action> {
+        // 4K AV1 has its own rule, in place of the generic note below: with
+        // a hardware decoder it isn't decoded in software at all, and
+        // without one the user is warned each time, until they choose to
+        // play it anyway.
+        if state.video.isHighResolutionAV1 {
+            guard !av1HardwareDecoding.isSupported(), !state.allowsUnsupportedAV1 else {
+                return handlePlayTapped(state: &state)
+            }
+            return presentUnsupportedAV1Warning(state: &state)
+        }
         guard state.video.requiresSoftwareDecodingAtHighResolution,
               !state.hasSeenSoftwareDecodeWarning
         else { return handlePlayTapped(state: &state) }
@@ -354,6 +364,25 @@ extension VideoDetailReducer {
         return .none
     }
 
+    /// Unlike the one-off software-decode note, this appears every time: this
+    /// device has no AV1 hardware decoder, and the software one can crash the
+    /// app on a video this size. Playing is still the user's call.
+    private func presentUnsupportedAV1Warning(state: inout State) -> Effect<Action> {
+        state.alert = AlertState {
+            TextState(String.localised("video.av1Unsupported.title", table: .videos))
+        } actions: {
+            ButtonState(role: .destructive, action: .playUnsupportedAV1Anyway) {
+                TextState(String.localised("video.av1Unsupported.playAnyway", table: .videos))
+            }
+            ButtonState(role: .cancel, action: .dismissed) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.av1Unsupported.message", table: .videos))
+        }
+        return .none
+    }
+
     func handlePlayTapped(state: inout State) -> Effect<Action> {
         guard let url = mediaURL(state: state) else { return .none }
         state.isPlaying = true
@@ -370,6 +399,7 @@ extension VideoDetailReducer {
             expectedSize: state.video.mediaSize.map { Int64($0) },
             metadata: Self.nowPlayingMetadata(for: state.video, config: config),
             isHighResolutionAV1: state.video.isHighResolutionAV1,
+            allowsUnsupportedAV1: state.allowsUnsupportedAV1,
             skipRanges: state.sponsorSkipRanges
         )
         return .run { [playerClient, videoService] send in

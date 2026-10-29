@@ -198,6 +198,108 @@ struct VideoDetailReducerTests {
         }
     }
 
+    // MARK: - Unsupported 4K AV1
+
+    private var unsupportedAV1Alert: AlertState<VideoDetailReducer.AlertAction> {
+        AlertState {
+            TextState(String.localised("video.av1Unsupported.title", table: .videos))
+        } actions: {
+            ButtonState(role: .destructive, action: .playUnsupportedAV1Anyway) {
+                TextState(String.localised("video.av1Unsupported.playAnyway", table: .videos))
+            }
+            ButtonState(role: .cancel, action: .dismissed) {
+                TextState(String.localised("generic.cancel", table: .generic))
+            }
+        } message: {
+            TextState(String.localised("video.av1Unsupported.message", table: .videos))
+        }
+    }
+
+    @Test func playingUnsupported4KAV1WarnsInsteadOfStarting() async {
+        let requests = LockIsolated<[PlayerClient.PlaybackRequest]>([])
+        let store = makeStore(video: TestFixtures.videoWithUHDAV1)
+        store.dependencies.av1HardwareDecoding = AV1HardwareDecodingClient { false }
+        store.dependencies.playerClient.startPlayback = { request in
+            requests.withValue { $0.append(request) }
+            return AsyncStream<PlayerEvent>.makeStream().stream
+        }
+
+        await store.send(.view(.playTapped)) {
+            $0.alert = unsupportedAV1Alert
+        }
+        #expect(requests.value.isEmpty)
+    }
+
+    @Test func playAnywayStartsTheVideoAndSkipsTheRefusal() async {
+        let requests = LockIsolated<[PlayerClient.PlaybackRequest]>([])
+        let (events, continuation) = AsyncStream<PlayerEvent>.makeStream()
+        let store = makeStore(video: TestFixtures.videoWithUHDAV1) {
+            $0.alert = unsupportedAV1Alert
+        }
+        store.dependencies.av1HardwareDecoding = AV1HardwareDecodingClient { false }
+        store.dependencies.playerClient.startPlayback = { request in
+            requests.withValue { $0.append(request) }
+            return events
+        }
+
+        await store.send(.alert(.presented(.playUnsupportedAV1Anyway))) {
+            $0.alert = nil
+            $0.allowsUnsupportedAV1 = true
+            $0.isPlaying = true
+        }
+        continuation.finish()
+        await store.finish()
+
+        #expect(requests.value.map(\.isHighResolutionAV1) == [true])
+        #expect(requests.value.map(\.allowsUnsupportedAV1) == [true])
+    }
+
+    @Test func cancellingTheWarningPlaysNothing() async {
+        let store = makeStore(video: TestFixtures.videoWithUHDAV1) {
+            $0.alert = unsupportedAV1Alert
+        }
+
+        await store.send(.alert(.dismiss)) {
+            $0.alert = nil
+        }
+    }
+
+    /// Retry arrives as an alert action, so the test needs an alert showing.
+    @Test func retryAfterAFailedPlayAnywayDoesNotWarnAgain() async {
+        let (events, continuation) = AsyncStream<PlayerEvent>.makeStream()
+        let store = makeStore(video: TestFixtures.videoWithUHDAV1) {
+            $0.allowsUnsupportedAV1 = true
+            $0.alert = AlertState { TextState("Playback failed") }
+        }
+        store.dependencies.av1HardwareDecoding = AV1HardwareDecodingClient { false }
+        store.dependencies.playerClient.startPlayback = { _ in events }
+
+        await store.send(.alert(.presented(.retryPlayback))) {
+            $0.alert = nil
+            $0.isPlaying = true
+        }
+        continuation.finish()
+        await store.finish()
+    }
+
+    @Test func aDeviceWithAV1HardwarePlaysWithoutAnyWarning() async {
+        let requests = LockIsolated<[PlayerClient.PlaybackRequest]>([])
+        let (events, continuation) = AsyncStream<PlayerEvent>.makeStream()
+        let store = makeStore(video: TestFixtures.videoWithUHDAV1)
+        store.dependencies.av1HardwareDecoding = AV1HardwareDecodingClient { true }
+        store.dependencies.playerClient.startPlayback = { request in
+            requests.withValue { $0.append(request) }
+            return events
+        }
+
+        await store.send(.view(.playTapped)) { $0.isPlaying = true }
+        continuation.finish()
+        await store.finish()
+
+        #expect(requests.value.map(\.isHighResolutionAV1) == [true])
+        #expect(requests.value.map(\.allowsUnsupportedAV1) == [false])
+    }
+
     // MARK: - SponsorBlock
 
     @Test func playbackSkipsSponsorSegmentsOnlyWhenTheSettingIsOn() async {
@@ -719,6 +821,31 @@ private extension TestFixtures {
         width: 1920,
         height: 1080,
         bitrate: nil
+    )
+
+    /// `video1` as a playable 4K AV1 video.
+    static let videoWithUHDAV1 = VideoResponse(
+        videoId: video1.videoId,
+        title: video1.title,
+        description: nil,
+        category: nil,
+        channel: video1.channel,
+        published: video1.published,
+        dateDownloaded: nil,
+        vidLastRefresh: nil,
+        vidThumbUrl: nil,
+        vidType: nil,
+        active: nil,
+        mediaUrl: "/media/video_1.mp4",
+        mediaSize: nil,
+        player: nil,
+        stats: nil,
+        subtitles: nil,
+        streams: [
+            VideoStream(type: "video", index: 0, codec: "av1", width: 3840, height: 2160, bitrate: nil)
+        ],
+        tags: nil,
+        commentCount: nil
     )
 
     /// `videoWithMedia` carrying one skippable SponsorBlock segment (30s–45s).

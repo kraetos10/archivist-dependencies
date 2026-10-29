@@ -33,6 +33,9 @@ public struct PlayerClient: Sendable {
         /// decoder (decoded through VideoToolbox) and fails cleanly on the
         /// rest.
         public var isHighResolutionAV1: Bool
+        /// The user was warned this device can't safely decode the AV1 and
+        /// chose to play it anyway, so the refusal is skipped.
+        public var allowsUnsupportedAV1: Bool
         /// Stretches of the video to jump over as playback reaches them
         /// (SponsorBlock). Empty plays everything.
         public var skipRanges: [Range<Double>]
@@ -46,6 +49,7 @@ public struct PlayerClient: Sendable {
             replacesCurrent: Bool = false,
             canGoPrevious: Bool? = nil,
             isHighResolutionAV1: Bool = false,
+            allowsUnsupportedAV1: Bool = false,
             skipRanges: [Range<Double>] = []
         ) {
             self.url = url
@@ -56,6 +60,7 @@ public struct PlayerClient: Sendable {
             self.replacesCurrent = replacesCurrent
             self.canGoPrevious = canGoPrevious
             self.isHighResolutionAV1 = isHighResolutionAV1
+            self.allowsUnsupportedAV1 = allowsUnsupportedAV1
             self.skipRanges = skipRanges
         }
     }
@@ -340,7 +345,7 @@ extension PlayerClient: DependencyKey {
         if let canGoPrevious = request.canGoPrevious {
             manager.canGoPrevious = canGoPrevious
         }
-        if request.isHighResolutionAV1, !AV1HardwareDecoding.isSupported {
+        if request.isHighResolutionAV1, !request.allowsUnsupportedAV1, !AV1HardwareDecoding.isSupported {
             // Never reaches dav1d. Reported like any other failed load, so
             // the screen stops, says so and doesn't mark the video watched.
             manager.currentVideoID = request.videoId

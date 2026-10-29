@@ -63,6 +63,9 @@ public struct VideoDetailReducer {
         var isDeletingFromServer = false
         var isDescriptionExpanded = false
         var isSubscribingToChannel = false
+        /// Set when the user answers the unsupported-AV1 warning with "Play
+        /// Anyway". Lasts for this video, so a retry doesn't warn again.
+        var allowsUnsupportedAV1 = false
         /// Set once a subscribe succeeds, since `video.channel` was fetched
         /// before it. Cleared when the screen switches to another video.
         var subscribedOverride: Bool?
@@ -261,6 +264,7 @@ public struct VideoDetailReducer {
             isDeletingFromServer = false
             isDescriptionExpanded = false
             isSubscribingToChannel = false
+            allowsUnsupportedAV1 = false
             subscribedOverride = nil
             expandedComment = nil
             playbackStartsAtBeginning = false
@@ -277,6 +281,7 @@ public struct VideoDetailReducer {
         case dismissed
         case confirmDeleteFromServer
         case confirmSoftwareDecodePlayback
+        case playUnsupportedAV1Anyway
         case retryPlayback
         case playFromBeginning
         case resumeFromPosition
@@ -397,6 +402,7 @@ public struct VideoDetailReducer {
     @Dependency(\.playNextDatabase) var playNextDatabase
     @Dependency(\.miniPlayerClient) var miniPlayerClient
     @Dependency(\.playerClient) var playerClient
+    @Dependency(\.av1HardwareDecoding) var av1HardwareDecoding
     @Dependency(\.offlineMedia) var offlineMedia
     @Dependency(\.date.now) var now
 
@@ -414,9 +420,15 @@ public struct VideoDetailReducer {
                 return .none
             case .alert(.presented(.confirmDeleteFromServer)):
                 return handleConfirmedDeleteFromServer(state: &state)
-            case .alert(.presented(.confirmSoftwareDecodePlayback)),
-                 .alert(.presented(.retryPlayback)):
+            case .alert(.presented(.confirmSoftwareDecodePlayback)):
                 return handlePlayTapped(state: &state)
+            case .alert(.presented(.playUnsupportedAV1Anyway)):
+                state.allowsUnsupportedAV1 = true
+                return handlePlayTapped(state: &state)
+            case .alert(.presented(.retryPlayback)):
+                // Back through the warnings: a failed load of an unsupported
+                // video shouldn't just fail the same way again.
+                return handlePlayTappedWarningIfNeeded(state: &state)
             case .alert(.presented(.playFromBeginning)):
                 state.playbackStartsAtBeginning = true
                 return handlePlayTappedWarningIfNeeded(state: &state)
