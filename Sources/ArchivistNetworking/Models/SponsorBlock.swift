@@ -92,6 +92,10 @@ public nonisolated struct SponsorBlockSegment: Decodable, Sendable, Equatable {
 }
 
 extension VideoResponse {
+    /// The video has SponsorBlock segments worth skipping, whether or not
+    /// the user has skipping turned on.
+    public var hasSponsorBlock: Bool { !sponsorSkipRanges.isEmpty }
+
     /// The time ranges playback should jump over, earliest first. Empty
     /// unless the server has SponsorBlock switched on for this video.
     public var sponsorSkipRanges: [Range<Double>] {

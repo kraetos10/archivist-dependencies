@@ -103,6 +103,8 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
     /// once per load, so rewinding into one on purpose plays it.
     public var skipRanges: [Range<Double>] = []
     private var skippedRangeStarts: Set<Double> = []
+    /// Called each time a range is skipped, for the "skipped" banner.
+    public var onRangeSkipped: (@MainActor @Sendable () -> Void)?
 
     public func load(url: URL, startPosition: Double?) {
         service.codecOverride = decodesAV1InHardware ? "avcodec" : nil
@@ -391,6 +393,7 @@ public final class PlaybackServiceBackend: NSObject, PlayerBackend, VLCPlaybackS
         }) else { return }
         skippedRangeStarts.insert(range.lowerBound)
         seekTo(duration > 0 ? min(range.upperBound, duration) : range.upperBound)
+        onRangeSkipped?()
     }
 
     private func handleStateChange(_ currentState: VLCMediaPlayerState) {

@@ -39,6 +39,8 @@ public struct PlayerClient: Sendable {
         /// Stretches of the video to jump over as playback reaches them
         /// (SponsorBlock). Empty plays everything.
         public var skipRanges: [Range<Double>]
+        /// Show the "skipped" banner each time one of `skipRanges` is skipped.
+        public var announcesSkips: Bool
 
         public init(
             url: URL,
@@ -50,7 +52,8 @@ public struct PlayerClient: Sendable {
             canGoPrevious: Bool? = nil,
             isHighResolutionAV1: Bool = false,
             allowsUnsupportedAV1: Bool = false,
-            skipRanges: [Range<Double>] = []
+            skipRanges: [Range<Double>] = [],
+            announcesSkips: Bool = false
         ) {
             self.url = url
             self.startPosition = startPosition
@@ -62,6 +65,7 @@ public struct PlayerClient: Sendable {
             self.isHighResolutionAV1 = isHighResolutionAV1
             self.allowsUnsupportedAV1 = allowsUnsupportedAV1
             self.skipRanges = skipRanges
+            self.announcesSkips = announcesSkips
         }
     }
 
@@ -345,6 +349,7 @@ extension PlayerClient: DependencyKey {
         if let canGoPrevious = request.canGoPrevious {
             manager.canGoPrevious = canGoPrevious
         }
+        SponsorSkipNotice.shared.clear()
         if request.isHighResolutionAV1, !request.allowsUnsupportedAV1, !AV1HardwareDecoding.isSupported {
             // Never reaches dav1d. Reported like any other failed load, so
             // the screen stops, says so and doesn't mark the video watched.
@@ -359,7 +364,13 @@ extension PlayerClient: DependencyKey {
             expectedSize: request.expectedSize,
             decodesAV1InHardware: request.isHighResolutionAV1
         )
-        (manager.backend as? PlaybackServiceBackend)?.skipRanges = request.skipRanges
+        let backend = manager.backend as? PlaybackServiceBackend
+        backend?.skipRanges = request.skipRanges
+        if request.announcesSkips {
+            backend?.onRangeSkipped = { SponsorSkipNotice.shared.skipped() }
+        } else {
+            backend?.onRangeSkipped = nil
+        }
         manager.currentVideoID = request.videoId
         if let metadata = request.metadata {
             manager.currentMetadata = metadata

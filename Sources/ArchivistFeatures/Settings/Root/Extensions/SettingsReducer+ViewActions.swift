@@ -20,6 +20,9 @@ extension SettingsReducer {
         case .skipSponsorSegmentsToggled(let isOn):
             state.$skipSponsorSegments.withLock { $0 = isOn }
             return .none
+        case .sponsorBlockBannerToggled(let isOn):
+            state.$showSponsorBlockBanner.withLock { $0 = isOn }
+            return .none
         case .clearDiagnosticLogsTapped:
             state.diagnosticLogURL = nil
             return .run { [diagnosticsLog] _ in

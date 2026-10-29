@@ -350,7 +350,8 @@ extension VideoDetailReducer {
                 replacesCurrent: true,
                 canGoPrevious: hasPrevious,
                 isHighResolutionAV1: state.video.isHighResolutionAV1,
-                skipRanges: state.sponsorSkipRanges
+                skipRanges: state.sponsorSkipRanges,
+                announcesSkips: state.announcesSponsorSkips
             )
         }
         let playbackEffect: Effect<Action> = .run { [playerClient, videoService] send in

@@ -76,6 +76,8 @@ public struct PlayerControlsOverlay: View {
                     )
                     .transition(.opacity)
                 }
+
+                SponsorSkipBanner()
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

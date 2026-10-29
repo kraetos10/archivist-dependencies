@@ -317,7 +317,8 @@ public struct VideoDetailScreen: View {
                 fileSize: store.video.formattedFileSize,
                 videoCodec: store.video.videoCodec,
                 duration: store.video.durationStr,
-                isCached: store.isCached
+                isCached: store.isCached,
+                hasSponsorBlock: store.video.hasSponsorBlock
             )
 
             if let linkedDescription = store.video.linkedDescription {

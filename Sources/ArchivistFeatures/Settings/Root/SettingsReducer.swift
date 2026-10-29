@@ -20,6 +20,7 @@ public struct SettingsReducer {
         @Shared(.autoPlayEnabled) public var autoPlayEnabled
         @Shared(.autoPlayPlaylist) public var autoPlayPlaylist
         @Shared(.skipSponsorSegments) public var skipSponsorSegments
+        @Shared(.showSponsorBlockBanner) public var showSponsorBlockBanner
         @Presents var videoDetail: VideoDetailReducer.State?
         @Presents var alert: AlertState<AlertAction>?
         #if !os(tvOS)
@@ -85,6 +86,7 @@ public struct SettingsReducer {
             case autoPlayToggled(Bool)
             case autoPlayPlaylistToggled(Bool)
             case skipSponsorSegmentsToggled(Bool)
+            case sponsorBlockBannerToggled(Bool)
             case clearDiagnosticLogsTapped
             case logoutTapped
             case rescanSubscriptionsTapped

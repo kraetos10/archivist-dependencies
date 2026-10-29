@@ -193,6 +193,17 @@ public struct TVVideoDetailScreen: View {
                             .clipShape(Capsule())
                     }
 
+                    if store.video.hasSponsorBlock {
+                        Text(String.localised("video.sponsorBlock.pill", table: .videos))
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Text.primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.Surface.highlight)
+                            .clipShape(Capsule())
+                    }
+
                     if let duration = store.video.durationStr {
                         Text(duration)
                             .lineLimit(1)

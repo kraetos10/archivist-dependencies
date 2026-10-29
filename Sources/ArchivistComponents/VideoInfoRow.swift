@@ -10,9 +10,15 @@ public struct VideoInfoRow: View {
         fileSize: String?,
         videoCodec: String?,
         duration: String?,
-        isCached: Bool = false
+        isCached: Bool = false,
+        hasSponsorBlock: Bool = false
     ) {
-        self.pills = [qualityLabel, fileSize, videoCodec].compactMap { $0 }
+        self.pills = [
+            qualityLabel,
+            fileSize,
+            videoCodec,
+            hasSponsorBlock ? String.localised("video.sponsorBlock.pill", table: .videos) : nil
+        ].compactMap { $0 }
         self.duration = duration
         self.isCached = isCached
     }

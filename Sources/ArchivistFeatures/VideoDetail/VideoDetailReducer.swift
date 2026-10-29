@@ -119,6 +119,10 @@ public struct VideoDetailReducer {
         var isWatched: Bool { watchedOverride ?? video.isWatched }
         /// What playback jumps over: the video's SponsorBlock segments, and
         /// only when the user has turned skipping on.
+        var announcesSponsorSkips: Bool {
+            @Shared(.showSponsorBlockBanner) var showSponsorBlockBanner
+            return showSponsorBlockBanner
+        }
         var sponsorSkipRanges: [Range<Double>] {
             @Shared(.skipSponsorSegments) var skipSponsorSegments
             return skipSponsorSegments ? video.sponsorSkipRanges : []
@@ -525,7 +529,7 @@ extension VideoDetailReducer.State {
     /// Whether the hero's second metadata line (quality pill, duration) has
     /// anything to show.
     var hasQualityOrDuration: Bool {
-        video.qualityLabel != nil || video.durationStr != nil
+        video.qualityLabel != nil || video.durationStr != nil || video.hasSponsorBlock
     }
 
     /// The description as plain text, for the clamped preview in the hero.

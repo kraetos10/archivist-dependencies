@@ -324,6 +324,27 @@ struct VideoDetailReducerTests {
         expectNoDifference(requests.value.map(\.skipRanges), [[], [30..<45]])
     }
 
+    @Test func playbackAnnouncesSkipsOnlyWhenTheBannerIsOn() async {
+        @Shared(.showSponsorBlockBanner) var showSponsorBlockBanner
+        defer { $showSponsorBlockBanner.withLock { $0 = true } }
+        let requests = LockIsolated<[PlayerClient.PlaybackRequest]>([])
+        let (events, continuation) = AsyncStream<PlayerEvent>.makeStream()
+        let store = makeStore(video: TestFixtures.videoWithSponsorSegment)
+        store.dependencies.playerClient.startPlayback = { request in
+            requests.withValue { $0.append(request) }
+            return events
+        }
+
+        $showSponsorBlockBanner.withLock { $0 = false }
+        await store.send(.view(.playTapped)) { $0.isPlaying = true }
+        $showSponsorBlockBanner.withLock { $0 = true }
+        await store.send(.view(.playTapped))
+        continuation.finish()
+        await store.finish()
+
+        expectNoDifference(requests.value.map(\.announcesSkips), [false, true])
+    }
+
     // MARK: - Subscribe to channel
 
     @Test func subscribeButtonShowsOnlyWhenTheChannelIsKnownToBeUnsubscribed() {

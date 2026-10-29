@@ -133,6 +133,39 @@
         }
       }
     },
+    "video.sponsorBlock.pill": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SponsorBlock"
+          }
+        }
+      }
+    },
+    "video.sponsorBlock.skipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped by SponsorBlock"
+          }
+        }
+      }
+    },
+    "video.sponsorBlock.banner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Skip Banner"
+          }
+        }
+      }
+    },
     "video.upNext": {
       "extractionState": "manual",
       "localizations": {

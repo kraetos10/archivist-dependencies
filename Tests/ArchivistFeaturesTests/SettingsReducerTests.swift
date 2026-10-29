@@ -48,6 +48,22 @@ struct SettingsReducerTests {
         }
     }
 
+    @Test func theSkipBannerIsOnByDefaultAndCanBeTurnedOff() async {
+        let store = TestStore(initialState: SettingsReducer.State(serverConfig: config)) {
+            SettingsReducer()
+        }
+        #expect(store.state.showSponsorBlockBanner)
+
+        await store.send(.view(.sponsorBlockBannerToggled(false))) {
+            $0.$showSponsorBlockBanner.withLock { $0 = false }
+        }
+        #expect(!store.state.showSponsorBlockBanner)
+
+        await store.send(.view(.sponsorBlockBannerToggled(true))) {
+            $0.$showSponsorBlockBanner.withLock { $0 = true }
+        }
+    }
+
     @Test func failedRescanShowsAlert() async {
         let failure = URLError(.timedOut)
         let store = TestStore(initialState: SettingsReducer.State(serverConfig: config)) {

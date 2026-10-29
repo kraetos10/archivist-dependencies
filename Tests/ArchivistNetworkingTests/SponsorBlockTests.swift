@@ -87,4 +87,22 @@ struct SponsorBlockTests {
 
         #expect(video.sponsorSkipRanges.isEmpty)
     }
+
+    @Test func theVideoHasSponsorBlockOnlyWhenThereIsSomethingToSkip() throws {
+        let withSegments = try decodeVideo(sponsorblock: """
+        { "is_enabled": true, "segments": [\(segment(10, 20))] }
+        """)
+        let switchedOff = try decodeVideo(sponsorblock: """
+        { "is_enabled": false, "segments": [\(segment(10, 20))] }
+        """)
+        let onlyMute = try decodeVideo(sponsorblock: """
+        { "is_enabled": true, "segments": [\(segment(10, 20, action: "mute"))] }
+        """)
+        let none = try decodeVideo(sponsorblock: "null")
+
+        #expect(withSegments.hasSponsorBlock)
+        #expect(!switchedOff.hasSponsorBlock)
+        #expect(!onlyMute.hasSponsorBlock)
+        #expect(!none.hasSponsorBlock)
+    }
 }

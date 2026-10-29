@@ -158,6 +158,10 @@ public struct iPhoneSettingsScreen: View {
                     String.localised("video.sponsorBlock", table: .videos),
                     isOn: $store.skipSponsorSegments.sending(\.view.skipSponsorSegmentsToggled)
                 )
+                Toggle(
+                    String.localised("video.sponsorBlock.banner", table: .videos),
+                    isOn: $store.showSponsorBlockBanner.sending(\.view.sponsorBlockBannerToggled)
+                )
             } header: {
                 Text(String.localised("video.sponsorBlockSection", table: .videos))
             } footer: {

@@ -43,6 +43,12 @@ extension SharedKey where Self == AppStorageKey<Bool>.Default {
         Self[.appStorage("skipSponsorSegments"), default: false]
     }
 
+    /// Briefly say so when a SponsorBlock segment is skipped. On, since
+    /// nothing is skipped until skipping itself is turned on.
+    public static var showSponsorBlockBanner: Self {
+        Self[.appStorage("showSponsorBlockBanner"), default: true]
+    }
+
     /// Child mode on/off.
     public static var childModeEnabled: Self {
         Self[.appStorage(ChildMode.enabledKey), default: false]

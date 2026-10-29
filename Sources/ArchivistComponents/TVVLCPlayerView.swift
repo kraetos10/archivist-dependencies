@@ -41,6 +41,8 @@ public struct TVVLCPlayerView: View {
             } else {
                 playbackChrome
             }
+
+            SponsorSkipBanner()
         }
         .animation(.easeInOut(duration: 0.3), value: playerManager.autoPlayCountdown == nil)
         .confirmationDialog(
